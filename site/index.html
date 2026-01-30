@@ -1,37 +1,143 @@
-<!DOCTYPE html>
-
-<html lang="en">
+<!doctype html>
+<html lang="en" data-theme="midnight">
   <head>
     <meta charset="utf-8" />
-    <title>NGINX on Railway</title>
-    <meta name="description" content="Choo Choo!" />
-
-    <link rel="icon" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-    <link rel="stylesheet" href="/styles.css?v=1.0" />
+    <meta name="theme-color" content="#070a18" />
+    <title>MySongs Player</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="alternate icon" href="./favicon.svg" />
+    <link rel="stylesheet" href="./styles.css" />
   </head>
-
   <body>
-    <main>
-      <img
-        src="https://railway.app/brand/logo-light.svg"
-        alt="Railway logo"
-        class="logo"
-      />
+    <noscript>
+      <div class="noscript">
+        This site needs JavaScript enabled to play audio.
+      </div>
+    </noscript>
 
-      <h1>NGINX on Railway</h1>
+    <canvas id="bgViz" class="wa-bg-viz" aria-hidden="true"></canvas>
 
-      <p>
-        Choo Choo! This is an example of an NGINX static site running on
-        Railway.
-        <a
-          href="https://github.com/railwayapp/starters/tree/master/examples/nginx"
-          >View source</a
-        >.
-      </p>
+    <main id="app" class="wa-app" aria-label="MySongs Player">
+      <section class="wa-window wa-player" id="playerWindow" aria-label="Player window">
+        <header class="wa-titlebar">
+          <div class="wa-titlebar__left">
+            <div class="wa-lamp" aria-hidden="true"></div>
+            <div class="wa-title">MYSONGS</div>
+          </div>
+          <div class="wa-titlebar__right">
+            <label class="wa-theme">
+              <span class="sr-only">Visualizer</span>
+              <select id="vizSelect" class="wa-theme__select" aria-label="Visualizer">
+                <option value="orbit">Orbit Bars</option>
+                <option value="grid">Wave Grid</option>
+                <option value="nebula">Particle Nebula</option>
+                <option value="scope">Oscilloscope Ring</option>
+                <option value="tunnel">Tunnel</option>
+                <option value="off">Off</option>
+              </select>
+            </label>
+            <label class="wa-theme">
+              <span class="sr-only">Theme</span>
+              <select id="themeSelect" class="wa-theme__select" aria-label="Theme">
+                <option value="midnight">Midnight</option>
+                <option value="winamp41">Classic</option>
+                <option value="neo">Neo Green</option>
+              </select>
+            </label>
+            <button class="wa-mini-btn" id="togglePlaylistBtn" type="button" aria-label="Toggle playlist">
+              PL
+            </button>
+          </div>
+        </header>
+
+        <div class="wa-player__content">
+          <div class="wa-lcd" aria-label="Track info display">
+            <div class="wa-lcd__row">
+              <div class="wa-marquee" id="marquee" aria-live="polite">
+                <span class="wa-marquee__inner" id="marqueeInner">
+                  <span id="trackText">No tracks loaded</span>
+                  <span class="wa-marquee__gap" aria-hidden="true"> • • • </span>
+                  <span id="trackTextDup" aria-hidden="true">No tracks loaded</span>
+                </span>
+              </div>
+            </div>
+            <div class="wa-lcd__row wa-lcd__row--bottom">
+              <div class="wa-kv">
+                <span class="wa-kv__k">STATUS</span>
+                <span class="wa-kv__v" id="statusText">STOP</span>
+              </div>
+              <div class="wa-kv wa-kv--right">
+                <span class="wa-kv__k">TIME</span>
+                <span class="wa-kv__v" id="timeText">00:00 / 00:00</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="wa-viz-wrap" id="vizWrap" aria-label="Visualizer">
+            <canvas class="wa-viz wa-viz--3d" id="viz3d"></canvas>
+            <canvas class="wa-viz wa-viz--2d" id="viz2d" width="276" height="32"></canvas>
+          </div>
+
+          <div class="wa-sliders" aria-label="Seek and volume">
+            <label class="wa-slider">
+              <span class="wa-slider__label">SEEK</span>
+              <input id="seek" type="range" min="0" max="1000" value="0" step="1" />
+            </label>
+            <label class="wa-slider">
+              <span class="wa-slider__label">VOL</span>
+              <input id="volume" type="range" min="0" max="100" value="100" step="1" />
+            </label>
+          </div>
+
+          <div class="wa-controls" aria-label="Playback controls">
+            <button class="wa-btn" id="prevBtn" type="button" aria-label="Previous track">⏮</button>
+            <button class="wa-btn wa-btn--primary" id="playBtn" type="button" aria-label="Play">▶</button>
+            <button class="wa-btn" id="pauseBtn" type="button" aria-label="Pause">⏸</button>
+            <button class="wa-btn" id="stopBtn" type="button" aria-label="Stop">⏹</button>
+            <button class="wa-btn" id="nextBtn" type="button" aria-label="Next track">⏭</button>
+            <button class="wa-btn wa-btn--toggle" id="shuffleBtn" type="button" aria-label="Toggle shuffle">SHUF</button>
+            <button class="wa-btn wa-btn--toggle" id="repeatBtn" type="button" aria-label="Toggle repeat">REP</button>
+          </div>
+
+          <div class="wa-footnote" id="hintText">
+            Tip: drop audio files onto the playlist, or add hosted tracks in <code>tracks.js</code>.
+          </div>
+        </div>
+      </section>
+
+      <section class="wa-window wa-playlist" id="playlistWindow" aria-label="Playlist window">
+        <header class="wa-titlebar">
+          <div class="wa-titlebar__left">
+            <div class="wa-lamp" aria-hidden="true"></div>
+            <div class="wa-title">LIBRARY</div>
+          </div>
+          <div class="wa-titlebar__right">
+            <button class="wa-mini-btn" id="addBtn" type="button" aria-label="Add files">
+              ADD
+            </button>
+            <button class="wa-mini-btn" id="clearBtn" type="button" aria-label="Clear playlist">
+              CLR
+            </button>
+          </div>
+        </header>
+
+        <div class="wa-playlist__content">
+          <div class="wa-playlist__top">
+            <input id="filterInput" class="wa-filter" type="search" placeholder="Search…" autocomplete="off" />
+            <input id="filePicker" type="file" accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac" multiple hidden />
+          </div>
+
+          <ol class="wa-list" id="playlist" aria-label="Track list"></ol>
+
+          <div class="wa-dropzone" id="dropzone" aria-hidden="true">
+            Drop audio files to add
+          </div>
+        </div>
+      </section>
     </main>
 
-    <script src="/script.js"></script>
+    <script src="./tracks.js"></script>
+    <script src="./app.js"></script>
   </body>
 </html>
