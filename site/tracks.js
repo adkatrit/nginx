@@ -12,14 +12,14 @@
 */
 
 window.TRACKS = [
-  { title: "Beast Mode", artist: "Beast Mode", url: "./music/Beast Mode/Beast Mode.wav" },
-  { title: "Data Tide", artist: "DeytaDreams", url: "./music/DeytaDreams/Data Tide/Data Tide.wav", coverUrl: "./music/DeytaDreams/Data Tide/generated-image-cover-art-1769705915039.jpg" },
-  { title: "Dreams Bleed Into Dashboards", artist: "DeytaDreams", url: "./music/DeytaDreams/Dreams Bleed Into Dashboards/Dreams Bleed Into Dashboards.wav" },
-  { title: "Signal Integrity", artist: "DeytaDreams", url: "./music/DeytaDreams/Signal Integrity/Signal Integrity.wav" },
-  { title: "Trade You My Hands", artist: "DeytaDreams", url: "./music/DeytaDreams/Trade You My Hands/Trade You My Hands.wav", coverUrl: "./music/DeytaDreams/Trade You My Hands/image_large_6413f7b3-afe1-4029-9e79-8f8523e569e1.jpeg" },
-  { title: "Gi Mi Di Reins", artist: "Gi Mi Di Reins", url: "./music/Gi Mi Di Reins/Gi Mi Di Reins.wav" },
-  { title: "Push Harder", artist: "Push Harder", url: "./music/Push Harder/Push Harder.wav" },
-  { title: "Soft Systems", artist: "Soft Systems", url: "./music/Soft Systems/Soft Systems.wav" },
-  { title: "The Last Dragon", artist: "The Last Dragon", url: "./music/The Last Dragon/The Last Dragon.wav" },
-  { title: "Who’s Learning Who", artist: "Who's Learning Who", url: "./music/Who's Learning Who/Who’s Learning Who.wav" },
+  { title: "Beast Mode", artist: "Beast Mode", url: "./music/Beast Mode/Beast Mode.mp3" },
+  { title: "Data Tide", artist: "DeytaDreams", url: "./music/DeytaDreams/Data Tide/Data Tide.mp3", coverUrl: "./music/DeytaDreams/Data Tide/generated-image-cover-art-1769705915039.jpg" },
+  { title: "Dreams Bleed Into Dashboards", artist: "DeytaDreams", url: "./music/DeytaDreams/Dreams Bleed Into Dashboards/Dreams Bleed Into Dashboards.mp3" },
+  { title: "Signal Integrity", artist: "DeytaDreams", url: "./music/DeytaDreams/Signal Integrity/Signal Integrity.mp3" },
+  { title: "Trade You My Hands", artist: "DeytaDreams", url: "./music/DeytaDreams/Trade You My Hands/Trade You My Hands.mp3", coverUrl: "./music/DeytaDreams/Trade You My Hands/image_large_6413f7b3-afe1-4029-9e79-8f8523e569e1.jpeg" },
+  { title: "Gi Mi Di Reins", artist: "Gi Mi Di Reins", url: "./music/Gi Mi Di Reins/Gi Mi Di Reins.mp3" },
+  { title: "Push Harder", artist: "Push Harder", url: "./music/Push Harder/Push Harder.mp3" },
+  { title: "Soft Systems", artist: "Soft Systems", url: "./music/Soft Systems/Soft Systems.mp3" },
+  { title: "The Last Dragon", artist: "The Last Dragon", url: "./music/The Last Dragon/The Last Dragon.mp3" },
+  { title: "Who's Learning Who", artist: "Who's Learning Who", url: "./music/Who's Learning Who/Who's Learning Who.mp3" },
 ];
