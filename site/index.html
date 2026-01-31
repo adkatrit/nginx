@@ -18,6 +18,9 @@
 
     <canvas id="bgViz" class="wa-bg-viz" aria-hidden="true"></canvas>
 
+    <!-- Screen reader announcements -->
+    <div class="sr-only" role="status" aria-live="polite" id="ariaStatus"></div>
+
     <main id="app" class="wa-app" aria-label="MySongs Player">
       <section class="wa-window wa-player" id="playerWindow" aria-label="Player window">
         <header class="wa-titlebar">
@@ -130,12 +133,23 @@
 
           <ol class="wa-list" id="playlist" aria-label="Track list"></ol>
 
+          <div class="wa-empty-state" id="emptyState">
+            <div class="wa-empty-state__icon">♫</div>
+            <div class="wa-empty-state__title">No tracks yet</div>
+            <div class="wa-empty-state__text">
+              Drag audio files here, click ADD, or add tracks to <code>tracks.js</code>
+            </div>
+          </div>
+
           <div class="wa-dropzone" id="dropzone" aria-hidden="true">
             Drop audio files to add
           </div>
         </div>
       </section>
     </main>
+
+    <!-- Keep a real media element in the DOM for best mobile behavior -->
+    <audio id="playerAudio" preload="metadata" crossorigin="anonymous" playsinline style="display:none"></audio>
 
     <script src="./tracks.js"></script>
     <script src="./app.js"></script>
