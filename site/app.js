@@ -103,9 +103,21 @@
   let playlistVisible = true;
 
   // ---- Audio ----
-  const audio = new Audio();
+  const domAudio = /** @type {HTMLAudioElement|null} */ (document.getElementById("playerAudio"));
+  const audio = domAudio || new Audio();
   audio.preload = "metadata";
   audio.crossOrigin = "anonymous";
+
+  // iOS tends to suspend WebAudio when backgrounded/locked, which can cut audio
+  // if we route the media element through an AudioContext for visualization.
+  // Prefer native playback on iOS; the visualizer will gracefully fall back.
+  const isIOS = (() => {
+    const ua = navigator.userAgent || "";
+    const iDevice = /iPad|iPhone|iPod/i.test(ua);
+    // iPadOS reports as Mac; maxTouchPoints helps distinguish.
+    const iPadOS = navigator.platform === "MacIntel" && (navigator.maxTouchPoints || 0) > 1;
+    return iDevice || iPadOS;
+  })();
 
   // Seeking in large files typically requires HTTP Range support from the server.
   let rangeSupportChecked = false;
@@ -197,6 +209,12 @@
       return false;
     }
   })();
+
+  function canUseWebAudioViz() {
+    if (prefersReducedMotion) return false;
+    if (isIOS) return false;
+    return true;
+  }
 
   function clamp(n, min, max) {
     return Math.max(min, Math.min(max, n));
@@ -301,11 +319,62 @@
 
   function setStatus(text) {
     statusText.textContent = text;
+    // Update lamp animation state
+    const lamps = document.querySelectorAll(".wa-lamp");
+    lamps.forEach((lamp) => lamp.classList.toggle("is-playing", text === "PLAY"));
+  }
+
+  /** @type {HTMLElement | null} */
+  const lcdEl = document.querySelector(".wa-lcd");
+
+  function setLoadingState(loading) {
+    if (lcdEl) lcdEl.classList.toggle("is-loading", loading);
   }
 
   function setHint(text, kind = "info") {
     hintText.innerHTML = text;
     hintText.style.color = kind === "warn" ? "var(--wa-warn)" : "rgba(255, 255, 255, 0.72)";
+  }
+
+  // ---- Accessibility: Screen reader announcements ----
+  const ariaStatus = $("ariaStatus");
+
+  function announceToScreenReader(message) {
+    if (!ariaStatus) return;
+    ariaStatus.textContent = message;
+    setTimeout(() => { ariaStatus.textContent = ""; }, 1500);
+  }
+
+  // ---- Error state handling ----
+  function showError(title, message, actionLabel, action) {
+    let errorEl = playlistWindow.querySelector(".wa-error");
+    if (!errorEl) {
+      errorEl = document.createElement("div");
+      errorEl.className = "wa-error";
+      errorEl.innerHTML = `
+        <div class="wa-error__title"></div>
+        <div class="wa-error__text"></div>
+        <button class="wa-error__action" type="button"></button>
+      `;
+      playlistWindow.querySelector(".wa-playlist__content").appendChild(errorEl);
+    }
+
+    errorEl.querySelector(".wa-error__title").textContent = title;
+    errorEl.querySelector(".wa-error__text").textContent = message;
+    const btn = /** @type {HTMLButtonElement} */ (errorEl.querySelector(".wa-error__action"));
+    btn.textContent = actionLabel || "Retry";
+    btn.onclick = () => {
+      errorEl.classList.remove("is-visible");
+      if (action) action();
+    };
+
+    errorEl.classList.add("is-visible");
+    announceToScreenReader(`Error: ${title}. ${message}`);
+  }
+
+  function hideError() {
+    const errorEl = playlistWindow.querySelector(".wa-error");
+    if (errorEl) errorEl.classList.remove("is-visible");
   }
 
   function setTrackDisplay(text) {
@@ -334,7 +403,9 @@
     timeText.textContent = `${formatTime(cur)} / ${formatTime(dur)}`;
 
     if (!isSeeking && Number.isFinite(dur) && dur > 0) {
+      const progress = (cur / dur) * 100;
       seek.value = String(Math.round((cur / dur) * 1000));
+      seek.style.setProperty("--progress", `${progress}%`);
     }
   }
 
@@ -405,14 +476,116 @@
       li.appendChild(cover);
       li.appendChild(main);
 
+      // Enable drag reorder
+      li.draggable = true;
+
       items.push(li);
     }
 
     playlistEl.replaceChildren(...items);
   }
 
+  // ---- Playlist drag reorder ----
+  function initPlaylistDragReorder() {
+    /** @type {HTMLElement | null} */
+    let draggedItem = null;
+    let draggedIndex = -1;
+    /** @type {HTMLElement | null} */
+    let placeholder = null;
+
+    playlistEl.addEventListener("dragstart", (e) => {
+      const target = /** @type {HTMLElement} */ (e.target);
+      const item = target.closest(".wa-item");
+      if (!item) return;
+
+      draggedItem = /** @type {HTMLElement} */ (item);
+      draggedIndex = Number(item.dataset.index);
+      item.classList.add("is-dragging");
+
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", String(draggedIndex));
+
+      // Create placeholder
+      placeholder = document.createElement("li");
+      placeholder.className = "wa-item wa-item--placeholder";
+      placeholder.style.height = `${item.offsetHeight}px`;
+    });
+
+    playlistEl.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      if (!draggedItem || !placeholder) return;
+      e.dataTransfer.dropEffect = "move";
+
+      const afterElement = getDragAfterElement(e.clientY);
+      if (afterElement) {
+        playlistEl.insertBefore(placeholder, afterElement);
+      } else {
+        playlistEl.appendChild(placeholder);
+      }
+    });
+
+    playlistEl.addEventListener("dragend", () => {
+      if (draggedItem) {
+        draggedItem.classList.remove("is-dragging");
+      }
+      if (placeholder && placeholder.parentNode) {
+        placeholder.remove();
+      }
+      draggedItem = null;
+      placeholder = null;
+    });
+
+    playlistEl.addEventListener("drop", (e) => {
+      e.preventDefault();
+      if (draggedIndex < 0 || !placeholder) return;
+
+      // Find new position
+      const items = [...playlistEl.querySelectorAll(".wa-item:not(.is-dragging):not(.wa-item--placeholder)")];
+      const placeholderIndex = items.indexOf(placeholder.nextElementSibling?.closest(".wa-item"));
+      let newIndex = placeholderIndex === -1 ? tracks.length - 1 : placeholderIndex;
+
+      // Adjust for the dragged item's original position
+      if (draggedIndex < newIndex) {
+        newIndex = Math.max(0, newIndex);
+      }
+
+      if (draggedIndex !== newIndex && draggedIndex >= 0 && draggedIndex < tracks.length) {
+        // Reorder tracks array
+        const [removed] = tracks.splice(draggedIndex, 1);
+        tracks.splice(newIndex, 0, removed);
+
+        // Update currentIndex if affected
+        if (currentIndex === draggedIndex) {
+          currentIndex = newIndex;
+        } else if (draggedIndex < currentIndex && newIndex >= currentIndex) {
+          currentIndex--;
+        } else if (draggedIndex > currentIndex && newIndex <= currentIndex) {
+          currentIndex++;
+        }
+
+        updatePlaylistUi();
+      }
+    });
+
+    function getDragAfterElement(y) {
+      const items = [...playlistEl.querySelectorAll(".wa-item:not(.is-dragging):not(.wa-item--placeholder)")];
+
+      return items.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+
+        if (offset < 0 && offset > closest.offset) {
+          return { offset, element: child };
+        }
+        return closest;
+      }, { offset: Number.NEGATIVE_INFINITY, element: null }).element;
+    }
+  }
+
+  initPlaylistDragReorder();
+
   function ensureAudioGraph() {
-    if (prefersReducedMotion) return;
+    if (!canUseWebAudioViz()) return;
     if (audioCtx && analyser && freqData && timeData) return;
 
     try {
@@ -610,7 +783,7 @@
   }
 
   async function ensureThreeViz() {
-    if (prefersReducedMotion) return false;
+    if (!canUseWebAudioViz()) return false;
     if (!bgVizCanvas) return false;
     if (threeReady) return true;
     if (threeInitPromise) return threeInitPromise;
@@ -1056,7 +1229,7 @@
   }
 
   function startVizLoop() {
-    if (prefersReducedMotion) return;
+    if (!canUseWebAudioViz()) return;
     if (vizRaf) return;
 
     const loop = (now) => {
@@ -1096,9 +1269,15 @@
     currentIndex = safeIndex;
     const t = tracks[currentIndex];
 
+    setLoadingState(true);
     setTrackDisplay(trackLabel(t));
     setStatus("STOP");
     updatePlaylistUi();
+    updateMediaSession();
+
+    // Reset seek slider
+    seek.value = "0";
+    seek.style.setProperty("--progress", "0%");
 
     audio.src = t.url;
     audio.currentTime = 0;
@@ -1126,16 +1305,23 @@
       loadTrack(currentIndex, { autoplay: false });
     }
 
-    ensureAudioGraph();
-    startVizLoop();
-    void ensureThreeViz();
-    await tryResumeAudioContext();
+    if (canUseWebAudioViz()) {
+      ensureAudioGraph();
+      startVizLoop();
+      void ensureThreeViz();
+      await tryResumeAudioContext();
+    } else {
+      // Keep playback background-safe; viz stays off/idle.
+      stopVizLoop();
+    }
 
     try {
       await audio.play();
       setStatus("PLAY");
       setHint(`Playing: <code>${escapeHtml(trackLabel(tracks[currentIndex]))}</code>`);
       updatePlaylistUi();
+      hideError();
+      announceToScreenReader(`Now playing: ${trackLabel(tracks[currentIndex])}`);
     } catch (err) {
       setStatus("STOP");
       setHint(
@@ -1215,12 +1401,15 @@
     updateButtonsUi();
     const msg = repeatMode === "off" ? "Repeat: OFF" : repeatMode === "all" ? "Repeat: ALL" : "Repeat: ONE";
     setHint(msg);
+    announceToScreenReader(msg);
   }
 
   function toggleShuffle() {
     shuffle = !shuffle;
     updateButtonsUi();
-    setHint(`Shuffle: ${shuffle ? "ON" : "OFF"}`);
+    const msg = `Shuffle: ${shuffle ? "ON" : "OFF"}`;
+    setHint(msg);
+    announceToScreenReader(msg);
   }
 
   function clearPlaylist() {
@@ -1273,6 +1462,79 @@
     }
   }
 
+  // ---- Media Session API (OS-level controls) ----
+  function setMediaSessionPlaybackState() {
+    if (!("mediaSession" in navigator)) return;
+    try {
+      navigator.mediaSession.playbackState = audio.paused ? "paused" : "playing";
+    } catch {
+      // Some browsers support MediaSession but not playbackState.
+    }
+  }
+
+  function setMediaSessionPositionState() {
+    if (!("mediaSession" in navigator)) return;
+    if (!Number.isFinite(audio.duration) || audio.duration <= 0) return;
+    try {
+      navigator.mediaSession.setPositionState({
+        duration: audio.duration,
+        position: audio.currentTime,
+        playbackRate: audio.playbackRate || 1,
+      });
+    } catch {
+      // setPositionState not supported everywhere.
+    }
+  }
+
+  function updateMediaSession() {
+    if (!("mediaSession" in navigator)) return;
+    const track = tracks[currentIndex];
+    if (!track) return;
+
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: track.title || deriveTitleFromUrl(track.url),
+      artist: track.artist || "Unknown Artist",
+      album: "MySongs",
+      artwork: track.coverUrl
+        ? [{ src: track.coverUrl, sizes: "512x512" }]
+        : [],
+    });
+    setMediaSessionPlaybackState();
+    setMediaSessionPositionState();
+  }
+
+  function initMediaSession() {
+    if (!("mediaSession" in navigator)) return;
+
+    navigator.mediaSession.setActionHandler("play", () => void play());
+    navigator.mediaSession.setActionHandler("pause", pause);
+    navigator.mediaSession.setActionHandler("stop", stop);
+    navigator.mediaSession.setActionHandler("previoustrack", () => prev({ autoplay: true }));
+    navigator.mediaSession.setActionHandler("nexttrack", () => next({ autoplay: true }));
+
+    navigator.mediaSession.setActionHandler("seekbackward", (details) => {
+      const skip = details.seekOffset || 10;
+      audio.currentTime = Math.max(audio.currentTime - skip, 0);
+    });
+
+    navigator.mediaSession.setActionHandler("seekforward", (details) => {
+      const skip = details.seekOffset || 10;
+      audio.currentTime = Math.min(audio.currentTime + skip, audio.duration || 0);
+    });
+
+    try {
+      navigator.mediaSession.setActionHandler("seekto", (details) => {
+        if (details.seekTime != null && Number.isFinite(audio.duration)) {
+          audio.currentTime = details.seekTime;
+        }
+      });
+    } catch {
+      // seekto not supported in all browsers
+    }
+  }
+
+  initMediaSession();
+
   // ---- Controls wiring ----
   updateButtonsUi();
   updatePlaylistUi();
@@ -1286,10 +1548,12 @@
     const v = clamp(savedVol, 0, 1);
     audio.volume = v;
     volume.value = String(Math.round(v * 100));
+    volume.style.setProperty("--progress", `${v * 100}%`);
   } else {
     // Default: full volume (unless the user has a saved preference).
     audio.volume = 1;
     volume.value = "100";
+    volume.style.setProperty("--progress", "100%");
   }
 
   if (tracks.length) {
@@ -1329,6 +1593,7 @@
   volume.addEventListener("input", () => {
     const v = clamp(Number(volume.value) / 100, 0, 1);
     audio.volume = v;
+    volume.style.setProperty("--progress", `${v * 100}%`);
     localStorage.setItem(VOLUME_STORAGE_KEY, String(v));
   });
 
@@ -1372,11 +1637,20 @@
   // Audio events
   audio.addEventListener("loadedmetadata", updateTimeUi);
   audio.addEventListener("durationchange", updateTimeUi);
-  audio.addEventListener("timeupdate", updateTimeUi);
-  audio.addEventListener("play", () => setStatus("PLAY"));
+  audio.addEventListener("timeupdate", () => {
+    updateTimeUi();
+    setMediaSessionPositionState();
+  });
+  audio.addEventListener("canplay", () => setLoadingState(false));
+  audio.addEventListener("loadstart", () => setLoadingState(true));
+  audio.addEventListener("play", () => {
+    setStatus("PLAY");
+    setMediaSessionPlaybackState();
+  });
   audio.addEventListener("pause", () => {
     if (audio.currentTime === 0 || audio.ended) setStatus("STOP");
     else setStatus("PAUSE");
+    setMediaSessionPlaybackState();
   });
   audio.addEventListener("ended", () => {
     if (repeatMode === "one") {
@@ -1391,10 +1665,38 @@
   });
   audio.addEventListener("error", () => {
     setStatus("STOP");
+    setLoadingState(false);
+    const track = tracks[currentIndex];
+    const trackName = track ? trackLabel(track) : "track";
     setHint(
       `Couldn't load this track. Check the file path in <code>tracks.js</code> or re-add the file.`,
       "warn",
     );
+    showError(
+      "Playback Error",
+      `Could not load "${trackName}". The file may be missing or corrupted.`,
+      "Skip to Next",
+      () => {
+        if (tracks.length > 1) {
+          next({ autoplay: true });
+        }
+      }
+    );
+  });
+
+  // When the tab is hidden/locked, stop expensive visualization work.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") {
+      stopVizLoop();
+      return;
+    }
+
+    if (canUseWebAudioViz() && !audio.paused) {
+      ensureAudioGraph();
+      startVizLoop();
+      void ensureThreeViz();
+      void tryResumeAudioContext();
+    }
   });
 
   // ---- Drag & drop files onto playlist ----
@@ -1431,22 +1733,171 @@
     });
   }
 
-  // ---- Keyboard shortcuts ----
-  window.addEventListener("keydown", (e) => {
-    if (e.target && (/** @type {HTMLElement} */ (e.target)).closest("input, textarea")) return;
+  // ---- Swipe gestures for mobile ----
+  function initSwipeGestures() {
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchStartTime = 0;
+    const SWIPE_THRESHOLD = 60;
+    const SWIPE_TIMEOUT = 350;
 
-    if (e.key === " ") {
-      e.preventDefault();
-      if (audio.paused) void play();
-      else pause();
-    } else if (e.key === "ArrowRight") {
-      audio.currentTime = clamp(audio.currentTime + 5, 0, Number.isFinite(audio.duration) ? audio.duration : 1e9);
-    } else if (e.key === "ArrowLeft") {
-      audio.currentTime = clamp(audio.currentTime - 5, 0, 1e9);
-    } else if (e.key.toLowerCase() === "n") {
-      next({ autoplay: true });
-    } else if (e.key.toLowerCase() === "p") {
-      prev({ autoplay: true });
+    playerWindow.addEventListener("touchstart", (e) => {
+      const touch = e.touches[0];
+      touchStartX = touch.clientX;
+      touchStartY = touch.clientY;
+      touchStartTime = Date.now();
+    }, { passive: true });
+
+    playerWindow.addEventListener("touchend", (e) => {
+      if (Date.now() - touchStartTime > SWIPE_TIMEOUT) return;
+
+      const touch = e.changedTouches[0];
+      const deltaX = touch.clientX - touchStartX;
+      const deltaY = touch.clientY - touchStartY;
+
+      // Only horizontal swipes, ignore if vertical movement is significant
+      if (Math.abs(deltaX) < SWIPE_THRESHOLD) return;
+      if (Math.abs(deltaY) > Math.abs(deltaX) * 0.6) return;
+
+      if (deltaX > 0) {
+        prev({ autoplay: !audio.paused });
+        showSwipeFeedback("prev");
+      } else {
+        next({ autoplay: !audio.paused });
+        showSwipeFeedback("next");
+      }
+    }, { passive: true });
+  }
+
+  function showSwipeFeedback(direction) {
+    const indicator = document.createElement("div");
+    indicator.className = `wa-swipe-indicator wa-swipe-indicator--${direction}`;
+    indicator.textContent = direction === "prev" ? "⏮" : "⏭";
+    playerWindow.appendChild(indicator);
+
+    requestAnimationFrame(() => {
+      indicator.classList.add("is-visible");
+      setTimeout(() => {
+        indicator.classList.remove("is-visible");
+        setTimeout(() => indicator.remove(), 200);
+      }, 250);
+    });
+  }
+
+  initSwipeGestures();
+
+  // ---- Enhanced keyboard shortcuts ----
+  function showVolumeToast(vol) {
+    let toast = playerWindow.querySelector(".wa-volume-toast");
+    if (!toast) {
+      toast = document.createElement("div");
+      toast.className = "wa-volume-toast";
+      playerWindow.appendChild(toast);
+    }
+    toast.textContent = `Vol: ${Math.round(vol * 100)}%`;
+    toast.classList.add("is-visible");
+    clearTimeout(toast._hideTimeout);
+    toast._hideTimeout = setTimeout(() => {
+      toast.classList.remove("is-visible");
+    }, 700);
+  }
+
+  function showKeyboardHelp() {
+    const shortcuts = [
+      ["Space", "Play/Pause"],
+      ["←/→", "Seek ±5s"],
+      ["↑/↓", "Volume ±5%"],
+      ["Shift+←/→", "Prev/Next track"],
+      ["N / P", "Next/Previous"],
+      ["M", "Mute"],
+      ["S", "Shuffle"],
+      ["R", "Repeat"],
+      ["L", "Toggle playlist"],
+      ["F", "Focus search"],
+    ];
+    const content = shortcuts.map(([key, desc]) => `<kbd>${key}</kbd> ${desc}`).join("<br>");
+    setHint(`<b>Shortcuts:</b><br>${content}`);
+  }
+
+  window.addEventListener("keydown", (e) => {
+    if (e.target && (/** @type {HTMLElement} */ (e.target)).closest("input, textarea, [contenteditable]")) return;
+
+    const key = e.key.toLowerCase();
+
+    switch (e.key) {
+      case " ":
+        e.preventDefault();
+        if (audio.paused) void play();
+        else pause();
+        break;
+
+      case "ArrowRight":
+        if (e.shiftKey) {
+          next({ autoplay: !audio.paused });
+        } else {
+          audio.currentTime = clamp(audio.currentTime + 5, 0, Number.isFinite(audio.duration) ? audio.duration : 1e9);
+        }
+        break;
+
+      case "ArrowLeft":
+        if (e.shiftKey) {
+          prev({ autoplay: !audio.paused });
+        } else {
+          audio.currentTime = clamp(audio.currentTime - 5, 0, 1e9);
+        }
+        break;
+
+      case "ArrowUp":
+        e.preventDefault();
+        audio.volume = clamp(audio.volume + 0.05, 0, 1);
+        volume.value = String(Math.round(audio.volume * 100));
+        volume.style.setProperty("--progress", `${audio.volume * 100}%`);
+        showVolumeToast(audio.volume);
+        localStorage.setItem(VOLUME_STORAGE_KEY, String(audio.volume));
+        break;
+
+      case "ArrowDown":
+        e.preventDefault();
+        audio.volume = clamp(audio.volume - 0.05, 0, 1);
+        volume.value = String(Math.round(audio.volume * 100));
+        volume.style.setProperty("--progress", `${audio.volume * 100}%`);
+        showVolumeToast(audio.volume);
+        localStorage.setItem(VOLUME_STORAGE_KEY, String(audio.volume));
+        break;
+
+      default:
+        // Handle letter keys (case-insensitive)
+        if (key === "n") {
+          next({ autoplay: !audio.paused });
+        } else if (key === "p") {
+          prev({ autoplay: !audio.paused });
+        } else if (key === "m") {
+          audio.muted = !audio.muted;
+          setHint(audio.muted ? "Muted" : "Unmuted");
+        } else if (key === "s") {
+          toggleShuffle();
+        } else if (key === "r") {
+          cycleRepeatMode();
+        } else if (key === "l") {
+          playlistVisible = !playlistVisible;
+          playlistWindow.classList.toggle("is-hidden", !playlistVisible);
+          app.classList.toggle("wa-app--playlist-hidden", !playlistVisible);
+        } else if (key === "f") {
+          e.preventDefault();
+          filterInput.focus();
+        } else if (key === "escape") {
+          if (document.activeElement === filterInput) {
+            if (filterInput.value) {
+              filterInput.value = "";
+              updatePlaylistUi();
+            } else {
+              filterInput.blur();
+            }
+          }
+        } else if (key === "?" || (e.shiftKey && e.key === "/")) {
+          showKeyboardHelp();
+        }
+        break;
     }
   });
 
