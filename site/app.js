@@ -1,34 +1,36 @@
 (() => {
   "use strict";
+  console.log("MySongs app.js loading...");
 
   const $ = (id) => /** @type {HTMLElement|null} */ (document.getElementById(id));
 
+  // ---- Immersive UI Elements ----
   const app = $("app");
-  const playerWindow = $("playerWindow");
-  const playlistWindow = $("playlistWindow");
-  const togglePlaylistBtn = $("togglePlaylistBtn");
+  const controlBar = $("controlBar");
+  const trackTitle = $("trackTitle");
+  const trackArtist = $("trackArtist");
+  const nowPlayingCover = $("nowPlayingCover");
+  const currentTimeEl = $("currentTime");
+  const durationEl = $("duration");
+
   const themeSelect = /** @type {HTMLSelectElement|null} */ ($("themeSelect"));
   const vizSelect = /** @type {HTMLSelectElement|null} */ ($("vizSelect"));
 
   const prevBtn = $("prevBtn");
-  const playBtn = $("playBtn");
-  const pauseBtn = $("pauseBtn");
-  const stopBtn = $("stopBtn");
+  const playPauseBtn = $("playPauseBtn");
   const nextBtn = $("nextBtn");
   const shuffleBtn = $("shuffleBtn");
   const repeatBtn = $("repeatBtn");
-
-  const trackText = $("trackText");
-  const trackTextDup = $("trackTextDup");
-  const marquee = $("marquee");
-  const marqueeInner = $("marqueeInner");
-  const statusText = $("statusText");
-  const timeText = $("timeText");
-  const hintText = $("hintText");
+  const volumeBtn = $("volumeBtn");
 
   const seek = /** @type {HTMLInputElement|null} */ ($("seek"));
   const volume = /** @type {HTMLInputElement|null} */ ($("volume"));
 
+  // Playlist modal elements
+  const playlistBtn = $("playlistBtn");
+  const playlistModal = $("playlistModal");
+  const playlistBackdrop = $("playlistBackdrop");
+  const closePlaylistBtn = $("closePlaylistBtn");
   const playlistEl = $("playlist");
   const filterInput = /** @type {HTMLInputElement|null} */ ($("filterInput"));
   const addBtn = $("addBtn");
@@ -37,42 +39,80 @@
   const dropzone = $("dropzone");
 
   const bgVizCanvas = /** @type {HTMLCanvasElement|null} */ ($("bgViz"));
-  const vizWrap = $("vizWrap");
-  const viz2dCanvas = /** @type {HTMLCanvasElement|null} */ ($("viz2d"));
+
+  // Visualizer settings elements
+  const vizSettingsBtn = $("vizSettingsBtn");
+  const vizSettings = $("vizSettings");
+  const closeVizSettingsBtn = $("closeVizSettings");
+  const vizAmplitude = /** @type {HTMLInputElement|null} */ ($("vizAmplitude"));
+  const vizSmoothing = /** @type {HTMLInputElement|null} */ ($("vizSmoothing"));
+  const vizSpeed = /** @type {HTMLInputElement|null} */ ($("vizSpeed"));
+  const vizReactivity = /** @type {HTMLInputElement|null} */ ($("vizReactivity"));
+  const vizZoom = /** @type {HTMLInputElement|null} */ ($("vizZoom"));
+  const modelSelect = /** @type {HTMLSelectElement|null} */ ($("modelSelect"));
+  const modelSettingsGroup = $("modelSettingsGroup");
+  const modelPosYGroup = $("modelPosYGroup");
+  const modelRotYGroup = $("modelRotYGroup");
+  const modelAnimSpeedGroup = $("modelAnimSpeedGroup");
+  const modelScaleSlider = /** @type {HTMLInputElement|null} */ ($("modelScale"));
+  const modelPosYSlider = /** @type {HTMLInputElement|null} */ ($("modelPosY"));
+  const modelRotYSlider = /** @type {HTMLInputElement|null} */ ($("modelRotY"));
+  const modelAnimSpeedSlider = /** @type {HTMLInputElement|null} */ ($("modelAnimSpeed"));
+  const modelScaleValue = $("modelScaleValue");
+  const modelPosYValue = $("modelPosYValue");
+  const modelRotYValue = $("modelRotYValue");
+  const modelAnimSpeedValue = $("modelAnimSpeedValue");
+  const scalePulseCheckbox = /** @type {HTMLInputElement|null} */ ($("scalePulseEnabled"));
+  const copySettingsBtn = $("copySettingsBtn");
+  const amplitudeValue = $("amplitudeValue");
+  const smoothingValue = $("smoothingValue");
+  const speedValue = $("speedValue");
+  const reactivityValue = $("reactivityValue");
+  const zoomValue = $("zoomValue");
+  const resetVizSettingsBtn = $("resetVizSettings");
 
   if (
     !app ||
-    !playerWindow ||
-    !playlistWindow ||
-    !togglePlaylistBtn ||
+    !controlBar ||
+    !trackTitle ||
+    !trackArtist ||
+    !nowPlayingCover ||
+    !currentTimeEl ||
+    !durationEl ||
     !themeSelect ||
     !vizSelect ||
     !prevBtn ||
-    !playBtn ||
-    !pauseBtn ||
-    !stopBtn ||
+    !playPauseBtn ||
     !nextBtn ||
     !shuffleBtn ||
     !repeatBtn ||
-    !trackText ||
-    !trackTextDup ||
-    !marquee ||
-    !marqueeInner ||
-    !statusText ||
-    !timeText ||
-    !hintText ||
+    !volumeBtn ||
     !seek ||
     !volume ||
+    !playlistBtn ||
+    !playlistModal ||
+    !playlistBackdrop ||
+    !closePlaylistBtn ||
     !playlistEl ||
     !filterInput ||
     !addBtn ||
     !clearBtn ||
     !filePicker ||
     !dropzone ||
-    !vizWrap ||
-    !viz2dCanvas
+    !vizSettingsBtn ||
+    !vizSettings ||
+    !closeVizSettingsBtn ||
+    !vizAmplitude ||
+    !vizSmoothing ||
+    !vizSpeed ||
+    !vizZoom ||
+    !amplitudeValue ||
+    !smoothingValue ||
+    !speedValue ||
+    !zoomValue ||
+    !resetVizSettingsBtn
   ) {
-    // If the DOM changed or IDs don't match, fail silently.
+    console.error("MySongs: Missing required DOM elements");
     return;
   }
 
@@ -95,12 +135,31 @@
   /** @type {number[]} */
   let visibleIndices = [];
 
-  let shuffle = false;
+  let shuffle = true;
   /** @type {"off"|"all"|"one"} */
-  let repeatMode = "off";
+  let repeatMode = "all";
 
   let isSeeking = false;
-  let playlistVisible = true;
+  let playlistOpen = false;
+  let vizSettingsOpen = false;
+
+  // Visualizer settings values
+  const vizParams = {
+    amplitude: 0.3,      // Multiplier for how much audio affects visual displacement
+    smoothing: 0.15,     // Analyser smoothingTimeConstant (0-0.95)
+    speed: 2.0,          // Animation speed multiplier
+    zoom: 0.25,          // Camera zoom (distance multiplier, inverted)
+    audioReactivity: 1.0, // How much audio affects speed (0=static, 1=fully reactive)
+  };
+
+  // Audio-reactive speed state
+  let audioSpeedMultiplier = 1.0;
+  let lastEnergyForSpeed = 0;
+  let spectralFlux = 0;
+  let globalBeatPulse = 0;
+  let lastBassForSpeed = 0;
+
+  const VIZ_PARAMS_STORAGE_KEY = "mysongs-viz-params";
 
   // ---- Audio ----
   const domAudio = /** @type {HTMLAudioElement|null} */ (document.getElementById("playerAudio"));
@@ -108,18 +167,13 @@
   audio.preload = "metadata";
   audio.crossOrigin = "anonymous";
 
-  // iOS tends to suspend WebAudio when backgrounded/locked, which can cut audio
-  // if we route the media element through an AudioContext for visualization.
-  // Prefer native playback on iOS; the visualizer will gracefully fall back.
   const isIOS = (() => {
     const ua = navigator.userAgent || "";
     const iDevice = /iPad|iPhone|iPod/i.test(ua);
-    // iPadOS reports as Mac; maxTouchPoints helps distinguish.
     const iPadOS = navigator.platform === "MacIntel" && (navigator.maxTouchPoints || 0) > 1;
     return iDevice || iPadOS;
   })();
 
-  // Seeking in large files typically requires HTTP Range support from the server.
   let rangeSupportChecked = false;
   let rangeSupported = true;
 
@@ -137,15 +191,7 @@
       const res = await fetch(src, { headers: { Range: "bytes=0-0" } });
       rangeSupported = res.status === 206 || !!res.headers.get("content-range");
     } catch {
-      // If we can't probe (offline/CORS/etc), don't block seeking.
       rangeSupported = true;
-    }
-
-    if (!rangeSupported) {
-      setHint(
-        `Seeking may be limited with this server. Run <code>python3 ./serve.py</code> (supports Range requests) or <code>npx serve</code>.`,
-        "warn",
-      );
     }
 
     return rangeSupported;
@@ -160,13 +206,13 @@
   let freqData = null;
   /** @type {Uint8Array | null} */
   let timeData = null;
-  /** @type {CanvasRenderingContext2D | null} */
-  let viz2dCtx = null;
   let vizRaf = 0;
-  let vizLastDrawMs = 0;
 
-  // ---- Three.js visualizer (optional; falls back to 2D) ----
-  const THREE_CDN = "https://unpkg.com/three/build/three.module.js";
+  // ---- Three.js visualizer ----
+  // Use jspm.dev which properly handles ES module dependencies
+  const THREE_CDN = "https://ga.jspm.io/npm:three@0.160.0/build/three.module.js";
+  const ORBIT_CONTROLS_CDN = "https://ga.jspm.io/npm:three@0.160.0/examples/jsm/controls/OrbitControls.js";
+  const GLTF_LOADER_CDN = "https://ga.jspm.io/npm:three@0.160.0/examples/jsm/loaders/GLTFLoader.js";
   /** @type {any | null} */
   let three = null;
   let threeReady = false;
@@ -184,6 +230,8 @@
   let threeCore = null;
   /** @type {any | null} */
   let threeStars = null;
+  /** @type {any | null} */
+  let orbitControls = null;
   /** @type {Record<string, { group: any; update: Function }> | null} */
   let threeModes = null;
   /** @type {Array<{ kind: "std" | "basic" | "points" | "line"; mat: any; emissiveScale?: number }>} */
@@ -193,13 +241,36 @@
   let threeW = 0;
   let threeH = 0;
 
+  // 3D Model state
+  /** @type {any | null} */
+  let gltfLoader = null;
+  /** @type {any | null} */
+  let currentModel = null;
+  /** @type {any | null} */
+  let currentModelMixer = null;
+  /** @type {string | null} */
+  let currentModelId = null;
+  /** @type {Array<{id: string, name: string, url: string, scale?: number, position?: [number, number, number]}>} */
+  let availableModels = [];
+  /** @type {number} */
+  let modelLoadId = 0; // Tracks which load request is current
+
+  // Runtime model overrides (tweakable via UI)
+  const modelOverrides = {
+    scale: 1,
+    posY: 0,
+    rotY: 0,
+    animSpeed: 1,
+    scalePulse: true,
+  };
+
   const vizPalette = {
     accent: "#3cff6b",
     accentDim: "#16b64f",
     bg: "#050505",
   };
 
-  /** @type {"orbit" | "grid" | "nebula" | "scope" | "tunnel" | "off"} */
+  /** @type {"grid" | "nebula" | "scope" | "off"} */
   let bgVizMode = "grid";
 
   const prefersReducedMotion = (() => {
@@ -231,7 +302,7 @@
   }
 
   function normalizeTheme(value) {
-    return value === "midnight" || value === "neo" || value === "winamp41" ? value : "midnight";
+    return value === "midnight" || value === "neo" || value === "winamp41" ? value : "neo";
   }
 
   const THEME_STORAGE_KEY = "mysongs-theme";
@@ -257,7 +328,7 @@
   themeSelect.addEventListener("change", () => applyTheme(themeSelect.value, { persist: true }));
 
   function normalizeVizMode(value) {
-    return value === "orbit" || value === "grid" || value === "nebula" || value === "scope" || value === "tunnel" || value === "off"
+    return value === "grid" || value === "nebula" || value === "scope" || value === "voyage" || value === "off"
       ? value
       : "grid";
   }
@@ -270,18 +341,13 @@
     vizSelect.value = m;
     if (persist) localStorage.setItem(VIZ_STORAGE_KEY, m);
 
-    // If 3D is ready, immediately swap modes.
     if (threeReady) syncThreeVizMode();
 
-    // If user turns it off, hide the background canvas even if 3D is ready.
     if (bgVizCanvas) bgVizCanvas.classList.toggle("is-on", threeReady && bgVizMode !== "off");
   }
 
   applyVizMode(normalizeVizMode(localStorage.getItem(VIZ_STORAGE_KEY) || bgVizMode));
   vizSelect.addEventListener("change", () => applyVizMode(vizSelect.value, { persist: true }));
-
-  // Start in 2D mode until the optional 3D visualizer loads.
-  vizWrap.classList.add("is-fallback");
 
   function escapeHtml(s) {
     return String(s)
@@ -293,11 +359,11 @@
   }
 
   function formatTime(seconds) {
-    if (!Number.isFinite(seconds) || seconds < 0) return "00:00";
+    if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
     const s = Math.floor(seconds);
     const m = Math.floor(s / 60);
     const r = s % 60;
-    return `${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
+    return `${m}:${String(r).padStart(2, "0")}`;
   }
 
   function deriveTitleFromUrl(url) {
@@ -317,25 +383,6 @@
     return artist ? `${artist} - ${title}` : title;
   }
 
-  function setStatus(text) {
-    statusText.textContent = text;
-    // Update lamp animation state
-    const lamps = document.querySelectorAll(".wa-lamp");
-    lamps.forEach((lamp) => lamp.classList.toggle("is-playing", text === "PLAY"));
-  }
-
-  /** @type {HTMLElement | null} */
-  const lcdEl = document.querySelector(".wa-lcd");
-
-  function setLoadingState(loading) {
-    if (lcdEl) lcdEl.classList.toggle("is-loading", loading);
-  }
-
-  function setHint(text, kind = "info") {
-    hintText.innerHTML = text;
-    hintText.style.color = kind === "warn" ? "var(--wa-warn)" : "rgba(255, 255, 255, 0.72)";
-  }
-
   // ---- Accessibility: Screen reader announcements ----
   const ariaStatus = $("ariaStatus");
 
@@ -345,62 +392,38 @@
     setTimeout(() => { ariaStatus.textContent = ""; }, 1500);
   }
 
-  // ---- Error state handling ----
-  function showError(title, message, actionLabel, action) {
-    let errorEl = playlistWindow.querySelector(".wa-error");
-    if (!errorEl) {
-      errorEl = document.createElement("div");
-      errorEl.className = "wa-error";
-      errorEl.innerHTML = `
-        <div class="wa-error__title"></div>
-        <div class="wa-error__text"></div>
-        <button class="wa-error__action" type="button"></button>
-      `;
-      playlistWindow.querySelector(".wa-playlist__content").appendChild(errorEl);
+  // ---- Immersive UI Functions ----
+
+  function setTrackDisplay(track) {
+    if (!track) {
+      trackTitle.textContent = "No tracks loaded";
+      trackArtist.textContent = "";
+      nowPlayingCover.style.backgroundImage = "";
+      nowPlayingCover.classList.remove("has-cover");
+      return;
     }
 
-    errorEl.querySelector(".wa-error__title").textContent = title;
-    errorEl.querySelector(".wa-error__text").textContent = message;
-    const btn = /** @type {HTMLButtonElement} */ (errorEl.querySelector(".wa-error__action"));
-    btn.textContent = actionLabel || "Retry";
-    btn.onclick = () => {
-      errorEl.classList.remove("is-visible");
-      if (action) action();
-    };
+    const title = (track.title || "").trim() || deriveTitleFromUrl(track.url);
+    const artist = (track.artist || "").trim();
 
-    errorEl.classList.add("is-visible");
-    announceToScreenReader(`Error: ${title}. ${message}`);
-  }
+    trackTitle.textContent = title;
+    trackArtist.textContent = artist || "Unknown Artist";
 
-  function hideError() {
-    const errorEl = playlistWindow.querySelector(".wa-error");
-    if (errorEl) errorEl.classList.remove("is-visible");
-  }
-
-  function setTrackDisplay(text) {
-    trackText.textContent = text;
-    trackTextDup.textContent = text;
-
-    // Enable marquee only if it overflows.
-    requestAnimationFrame(() => {
-      marquee.classList.remove("wa-marquee--scroll");
-      marquee.style.removeProperty("--wa-marquee-duration");
-      const container = marquee.getBoundingClientRect().width;
-      const inner = marqueeInner.scrollWidth;
-      if (inner <= container + 2) return;
-
-      // duration scales with content length; cap to keep it readable
-      const pxPerSecond = 38;
-      const duration = clamp(inner / pxPerSecond, 8, 22);
-      marquee.style.setProperty("--wa-marquee-duration", `${duration}s`);
-      marquee.classList.add("wa-marquee--scroll");
-    });
+    if (track.coverUrl) {
+      nowPlayingCover.style.backgroundImage = `url('${track.coverUrl}')`;
+      nowPlayingCover.classList.add("has-cover");
+    } else {
+      nowPlayingCover.style.backgroundImage = "";
+      nowPlayingCover.classList.remove("has-cover");
+    }
   }
 
   function updateTimeUi() {
     const dur = audio.duration;
     const cur = audio.currentTime;
-    timeText.textContent = `${formatTime(cur)} / ${formatTime(dur)}`;
+
+    currentTimeEl.textContent = formatTime(cur);
+    durationEl.textContent = formatTime(dur);
 
     if (!isSeeking && Number.isFinite(dur) && dur > 0) {
       const progress = (cur / dur) * 100;
@@ -409,18 +432,42 @@
     }
   }
 
+  function updatePlayPauseBtn() {
+    const isPlaying = !audio.paused;
+    playPauseBtn.setAttribute("aria-label", isPlaying ? "Pause" : "Play");
+    playPauseBtn.classList.toggle("is-playing", isPlaying);
+    playPauseBtn.innerHTML = isPlaying ? "&#x23F8;" : "&#x25B6;";
+  }
+
+  function updateVizPauseState() {
+    if (bgVizCanvas) {
+      bgVizCanvas.classList.toggle("is-paused", audio.paused);
+    }
+  }
+
   function updateButtonsUi() {
     shuffleBtn.setAttribute("aria-pressed", String(shuffle));
 
     if (repeatMode === "off") {
       repeatBtn.setAttribute("aria-pressed", "false");
-      repeatBtn.textContent = "REP";
+      repeatBtn.innerHTML = "&#x1F501;";
     } else if (repeatMode === "all") {
       repeatBtn.setAttribute("aria-pressed", "true");
-      repeatBtn.textContent = "REP";
+      repeatBtn.innerHTML = "&#x1F501;";
     } else {
       repeatBtn.setAttribute("aria-pressed", "true");
-      repeatBtn.textContent = "REP1";
+      repeatBtn.innerHTML = "&#x1F502;"; // repeat-one emoji
+    }
+  }
+
+  function updateVolumeIcon() {
+    const vol = audio.muted ? 0 : audio.volume;
+    if (vol === 0) {
+      volumeBtn.innerHTML = "&#x1F507;"; // muted
+    } else if (vol < 0.5) {
+      volumeBtn.innerHTML = "&#x1F509;"; // low
+    } else {
+      volumeBtn.innerHTML = "&#x1F50A;"; // high
     }
   }
 
@@ -476,7 +523,6 @@
       li.appendChild(cover);
       li.appendChild(main);
 
-      // Enable drag reorder
       li.draggable = true;
 
       items.push(li);
@@ -484,6 +530,468 @@
 
     playlistEl.replaceChildren(...items);
   }
+
+  // ---- Playlist Modal ----
+
+  function openPlaylist() {
+    // Close other panels
+    if (vizSettingsOpen) closeVizSettings();
+
+    playlistOpen = true;
+    playlistModal.hidden = false;
+    // Trigger reflow for animation
+    void playlistModal.offsetWidth;
+    playlistModal.classList.add("is-open");
+    playlistBtn.setAttribute("aria-expanded", "true");
+    closePlaylistBtn.focus();
+    announceToScreenReader("Playlist opened");
+    document.addEventListener("keydown", handleModalKeydown);
+  }
+
+  function closePlaylist() {
+    playlistOpen = false;
+    playlistModal.classList.remove("is-open");
+    playlistBtn.setAttribute("aria-expanded", "false");
+    document.removeEventListener("keydown", handleModalKeydown);
+
+    setTimeout(() => {
+      if (!playlistOpen) {
+        playlistModal.hidden = true;
+      }
+    }, 300);
+
+    playlistBtn.focus();
+    announceToScreenReader("Playlist closed");
+  }
+
+  function handleModalKeydown(e) {
+    if (e.key === "Escape") {
+      closePlaylist();
+      return;
+    }
+
+    // Focus trap
+    if (e.key !== "Tab") return;
+
+    const focusable = playlistModal.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+
+  // ---- Visualizer Settings Panel ----
+
+  function loadVizParams() {
+    try {
+      const saved = localStorage.getItem(VIZ_PARAMS_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed.amplitude === "number") vizParams.amplitude = clamp(parsed.amplitude, 0.2, 3);
+        if (typeof parsed.smoothing === "number") vizParams.smoothing = clamp(parsed.smoothing, 0, 0.95);
+        if (typeof parsed.speed === "number") vizParams.speed = clamp(parsed.speed, 0.25, 2);
+        if (typeof parsed.audioReactivity === "number") vizParams.audioReactivity = clamp(parsed.audioReactivity, 0, 1);
+        if (typeof parsed.zoom === "number") vizParams.zoom = clamp(parsed.zoom, 0.25, 2);
+      }
+    } catch { /* ignore */ }
+
+    // Sync sliders with loaded values
+    vizAmplitude.value = String(Math.round(vizParams.amplitude * 100));
+    vizSmoothing.value = String(Math.round(vizParams.smoothing * 100));
+    vizSpeed.value = String(Math.round(vizParams.speed * 100));
+    vizReactivity.value = String(Math.round(vizParams.audioReactivity * 100));
+    vizZoom.value = String(Math.round(vizParams.zoom * 100));
+    updateVizParamDisplays();
+    applyVizSmoothing();
+  }
+
+  function saveVizParams() {
+    try {
+      localStorage.setItem(VIZ_PARAMS_STORAGE_KEY, JSON.stringify(vizParams));
+    } catch { /* ignore */ }
+  }
+
+  function updateVizParamDisplays() {
+    amplitudeValue.textContent = `${Math.round(vizParams.amplitude * 100)}%`;
+    smoothingValue.textContent = `${Math.round(vizParams.smoothing * 100)}%`;
+    speedValue.textContent = `${Math.round(vizParams.speed * 100)}%`;
+    reactivityValue.textContent = `${Math.round(vizParams.audioReactivity * 100)}%`;
+    zoomValue.textContent = `${Math.round(vizParams.zoom * 100)}%`;
+  }
+
+  function applyVizSmoothing() {
+    if (analyser) {
+      analyser.smoothingTimeConstant = vizParams.smoothing;
+    }
+  }
+
+  function applyVizZoom() {
+    if (!threeReady || !threeCamera) return;
+    // Base position is (0, -1.2, 9.5), zoom affects distance from target
+    // Higher zoom = closer, lower zoom = further
+    const baseDistance = 9.5;
+    const targetDistance = baseDistance / vizParams.zoom;
+
+    if (orbitControls) {
+      // When OrbitControls is active, adjust the camera distance while keeping the direction
+      const direction = threeCamera.position.clone().sub(orbitControls.target).normalize();
+      threeCamera.position.copy(orbitControls.target).add(direction.multiplyScalar(targetDistance));
+      orbitControls.update();
+    } else {
+      threeCamera.position.z = targetDistance;
+    }
+    threeCamera.updateProjectionMatrix();
+  }
+
+  function handleVizSettingsClickOutside(e) {
+    const target = /** @type {HTMLElement} */ (e.target);
+    if (!vizSettings.contains(target) && !vizSettingsBtn.contains(target)) {
+      closeVizSettings();
+    }
+  }
+
+  function openVizSettings() {
+    vizSettingsOpen = true;
+    vizSettings.hidden = false;
+    void vizSettings.offsetWidth;
+    vizSettings.classList.add("is-open");
+    vizSettingsBtn.setAttribute("aria-expanded", "true");
+    setTimeout(() => {
+      document.addEventListener("click", handleVizSettingsClickOutside);
+    }, 10);
+  }
+
+  function closeVizSettings() {
+    vizSettingsOpen = false;
+    vizSettings.classList.remove("is-open");
+    vizSettingsBtn.setAttribute("aria-expanded", "false");
+    document.removeEventListener("click", handleVizSettingsClickOutside);
+    setTimeout(() => {
+      if (!vizSettingsOpen) vizSettings.hidden = true;
+    }, 200);
+  }
+
+  function resetVizParams() {
+    vizParams.amplitude = 0.3;
+    vizParams.smoothing = 0.15;
+    vizParams.speed = 2.0;
+    vizParams.audioReactivity = 1.0;
+    vizParams.zoom = 0.25;
+    vizAmplitude.value = "30";
+    vizSmoothing.value = "15";
+    vizSpeed.value = "200";
+    vizReactivity.value = "100";
+    vizZoom.value = "25";
+    updateVizParamDisplays();
+    applyVizSmoothing();
+
+    // Reset camera position and OrbitControls
+    if (threeCamera && orbitControls) {
+      threeCamera.position.set(0, -1.2, 9.5);
+      orbitControls.target.set(0, 0.5, 0);
+      orbitControls.update();
+    }
+    applyVizZoom();
+    saveVizParams();
+    // Reset model selection
+    if (modelSelect) {
+      modelSelect.value = "";
+      unloadCurrentModel();
+    }
+  }
+
+  // ---- 3D Model Management ----
+  const MODEL_STORAGE_KEY = "mysongs-selected-model";
+
+  function initModelSelect() {
+    if (!modelSelect) return;
+
+    // Load available models from window.MODELS
+    availableModels = Array.isArray(window.MODELS) ? window.MODELS : [];
+
+    // Populate the select dropdown
+    modelSelect.innerHTML = '<option value="">None</option>';
+    availableModels.forEach((model) => {
+      const option = document.createElement("option");
+      option.value = model.id;
+      option.textContent = model.name;
+      modelSelect.appendChild(option);
+    });
+
+    // Restore saved selection
+    const savedModelId = localStorage.getItem(MODEL_STORAGE_KEY);
+    if (savedModelId && availableModels.some((m) => m.id === savedModelId)) {
+      modelSelect.value = savedModelId;
+    }
+
+    // Handle selection changes
+    modelSelect.addEventListener("change", () => {
+      const modelId = modelSelect.value;
+      localStorage.setItem(MODEL_STORAGE_KEY, modelId);
+      if (modelId) {
+        loadModel(modelId);
+      } else {
+        unloadCurrentModel();
+      }
+    });
+  }
+
+  function loadModel(modelId) {
+    if (!gltfLoader || !threeScene || !three) {
+      console.warn("Cannot load model: Three.js or GLTFLoader not ready");
+      return;
+    }
+
+    const modelConfig = availableModels.find((m) => m.id === modelId);
+    if (!modelConfig) {
+      console.warn("Model not found:", modelId);
+      return;
+    }
+
+    // Unload current model first
+    unloadCurrentModel();
+
+    // Increment load ID to track this request
+    modelLoadId++;
+    const thisLoadId = modelLoadId;
+
+    console.log("Loading model:", modelConfig.name, "loadId:", thisLoadId);
+
+    gltfLoader.load(
+      modelConfig.url,
+      (gltf) => {
+        // Ignore if a newer load was started
+        if (thisLoadId !== modelLoadId) {
+          console.log("Ignoring stale model load:", modelConfig.name);
+          // Dispose the loaded model since we don't need it
+          gltf.scene.traverse((child) => {
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) {
+              if (Array.isArray(child.material)) {
+                child.material.forEach((m) => m.dispose());
+              } else {
+                child.material.dispose();
+              }
+            }
+          });
+          return;
+        }
+
+        console.log("Model loaded successfully:", modelConfig.name);
+        currentModel = gltf.scene;
+        currentModelId = modelId;
+
+        // Apply scale
+        const scale = modelConfig.scale || 1;
+        currentModel.scale.set(scale, scale, scale);
+
+        // Apply position
+        const pos = modelConfig.position || [0, 0, 0];
+        currentModel.position.set(pos[0], pos[1], pos[2]);
+
+        // Apply rotation if specified
+        if (modelConfig.rotation) {
+          currentModel.rotation.set(
+            modelConfig.rotation[0],
+            modelConfig.rotation[1],
+            modelConfig.rotation[2]
+          );
+        }
+
+        // Add to scene
+        threeScene.add(currentModel);
+
+        // Setup animation mixer if model has animations
+        if (gltf.animations && gltf.animations.length > 0) {
+          currentModelMixer = new three.AnimationMixer(currentModel);
+          // Play all animations
+          gltf.animations.forEach((clip) => {
+            const action = currentModelMixer.clipAction(clip);
+            action.play();
+          });
+          console.log(`Playing ${gltf.animations.length} animation(s)`);
+        }
+
+        // Initialize model overrides from config
+        modelOverrides.scale = modelConfig.scale || 1;
+        modelOverrides.posY = modelConfig.position?.[1] || 0;
+        modelOverrides.rotY = modelConfig.rotation?.[1] ? (modelConfig.rotation[1] * 180 / Math.PI) : 0;
+        modelOverrides.animSpeed = modelConfig.animationSpeed || 1;
+        modelOverrides.scalePulse = !modelConfig.noScalePulse;
+
+        // Update UI sliders
+        updateModelSettingsUI();
+        showModelSettings(true);
+      },
+      (progress) => {
+        if (progress.total > 0) {
+          const pct = Math.round((progress.loaded / progress.total) * 100);
+          console.log(`Loading model: ${pct}%`);
+        }
+      },
+      (error) => {
+        console.error("Error loading model:", error);
+        currentModel = null;
+        currentModelId = null;
+      }
+    );
+  }
+
+  function unloadCurrentModel() {
+    console.log("unloadCurrentModel called, currentModelId:", currentModelId);
+    if (currentModel && threeScene) {
+      console.log("Removing model from scene");
+      threeScene.remove(currentModel);
+      // Dispose of geometries and materials
+      currentModel.traverse((child) => {
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) {
+          if (Array.isArray(child.material)) {
+            child.material.forEach((m) => m.dispose());
+          } else {
+            child.material.dispose();
+          }
+        }
+      });
+    }
+    if (currentModelMixer) {
+      currentModelMixer.stopAllAction();
+      currentModelMixer = null;
+    }
+    currentModel = null;
+    currentModelId = null;
+    showModelSettings(false);
+  }
+
+  function showModelSettings(show) {
+    const groups = [modelSettingsGroup, modelPosYGroup, modelRotYGroup, modelAnimSpeedGroup];
+    groups.forEach((g) => {
+      if (g) g.hidden = !show;
+    });
+  }
+
+  function updateModelSettingsUI() {
+    if (modelScaleSlider) {
+      modelScaleSlider.value = String(modelOverrides.scale);
+      if (modelScaleValue) modelScaleValue.textContent = modelOverrides.scale.toFixed(1);
+    }
+    if (modelPosYSlider) {
+      modelPosYSlider.value = String(modelOverrides.posY);
+      if (modelPosYValue) modelPosYValue.textContent = modelOverrides.posY.toFixed(1);
+    }
+    if (modelRotYSlider) {
+      modelRotYSlider.value = String(modelOverrides.rotY);
+      if (modelRotYValue) modelRotYValue.textContent = `${Math.round(modelOverrides.rotY)}°`;
+    }
+    if (modelAnimSpeedSlider) {
+      modelAnimSpeedSlider.value = String(modelOverrides.animSpeed);
+      if (modelAnimSpeedValue) modelAnimSpeedValue.textContent = `${modelOverrides.animSpeed.toFixed(1)}x`;
+    }
+    if (scalePulseCheckbox) {
+      scalePulseCheckbox.checked = modelOverrides.scalePulse;
+    }
+  }
+
+  function applyModelOverrides() {
+    if (!currentModel) return;
+
+    // Apply scale (base scale, pulse is applied in render loop)
+    currentModel.scale.setScalar(modelOverrides.scale);
+
+    // Apply Y position
+    currentModel.position.y = modelOverrides.posY;
+
+    // Apply Y rotation (convert degrees to radians)
+    currentModel.rotation.y = modelOverrides.rotY * Math.PI / 180;
+  }
+
+  function copySettingsToClipboard() {
+    console.log("copySettingsToClipboard called, currentModelId:", currentModelId);
+    const modelConfig = availableModels.find((m) => m.id === currentModelId);
+
+    let textToCopy;
+
+    if (!currentModelId || !modelConfig) {
+      // No model selected - copy just vizParams
+      textToCopy = `// Viz params
+{
+  amplitude: ${vizParams.amplitude},
+  smoothing: ${vizParams.smoothing},
+  speed: ${vizParams.speed},
+  audioReactivity: ${vizParams.audioReactivity},
+  zoom: ${vizParams.zoom},
+}`;
+    } else {
+      // Format as JS object for direct paste into models.js
+      const scalePulseLine = !modelOverrides.scalePulse ? ",\n    noScalePulse: true" : "";
+      textToCopy = `  {
+    id: "${currentModelId}",
+    name: "${modelConfig.name || currentModelId}",
+    url: "${modelConfig.url}",
+    scale: ${modelOverrides.scale.toFixed(2)},
+    position: [0, ${modelOverrides.posY.toFixed(2)}, 0],
+    rotation: [0, ${(modelOverrides.rotY * Math.PI / 180).toFixed(3)}, 0],
+    animationSpeed: ${modelOverrides.animSpeed.toFixed(2)}${scalePulseLine}
+  },`;
+    }
+
+    console.log("Text to copy:", textToCopy);
+
+    // Try clipboard API first, fallback to prompt
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(textToCopy).then(() => {
+        console.log("Copied to clipboard successfully");
+        if (copySettingsBtn) {
+          copySettingsBtn.textContent = "Copied!";
+          setTimeout(() => { copySettingsBtn.textContent = "Copy Settings JSON"; }, 1500);
+        }
+      }).catch((err) => {
+        console.warn("Clipboard API failed:", err);
+        fallbackCopy(textToCopy);
+      });
+    } else {
+      fallbackCopy(textToCopy);
+    }
+  }
+
+  function fallbackCopy(text) {
+    // Fallback: use a temporary textarea
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.style.position = "fixed";
+    textarea.style.top = "0";
+    textarea.style.left = "0";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+      document.execCommand("copy");
+      console.log("Fallback copy succeeded");
+      if (copySettingsBtn) {
+        copySettingsBtn.textContent = "Copied!";
+        setTimeout(() => { copySettingsBtn.textContent = "Copy Settings JSON"; }, 1500);
+      }
+    } catch (err) {
+      console.error("Fallback copy failed:", err);
+      // Last resort: show in prompt
+      window.prompt("Copy this (Ctrl+C):", text);
+    }
+    document.body.removeChild(textarea);
+  }
+
+  // Initialize viz params
+  loadVizParams();
+
+  // Initialize model select dropdown (populate options immediately)
+  initModelSelect();
 
   // ---- Playlist drag reorder ----
   function initPlaylistDragReorder() {
@@ -505,7 +1013,6 @@
       e.dataTransfer.effectAllowed = "move";
       e.dataTransfer.setData("text/plain", String(draggedIndex));
 
-      // Create placeholder
       placeholder = document.createElement("li");
       placeholder.className = "wa-item wa-item--placeholder";
       placeholder.style.height = `${item.offsetHeight}px`;
@@ -539,22 +1046,18 @@
       e.preventDefault();
       if (draggedIndex < 0 || !placeholder) return;
 
-      // Find new position
       const items = [...playlistEl.querySelectorAll(".wa-item:not(.is-dragging):not(.wa-item--placeholder)")];
       const placeholderIndex = items.indexOf(placeholder.nextElementSibling?.closest(".wa-item"));
       let newIndex = placeholderIndex === -1 ? tracks.length - 1 : placeholderIndex;
 
-      // Adjust for the dragged item's original position
       if (draggedIndex < newIndex) {
         newIndex = Math.max(0, newIndex);
       }
 
       if (draggedIndex !== newIndex && draggedIndex >= 0 && draggedIndex < tracks.length) {
-        // Reorder tracks array
         const [removed] = tracks.splice(draggedIndex, 1);
         tracks.splice(newIndex, 0, removed);
 
-        // Update currentIndex if affected
         if (currentIndex === draggedIndex) {
           currentIndex = newIndex;
         } else if (draggedIndex < currentIndex && newIndex >= currentIndex) {
@@ -584,6 +1087,8 @@
 
   initPlaylistDragReorder();
 
+  // ---- Audio Graph (WebAudio for visualization) ----
+
   function ensureAudioGraph() {
     if (!canUseWebAudioViz()) return;
     if (audioCtx && analyser && freqData && timeData) return;
@@ -595,80 +1100,16 @@
       const source = audioCtx.createMediaElementSource(audio);
       analyser = audioCtx.createAnalyser();
       analyser.fftSize = 256;
-      analyser.smoothingTimeConstant = 0.82;
+      analyser.smoothingTimeConstant = vizParams.smoothing;
       source.connect(analyser);
       analyser.connect(audioCtx.destination);
       freqData = new Uint8Array(analyser.frequencyBinCount);
       timeData = new Uint8Array(analyser.fftSize);
     } catch (err) {
-      // Some browsers may block WebAudio wiring in certain contexts.
       audioCtx = null;
       analyser = null;
       freqData = null;
       timeData = null;
-    }
-  }
-
-  function ensureViz2dContext() {
-    if (viz2dCtx) return true;
-    viz2dCtx = viz2dCanvas.getContext("2d");
-    return !!viz2dCtx;
-  }
-
-  function resizeViz2dCanvas() {
-    if (!viz2dCanvas || !viz2dCtx) return;
-    const dpr = window.devicePixelRatio || 1;
-    const w = Math.max(1, Math.floor(viz2dCanvas.clientWidth * dpr));
-    const h = Math.max(1, Math.floor(viz2dCanvas.clientHeight * dpr));
-    if (viz2dCanvas.width === w && viz2dCanvas.height === h) return;
-    viz2dCanvas.width = w;
-    viz2dCanvas.height = h;
-  }
-
-  function drawViz2d(nowMs) {
-    if (!viz2dCtx || !viz2dCanvas) return;
-    if (!analyser || !freqData) {
-      // idle fallback
-      viz2dCtx.clearRect(0, 0, viz2dCanvas.width, viz2dCanvas.height);
-      viz2dCtx.fillStyle = vizPalette.bg;
-      viz2dCtx.fillRect(0, 0, viz2dCanvas.width, viz2dCanvas.height);
-      return;
-    }
-
-    // Throttle a bit; we don't need 60fps for tiny canvas.
-    if (nowMs - vizLastDrawMs < 33) return;
-    vizLastDrawMs = nowMs;
-
-    analyser.getByteFrequencyData(freqData);
-    const w = viz2dCanvas.width;
-    const h = viz2dCanvas.height;
-    viz2dCtx.clearRect(0, 0, w, h);
-
-    // Background
-    viz2dCtx.fillStyle = vizPalette.bg;
-    viz2dCtx.fillRect(0, 0, w, h);
-
-    const bars = 24;
-    const gap = Math.max(1, Math.floor(w * 0.006));
-    const barW = Math.max(2, Math.floor((w - gap * (bars + 1)) / bars));
-
-    // Sample the low-mid range; looks more "Winamp-ish"
-    const startBin = Math.floor(freqData.length * 0.06);
-    const endBin = Math.floor(freqData.length * 0.6);
-    const span = Math.max(1, endBin - startBin);
-
-    for (let i = 0; i < bars; i += 1) {
-      const bin = startBin + Math.floor((i / (bars - 1)) * span);
-      const v = freqData[bin] / 255; // 0..1
-      const barH = Math.max(1, Math.floor(v * (h - 4)));
-      const x = gap + i * (barW + gap);
-      const y = h - barH - 2;
-
-      const grad = viz2dCtx.createLinearGradient(0, y, 0, y + barH);
-      grad.addColorStop(0, vizPalette.accent);
-      grad.addColorStop(1, vizPalette.accentDim);
-      viz2dCtx.fillStyle = grad;
-      viz2dCtx.fillRect(x, y, barW, barH);
     }
   }
 
@@ -702,8 +1143,7 @@
     }
 
     if (threeCore) {
-      const coreOn = bgVizMode === "orbit" || bgVizMode === "tunnel";
-      threeCore.visible = on && coreOn;
+      threeCore.visible = false; // Core no longer used
     }
 
     if (threeStars) {
@@ -730,9 +1170,7 @@
     if (!threeReady || !threeRenderer || !threeScene || !threeCamera || !threeGroup || !threeModes) return;
     if (bgVizMode === "off") return;
 
-    const t = nowMs * 0.001;
-    const dt = threeLastNowMs ? clamp((nowMs - threeLastNowMs) * 0.001, 0, 0.05) : 0.016;
-    threeLastNowMs = nowMs;
+    const amplitude = vizParams.amplitude;
 
     const avgBins = (start, end) => {
       if (!freqData || !freqData.length) return 0;
@@ -757,6 +1195,60 @@
       treble = avgBins(Math.floor(freqData.length * 0.55), Math.floor(freqData.length * 0.92));
     }
 
+    // ---- Audio-reactive speed calculation ----
+    const reactivity = vizParams.audioReactivity;
+
+    if (reactivity > 0) {
+      // Calculate spectral flux (rate of change in energy) for "busyness"
+      const energyDelta = energy - lastEnergyForSpeed;
+      spectralFlux = spectralFlux * 0.88 + Math.abs(energyDelta) * 0.12;
+      lastEnergyForSpeed = energy;
+
+      // Beat detection - detect bass hits for speed bursts
+      const bassHit = bass > 0.5 && bass > lastBassForSpeed + 0.1;
+      if (bassHit) {
+        globalBeatPulse = Math.min(globalBeatPulse + 0.35, 1.0);
+      }
+      globalBeatPulse *= 0.93; // Smooth decay
+      lastBassForSpeed = bass;
+
+      // Target speed calculation:
+      // - Base: energy maps 0→0.35 to 1→1.1 (silence slows down, loud speeds up)
+      // - Beat pulse adds transient bursts
+      // - Spectral flux adds responsiveness to dynamic/busy audio
+      // - Mid/treble activity adds extra liveliness
+      const energySpeed = 0.35 + energy * 0.75;
+      const beatBoost = globalBeatPulse * 0.5;
+      const fluxBoost = spectralFlux * 2.0;
+      const harmonyBoost = (mid * 0.15 + treble * 0.1);
+
+      const targetAudioSpeed = clamp(
+        energySpeed + beatBoost + fluxBoost + harmonyBoost,
+        0.25,  // Minimum during silence (still moves, just slower)
+        1.8    // Maximum during intense sections
+      );
+
+      // Asymmetric smoothing: fast attack, slow release
+      // This makes beats feel punchy while silence fades gracefully
+      const smoothUp = 0.18;   // Quick response to louder audio
+      const smoothDown = 0.025; // Gradual slowdown during quiet parts
+      const smooth = targetAudioSpeed > audioSpeedMultiplier ? smoothUp : smoothDown;
+      audioSpeedMultiplier += (targetAudioSpeed - audioSpeedMultiplier) * smooth;
+    } else {
+      // No reactivity - gradually return to base speed
+      audioSpeedMultiplier += (1.0 - audioSpeedMultiplier) * 0.05;
+    }
+
+    // Blend between static speed and audio-reactive speed
+    const effectiveSpeed = vizParams.speed * (
+      (1 - reactivity) + reactivity * audioSpeedMultiplier
+    );
+
+    // Apply speed modifier to time
+    const t = nowMs * 0.001 * effectiveSpeed;
+    const dt = threeLastNowMs ? clamp((nowMs - threeLastNowMs) * 0.001 * effectiveSpeed, 0, 0.05) : 0.016;
+    threeLastNowMs = nowMs;
+
     if (threeStars) {
       threeStars.rotation.y = -t * 0.03;
       threeStars.rotation.x = -0.08;
@@ -773,25 +1265,93 @@
         bass,
         mid,
         treble,
+        amplitude,
         analyser,
         freqData,
         timeData,
       });
     }
 
+    // Update OrbitControls for smooth damping
+    if (orbitControls) {
+      orbitControls.update();
+    }
+
+    // Update 3D model animations with audio reactivity
+    if (currentModelMixer && currentModel) {
+      // Audio-reactive animation speed using modelOverrides
+      const baseAnimSpeed = modelOverrides.animSpeed;
+      const energyMod = 0.5 + energy * 1.0;
+      const beatMod = 1 + globalBeatPulse * 0.8;
+      const animSpeed = baseAnimSpeed * energyMod * beatMod * effectiveSpeed;
+
+      currentModelMixer.update(dt * animSpeed);
+
+      // Scale pulse with bass (if enabled via modelOverrides)
+      if (modelOverrides.scalePulse) {
+        const pulse = 1 + bass * 0.1 * amplitude;
+        currentModel.scale.setScalar(modelOverrides.scale * pulse);
+      }
+    }
+
     threeRenderer.render(threeScene, threeCamera);
   }
 
   async function ensureThreeViz() {
-    if (!canUseWebAudioViz()) return false;
-    if (!bgVizCanvas) return false;
-    if (threeReady) return true;
-    if (threeInitPromise) return threeInitPromise;
+    console.log("ensureThreeViz called");
+    console.log("canUseWebAudioViz:", canUseWebAudioViz(), "| prefersReducedMotion:", prefersReducedMotion, "| isIOS:", isIOS);
+    if (!canUseWebAudioViz()) {
+      console.log("WebAudio viz disabled");
+      return false;
+    }
+    if (!bgVizCanvas) {
+      console.log("No bgVizCanvas found");
+      return false;
+    }
+    if (threeReady) {
+      console.log("Three already ready");
+      return true;
+    }
+    if (threeInitPromise) {
+      console.log("Three init already in progress");
+      return threeInitPromise;
+    }
 
+    console.log("Starting Three.js initialization...");
     threeInitPromise = (async () => {
       try {
+        console.log("Importing Three.js from:", THREE_CDN);
         const mod = await import(THREE_CDN);
+        console.log("Three.js imported successfully");
         three = mod;
+
+        // Try to load OrbitControls separately - visualization works without it
+        let OrbitControls = null;
+        try {
+          const orbitMod = await import(ORBIT_CONTROLS_CDN);
+          OrbitControls = orbitMod.OrbitControls;
+          if (OrbitControls) {
+            console.log("OrbitControls loaded successfully");
+          } else {
+            console.warn("OrbitControls module loaded but OrbitControls class not found. Keys:", Object.keys(orbitMod));
+          }
+        } catch (orbitErr) {
+          console.warn("OrbitControls failed to load, camera interaction disabled:", orbitErr);
+        }
+
+        // Try to load GLTFLoader for 3D model support
+        let GLTFLoader = null;
+        try {
+          const gltfMod = await import(GLTF_LOADER_CDN);
+          GLTFLoader = gltfMod.GLTFLoader;
+          if (GLTFLoader) {
+            console.log("GLTFLoader loaded successfully");
+          } else {
+            console.warn("GLTFLoader module loaded but GLTFLoader class not found");
+          }
+        } catch (gltfErr) {
+          console.warn("GLTFLoader failed to load, 3D model support disabled:", gltfErr);
+        }
 
         const {
           Scene,
@@ -814,7 +1374,13 @@
           LineLoop,
           LineBasicMaterial,
           AdditiveBlending,
+          AnimationMixer,
         } = mod;
+
+        // Initialize GLTFLoader if available
+        if (GLTFLoader) {
+          gltfLoader = new GLTFLoader();
+        }
 
         threeRenderer = new WebGLRenderer({
           canvas: bgVizCanvas,
@@ -825,19 +1391,40 @@
         threeRenderer.setClearAlpha(0);
         threeRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
 
-        // three.js r152+ uses outputColorSpace.
         try {
           if (mod.SRGBColorSpace && "outputColorSpace" in threeRenderer) {
             threeRenderer.outputColorSpace = mod.SRGBColorSpace;
           }
-        } catch {
-          // ignore
-        }
+        } catch { /* ignore */ }
 
         threeScene = new Scene();
         threeCamera = new PerspectiveCamera(60, 1, 0.1, 120);
-        threeCamera.position.set(0, 1.2, 9.5);
-        threeCamera.lookAt(0, 0.55, 0);
+        threeCamera.position.set(0, -1.2, 9.5);
+        threeCamera.lookAt(0, 0.5, 0); // Look upward toward the ceiling
+
+        // Initialize OrbitControls for interactive camera manipulation (if loaded)
+        if (OrbitControls) {
+          try {
+            orbitControls = new OrbitControls(threeCamera, bgVizCanvas);
+            orbitControls.enableDamping = true;
+            orbitControls.dampingFactor = 0.08;
+            orbitControls.enableZoom = true;
+            orbitControls.zoomSpeed = 0.8;
+            orbitControls.enablePan = true;
+            orbitControls.panSpeed = 0.6;
+            orbitControls.rotateSpeed = 0.5;
+            orbitControls.minDistance = 2;
+            orbitControls.maxDistance = 30;
+            orbitControls.target.set(0, 0.5, 0); // Match the lookAt target
+
+            // Enable pointer events on the canvas for OrbitControls
+            bgVizCanvas.classList.add("has-orbit-controls");
+            console.log("OrbitControls initialized successfully");
+          } catch (initErr) {
+            console.warn("Failed to initialize OrbitControls:", initErr);
+            orbitControls = null;
+          }
+        }
 
         const ambient = new AmbientLight(0xffffff, 0.55);
         const dir = new DirectionalLight(0xffffff, 0.85);
@@ -854,7 +1441,7 @@
         threeModes = null;
         threeLastNowMs = 0;
 
-        // Center “core” (wireframe knot) that pulses with bass.
+        // Center "core" (wireframe knot)
         const coreGeom = new TorusKnotGeometry(1.05, 0.32, 160, 22);
         const coreMat = new MeshStandardMaterial({
           color: accent.clone(),
@@ -870,14 +1457,14 @@
         threeGroup.add(threeCore);
         threeThemeTargets.push({ kind: "std", mat: coreMat, emissiveScale: 0.22 });
 
-        // Sparse additive “stars” to make it feel more like a background demo.
+        // Stars
         const starCount = 1100;
         const positions = new Float32Array(starCount * 3);
         for (let i = 0; i < starCount; i += 1) {
           const idx = i * 3;
           const r = 6 + Math.random() * 10;
           const theta = Math.random() * Math.PI * 2;
-          const u = Math.random() * 2 - 1; // -1..1
+          const u = Math.random() * 2 - 1;
           const phi = Math.acos(u);
           positions[idx + 0] = Math.cos(theta) * Math.sin(phi) * r;
           positions[idx + 1] = Math.cos(phi) * r * 0.65;
@@ -900,66 +1487,12 @@
         const freqBins = (freqData && freqData.length) || 128;
         const clamp01 = (n) => clamp(n, 0, 1);
 
-        // --- Mode: Orbit Bars (ring equalizer) ---
-        const orbitGroup = new Group();
-        threeGroup.add(orbitGroup);
-
-        const orbitGeom = new BoxGeometry(0.18, 1, 0.18);
-        const orbitMat = new MeshStandardMaterial({
-          color: accent.clone(),
-          emissive: accent.clone().multiplyScalar(0.35),
-          roughness: 0.35,
-          metalness: 0.18,
-        });
-        threeThemeTargets.push({ kind: "std", mat: orbitMat, emissiveScale: 0.35 });
-
-        const orbitBars = [];
-        const orbitCount = 96;
-        const orbitRadius = 3.45;
-        for (let i = 0; i < orbitCount; i += 1) {
-          const bar = new Mesh(orbitGeom, orbitMat);
-          const a = (i / orbitCount) * Math.PI * 2;
-          bar.position.set(Math.cos(a) * orbitRadius, 0, Math.sin(a) * orbitRadius);
-          bar.rotation.y = -a;
-          bar.scale.y = 0.12;
-          bar.position.y = bar.scale.y / 2 - 0.06;
-          orbitGroup.add(bar);
-          orbitBars.push(bar);
-        }
-
-        const orbitUpdate = ({ t, bass, freqData: f }) => {
-          orbitGroup.rotation.y = t * 0.35;
-          orbitGroup.rotation.x = -0.35;
-
-          if (threeCore && threeCore.visible) {
-            const pulse = 0.86 + bass * 0.95;
-            threeCore.scale.setScalar(pulse);
-            threeCore.rotation.y = t * 0.85;
-            threeCore.rotation.x = 0.55 + t * 0.22;
-          }
-
-          if (!f || !f.length) return;
-          const startBin = Math.floor(f.length * 0.02);
-          const endBin = Math.floor(f.length * 0.82);
-          const span = Math.max(1, endBin - startBin);
-
-          for (let i = 0; i < orbitBars.length; i += 1) {
-            const bar = orbitBars[i];
-            const bin = startBin + Math.floor((i / Math.max(1, orbitBars.length - 1)) * span);
-            const v = (f[bin] || 0) / 255;
-            const shaped = Math.pow(v, 1.65);
-            const s = 0.12 + shaped * 4.2;
-            bar.scale.y = s;
-            bar.position.y = s / 2 - 0.06;
-          }
-        };
-
-        // --- Mode: Wave Grid (wireframe plane) ---
+        // --- Mode: Wave Grid (Ceiling) ---
         const gridGroup = new Group();
         threeGroup.add(gridGroup);
         const gridGeom = new PlaneGeometry(9.6, 9.6, 64, 64);
-        gridGeom.rotateX(-Math.PI / 2);
-        gridGeom.translate(0, -1.0, 0);
+        gridGeom.rotateX(Math.PI / 2); // Rotate to horizontal plane facing down
+        gridGeom.translate(0, 1.0, 0); // Position above as ceiling
         const gridMat = new MeshBasicMaterial({
           color: accent.clone(),
           transparent: true,
@@ -982,9 +1515,11 @@
           gridBins[i] = gridStart + Math.floor(u * gridSpan);
         }
 
-        const gridUpdate = ({ t, freqData: f, energy }) => {
+        const gridUpdate = ({ t, freqData: f, energy, amplitude }) => {
           gridGroup.rotation.y = t * 0.12;
           if (!f || !f.length) return;
+
+          const amp = amplitude || 1;
 
           for (let i = 0; i < gridPos.count; i += 1) {
             const idx = i * 3;
@@ -997,12 +1532,14 @@
             const v = (f[bin] || 0) / 255;
             const shaped = Math.pow(v, 1.85);
             const wave = Math.sin(t * 1.25 + x * 0.8 + z * 0.75) * (0.18 + energy * 0.22);
-            gridPos.array[idx + 1] = gridBase[idx + 1] + (shaped * 1.6 + wave) * fall;
+            // Push vertices downward (negative Y) for ceiling dripping effect
+            // Amplitude controls how much the audio affects displacement
+            gridPos.array[idx + 1] = gridBase[idx + 1] - (shaped * 1.6 * amp + wave) * fall;
           }
           gridPos.needsUpdate = true;
         };
 
-        // --- Mode: Particle Nebula (points driven by spectrum) ---
+        // --- Mode: Particle Nebula ---
         const nebulaGroup = new Group();
         threeGroup.add(nebulaGroup);
 
@@ -1048,25 +1585,27 @@
 
         const nebulaPosAttr = /** @type {any} */ (nebulaGeom.getAttribute("position"));
 
-        const nebulaUpdate = ({ t, freqData: f, energy }) => {
+        const nebulaUpdate = ({ t, freqData: f, energy, amplitude }) => {
           nebulaGroup.rotation.y = t * 0.22;
           nebulaGroup.rotation.x = -0.12;
           if (!f || !f.length) return;
 
+          const ampMult = amplitude || 1;
+
           for (let i = 0; i < nebulaCount; i += 1) {
-            const amp = (f[nebulaBinArr[i]] || 0) / 255;
-            const shaped = Math.pow(amp, 1.6);
-            const r = nebulaRadArr[i] * (0.65 + shaped * 1.8);
+            const audioVal = (f[nebulaBinArr[i]] || 0) / 255;
+            const shaped = Math.pow(audioVal, 1.6);
+            const r = nebulaRadArr[i] * (0.65 + shaped * 1.8 * ampMult);
             const idx = i * 3;
             nebulaPosAttr.array[idx + 0] = nebulaDirArr[idx + 0] * r;
             nebulaPosAttr.array[idx + 1] = nebulaDirArr[idx + 1] * r;
             nebulaPosAttr.array[idx + 2] = nebulaDirArr[idx + 2] * r;
           }
           nebulaPosAttr.needsUpdate = true;
-          nebulaMat.size = 0.04 + energy * 0.08;
+          nebulaMat.size = 0.04 + energy * 0.08 * ampMult;
         };
 
-        // --- Mode: Oscilloscope Ring (time-domain loop) ---
+        // --- Mode: Oscilloscope Ring ---
         const scopeGroup = new Group();
         threeGroup.add(scopeGroup);
 
@@ -1089,18 +1628,19 @@
 
         const scopePosAttr = /** @type {any} */ (scopeGeom.getAttribute("position"));
 
-        const scopeUpdate = ({ t, bass, analyser: a, timeData: td }) => {
+        const scopeUpdate = ({ t, bass, amplitude, analyser: a, timeData: td }) => {
           scopeGroup.rotation.y = -t * 0.18;
           scopeGroup.rotation.x = -0.22;
           if (!a || !td || td.length < scopeN) return;
           a.getByteTimeDomainData(td);
 
+          const ampMult = amplitude || 1;
           const baseR = 3.25;
-          const ampR = 1.05 + bass * 0.8;
+          const ampR = (1.05 + bass * 0.8) * ampMult;
           for (let i = 0; i < scopeN; i += 1) {
-            const s = (td[i] - 128) / 128; // -1..1
+            const s = (td[i] - 128) / 128;
             const r = baseR + s * ampR;
-            const y = s * 0.9;
+            const y = s * 0.9 * ampMult;
             const ang = scopeAngles[i];
             const idx = i * 3;
             scopePosAttr.array[idx + 0] = Math.cos(ang) * r;
@@ -1110,104 +1650,224 @@
           scopePosAttr.needsUpdate = true;
         };
 
-        // --- Mode: Tunnel (rings flying toward camera) ---
-        const tunnelGroup = new Group();
-        threeGroup.add(tunnelGroup);
+        // --- Mode: Voyage (Cosmic terrain + starfield journey) ---
+        const voyageGroup = new Group();
+        threeGroup.add(voyageGroup);
 
-        const tunnelRingCount = 16;
-        const tunnelBarsPerRing = 48;
-        const tunnelRadius = 2.95;
-        const tunnelSpacing = 0.82;
-        const tunnelGeom = new BoxGeometry(0.14, 1, 0.14);
-        const tunnelMat = new MeshStandardMaterial({
-          color: accent.clone(),
-          emissive: accent.clone().multiplyScalar(0.35),
-          roughness: 0.32,
-          metalness: 0.2,
+        // Terrain mesh - scrolling plane with frequency-based displacement
+        const terrainSegW = 80;
+        const terrainSegH = 60;
+        const terrainW = 24;
+        const terrainH = 40;
+        const terrainGeom = new PlaneGeometry(terrainW, terrainH, terrainSegW, terrainSegH);
+        terrainGeom.rotateX(-Math.PI / 2); // Lay flat
+        terrainGeom.translate(0, -2.5, -5); // Position below and ahead
+
+        // Create vertex colors for rainbow spectrum
+        const terrainVertCount = terrainGeom.getAttribute("position").count;
+        const terrainColors = new Float32Array(terrainVertCount * 3);
+        terrainGeom.setAttribute("color", new Float32BufferAttribute(terrainColors, 3));
+
+        const terrainMat = new MeshBasicMaterial({
+          vertexColors: true,
+          transparent: true,
+          opacity: 0.75,
+          wireframe: true,
+          blending: AdditiveBlending,
         });
-        threeThemeTargets.push({ kind: "std", mat: tunnelMat, emissiveScale: 0.35 });
+        const terrainMesh = new Mesh(terrainGeom, terrainMat);
+        voyageGroup.add(terrainMesh);
 
-        /** @type {any[]} */
-        const tunnelRings = [];
-        for (let r = 0; r < tunnelRingCount; r += 1) {
-          const ring = new Group();
-          ring.position.z = -r * tunnelSpacing;
-          ring.userData._ringIndex = r;
-
-          /** @type {any[]} */
-          const bars = [];
-          for (let i = 0; i < tunnelBarsPerRing; i += 1) {
-            const bar = new Mesh(tunnelGeom, tunnelMat);
-            const a = (i / tunnelBarsPerRing) * Math.PI * 2;
-            bar.position.set(Math.cos(a) * tunnelRadius, 0, Math.sin(a) * tunnelRadius);
-            bar.rotation.y = -a;
-            bar.scale.y = 0.12;
-            bar.position.y = bar.scale.y / 2 - 0.06;
-            ring.add(bar);
-            bars.push(bar);
-          }
-
-          ring.userData._bars = bars;
-          tunnelGroup.add(ring);
-          tunnelRings.push(ring);
+        const terrainPos = /** @type {any} */ (terrainGeom.getAttribute("position"));
+        const terrainCol = /** @type {any} */ (terrainGeom.getAttribute("color"));
+        const terrainBaseY = new Float32Array(terrainPos.count);
+        const terrainBaseZ = new Float32Array(terrainPos.count);
+        for (let i = 0; i < terrainPos.count; i++) {
+          terrainBaseY[i] = terrainPos.array[i * 3 + 1];
+          terrainBaseZ[i] = terrainPos.array[i * 3 + 2];
         }
-        const tunnelMinZ = -tunnelRingCount * tunnelSpacing;
 
-        const tunnelUpdate = ({ t, dt, energy, bass, freqData: f }) => {
-          tunnelGroup.rotation.y = t * 0.15;
-          tunnelGroup.rotation.x = -0.2;
+        // Starfield for voyage - particles rushing toward camera
+        const voyageStarCount = 1500;
+        const voyageStarPos = new Float32Array(voyageStarCount * 3);
+        const voyageStarCol = new Float32Array(voyageStarCount * 3);
+        const voyageStarBaseZ = new Float32Array(voyageStarCount);
+        const voyageStarSpeed = new Float32Array(voyageStarCount);
 
-          if (threeCore && threeCore.visible) {
-            const pulse = 0.82 + bass * 1.15;
-            threeCore.scale.setScalar(pulse);
-            threeCore.rotation.y = t * 0.9;
-            threeCore.rotation.x = 0.55 + t * 0.22;
-          }
+        for (let i = 0; i < voyageStarCount; i++) {
+          const idx = i * 3;
+          // Spread stars in a wide tunnel around the view
+          const angle = Math.random() * Math.PI * 2;
+          const radius = 1.5 + Math.random() * 8;
+          voyageStarPos[idx + 0] = Math.cos(angle) * radius;
+          voyageStarPos[idx + 1] = -1 + Math.random() * 6; // Mostly above terrain
+          voyageStarPos[idx + 2] = -30 + Math.random() * 60; // Spread along Z
+          voyageStarBaseZ[i] = voyageStarPos[idx + 2];
+          voyageStarSpeed[i] = 0.3 + Math.random() * 0.7; // Variable speed for depth
+          // Initial white color
+          voyageStarCol[idx + 0] = 1;
+          voyageStarCol[idx + 1] = 1;
+          voyageStarCol[idx + 2] = 1;
+        }
 
-          const speed = 1.2 + energy * 2.6;
-          for (const ring of tunnelRings) {
-            ring.position.z += speed * dt;
-            ring.rotation.z += dt * (0.35 + energy * 0.55);
-            if (ring.position.z > 3.4) ring.position.z = tunnelMinZ;
-          }
+        const voyageStarGeom = new BufferGeometry();
+        voyageStarGeom.setAttribute("position", new Float32BufferAttribute(voyageStarPos, 3));
+        voyageStarGeom.setAttribute("color", new Float32BufferAttribute(voyageStarCol, 3));
 
+        const voyageStarMat = new PointsMaterial({
+          size: 0.08,
+          vertexColors: true,
+          transparent: true,
+          opacity: 0.85,
+          blending: AdditiveBlending,
+          depthWrite: false,
+        });
+
+        const voyageStars = new Points(voyageStarGeom, voyageStarMat);
+        voyageGroup.add(voyageStars);
+
+        const voyageStarPosAttr = /** @type {any} */ (voyageStarGeom.getAttribute("position"));
+        const voyageStarColAttr = /** @type {any} */ (voyageStarGeom.getAttribute("color"));
+
+        // Helper: HSL to RGB for rainbow colors
+        const hslToRgb = (h, s, l) => {
+          const c = (1 - Math.abs(2 * l - 1)) * s;
+          const x = c * (1 - Math.abs((h * 6) % 2 - 1));
+          const m = l - c / 2;
+          let r = 0, g = 0, b = 0;
+          if (h < 1/6) { r = c; g = x; b = 0; }
+          else if (h < 2/6) { r = x; g = c; b = 0; }
+          else if (h < 3/6) { r = 0; g = c; b = x; }
+          else if (h < 4/6) { r = 0; g = x; b = c; }
+          else if (h < 5/6) { r = x; g = 0; b = c; }
+          else { r = c; g = 0; b = x; }
+          return [r + m, g + m, b + m];
+        };
+
+        // Voyage state for scroll position and beat detection
+        let voyageScroll = 0;
+        let voyageBeatPulse = 0;
+        let voyageLastBass = 0;
+
+        const voyageUpdate = ({ t, dt, bass, mid, treble, energy, amplitude, freqData: f }) => {
           if (!f || !f.length) return;
-          const startBin = Math.floor(f.length * 0.04);
-          const endBin = Math.floor(f.length * 0.92);
-          const span = Math.max(1, endBin - startBin);
 
-          for (const ring of tunnelRings) {
-            const bars = /** @type {any[]} */ (ring.userData._bars || []);
-            const rIdx = Number(ring.userData._ringIndex) || 0;
-            const offset = Math.floor(((rIdx / Math.max(1, tunnelRingCount - 1)) * 0.38) * span);
+          const ampMult = amplitude || 1;
 
-            for (let i = 0; i < bars.length; i += 1) {
-              const bar = bars[i];
-              const bin = startBin + ((Math.floor((i / Math.max(1, bars.length - 1)) * span) + offset) % span);
-              const v = (f[bin] || 0) / 255;
-              const shaped = Math.pow(v, 1.55);
-              const s = 0.12 + shaped * 3.6;
-              bar.scale.y = s;
-              bar.position.y = s / 2 - 0.06;
-            }
+          // Beat detection - detect bass hits for speed bursts
+          const bassHit = bass > 0.6 && bass > voyageLastBass + 0.15;
+          if (bassHit) {
+            voyageBeatPulse = Math.min(voyageBeatPulse + 0.5, 1.5);
           }
+          voyageBeatPulse *= 0.92; // Decay
+          voyageLastBass = bass;
+
+          // Scroll speed based on energy + beat pulses
+          const baseSpeed = 4;
+          const scrollSpeed = baseSpeed * (0.6 + energy * 0.8 + voyageBeatPulse * 2);
+          voyageScroll += dt * scrollSpeed;
+
+          // Update terrain vertices
+          const segW1 = terrainSegW + 1;
+          const segH1 = terrainSegH + 1;
+          const freqBinCount = f.length;
+
+          for (let i = 0; i < terrainPos.count; i++) {
+            const idx = i * 3;
+            const col = i % segW1;
+            const row = Math.floor(i / segW1);
+
+            // X position determines frequency bin (left = bass, right = treble)
+            const u = col / terrainSegW;
+            const freqIdx = Math.floor(u * freqBinCount * 0.8);
+            const freqVal = (f[freqIdx] || 0) / 255;
+            const shaped = Math.pow(freqVal, 1.4);
+
+            // Z position for scrolling - wrap around
+            const baseZ = terrainBaseZ[i];
+            let z = baseZ + voyageScroll;
+            // Wrap terrain to create infinite scroll
+            const halfH = terrainH / 2;
+            while (z > halfH + 10) z -= terrainH;
+
+            // Height based on frequency + wave
+            const wave = Math.sin(t * 0.8 + u * 4 + (baseZ + voyageScroll) * 0.3) * 0.3;
+            const height = shaped * 3.5 * ampMult + wave * energy;
+
+            terrainPos.array[idx + 1] = terrainBaseY[i] + height;
+            terrainPos.array[idx + 2] = z;
+
+            // Rainbow color based on frequency position
+            const hue = u * 0.8; // Full spectrum across width
+            const brightness = 0.4 + shaped * 0.6;
+            const [r, g, b] = hslToRgb(hue, 0.9, brightness);
+            terrainCol.array[idx + 0] = r;
+            terrainCol.array[idx + 1] = g;
+            terrainCol.array[idx + 2] = b;
+          }
+          terrainPos.needsUpdate = true;
+          terrainCol.needsUpdate = true;
+
+          // Update starfield - rush toward camera
+          const starSpeed = 15 * (0.5 + energy * 1.0 + voyageBeatPulse * 3);
+          for (let i = 0; i < voyageStarCount; i++) {
+            const idx = i * 3;
+
+            // Move toward camera (positive Z)
+            voyageStarPosAttr.array[idx + 2] += dt * starSpeed * voyageStarSpeed[i];
+
+            // Reset stars that pass the camera
+            if (voyageStarPosAttr.array[idx + 2] > 15) {
+              voyageStarPosAttr.array[idx + 2] = -30;
+              // Randomize position when reset
+              const angle = Math.random() * Math.PI * 2;
+              const radius = 1.5 + Math.random() * 8;
+              voyageStarPosAttr.array[idx + 0] = Math.cos(angle) * radius;
+              voyageStarPosAttr.array[idx + 1] = -1 + Math.random() * 6;
+            }
+
+            // Color stars based on their position (rainbow gradient)
+            const zNorm = (voyageStarPosAttr.array[idx + 2] + 30) / 45;
+            const hue = (zNorm * 0.7 + t * 0.1) % 1;
+            const [r, g, b] = hslToRgb(hue, 0.85, 0.55 + energy * 0.25);
+            voyageStarColAttr.array[idx + 0] = r;
+            voyageStarColAttr.array[idx + 1] = g;
+            voyageStarColAttr.array[idx + 2] = b;
+          }
+          voyageStarPosAttr.needsUpdate = true;
+          voyageStarColAttr.needsUpdate = true;
+
+          // Star size pulses with beat
+          voyageStarMat.size = 0.06 + energy * 0.06 + voyageBeatPulse * 0.08;
+
+          // Subtle camera shake on big beats (optional - affects the whole scene)
+          voyageGroup.rotation.x = Math.sin(t * 2) * 0.01 * voyageBeatPulse;
+          voyageGroup.rotation.z = Math.cos(t * 1.7) * 0.008 * voyageBeatPulse;
         };
 
         threeModes = {
-          orbit: { group: orbitGroup, update: orbitUpdate },
           grid: { group: gridGroup, update: gridUpdate },
           nebula: { group: nebulaGroup, update: nebulaUpdate },
           scope: { group: scopeGroup, update: scopeUpdate },
-          tunnel: { group: tunnelGroup, update: tunnelUpdate },
+          voyage: { group: voyageGroup, update: voyageUpdate },
         };
 
         threeReady = true;
+        console.log("Three.js initialization complete!");
         resizeThreeRenderer();
         refreshThreeTheme();
+        applyVizZoom();
         syncThreeVizMode();
+
+        // Load saved model if one was selected (dropdown already populated on page load)
+        const savedModelId = localStorage.getItem(MODEL_STORAGE_KEY);
+        if (savedModelId && availableModels.some((m) => m.id === savedModelId)) {
+          loadModel(savedModelId);
+        }
+
         return true;
-      } catch {
-        // Fall back to 2D visualizer.
+      } catch (err) {
+        console.error("Three.js initialization failed:", err);
         three = null;
         threeReady = false;
         threeInitPromise = null;
@@ -1235,15 +1895,10 @@
     const loop = (now) => {
       vizRaf = requestAnimationFrame(loop);
 
-      // Background Three.js viz (optional)
       if (threeReady && bgVizMode !== "off") {
         resizeThreeRenderer();
         drawVizThree(now);
       }
-
-      if (!ensureViz2dContext()) return;
-      resizeViz2dCanvas();
-      drawViz2d(now);
     };
     vizRaf = requestAnimationFrame(loop);
   }
@@ -1258,10 +1913,10 @@
     if (!audioCtx) return;
     try {
       if (audioCtx.state !== "running") await audioCtx.resume();
-    } catch {
-      // ignore
-    }
+    } catch { /* ignore */ }
   }
+
+  // ---- Playback Functions ----
 
   function loadTrack(index, { autoplay = false } = {}) {
     if (!tracks.length) return;
@@ -1269,13 +1924,10 @@
     currentIndex = safeIndex;
     const t = tracks[currentIndex];
 
-    setLoadingState(true);
-    setTrackDisplay(trackLabel(t));
-    setStatus("STOP");
+    setTrackDisplay(t);
     updatePlaylistUi();
     updateMediaSession();
 
-    // Reset seek slider
     seek.value = "0";
     seek.style.setProperty("--progress", "0%");
 
@@ -1283,17 +1935,39 @@
     audio.currentTime = 0;
     audio.load();
 
+    // Random model on track change
+    selectRandomModel();
+
     if (autoplay) {
       void play();
     }
   }
 
+  function selectRandomModel() {
+    if (!availableModels.length) return;
+
+    // Pick a random model (different from current if possible)
+    let newModelId;
+    if (availableModels.length === 1) {
+      newModelId = availableModels[0].id;
+    } else {
+      const otherModels = availableModels.filter((m) => m.id !== currentModelId);
+      const pick = otherModels[Math.floor(Math.random() * otherModels.length)];
+      newModelId = pick.id;
+    }
+
+    // Update the dropdown and load the model
+    if (modelSelect) {
+      modelSelect.value = newModelId;
+    }
+    localStorage.setItem(MODEL_STORAGE_KEY, newModelId);
+    loadModel(newModelId);
+  }
+
   async function play() {
+    console.log("play() called");
     if (!tracks.length) {
-      setHint(
-        `No tracks yet. Click <b>ADD</b> or drag audio files into the playlist, or edit <code>tracks.js</code>.`,
-        "warn",
-      );
+      announceToScreenReader("No tracks. Add audio files to play.");
       return;
     }
 
@@ -1306,35 +1980,31 @@
     }
 
     if (canUseWebAudioViz()) {
+      console.log("Calling viz functions from play()...");
       ensureAudioGraph();
       startVizLoop();
       void ensureThreeViz();
       await tryResumeAudioContext();
     } else {
-      // Keep playback background-safe; viz stays off/idle.
       stopVizLoop();
     }
 
     try {
       await audio.play();
-      setStatus("PLAY");
-      setHint(`Playing: <code>${escapeHtml(trackLabel(tracks[currentIndex]))}</code>`);
+      updatePlayPauseBtn();
+      updateVizPauseState();
       updatePlaylistUi();
-      hideError();
       announceToScreenReader(`Now playing: ${trackLabel(tracks[currentIndex])}`);
     } catch (err) {
-      setStatus("STOP");
-      setHint(
-        `Browser blocked autoplay. Click <b>PLAY</b> again, or interact with the page first.`,
-        "warn",
-      );
+      announceToScreenReader("Playback blocked. Tap play again.");
     }
   }
 
   function pause() {
     audio.pause();
     stopVizLoop();
-    setStatus("PAUSE");
+    updatePlayPauseBtn();
+    updateVizPauseState();
     updatePlaylistUi();
   }
 
@@ -1342,7 +2012,8 @@
     audio.pause();
     audio.currentTime = 0;
     stopVizLoop();
-    setStatus("STOP");
+    updatePlayPauseBtn();
+    updateVizPauseState();
     updateTimeUi();
   }
 
@@ -1379,7 +2050,6 @@
   function prev({ autoplay = true } = {}) {
     if (!tracks.length) return;
 
-    // Winamp-ish: if you've heard more than 3s, restart; else go previous
     if (audio.currentTime > 3 && !shuffle) {
       audio.currentTime = 0;
       updateTimeUi();
@@ -1399,31 +2069,26 @@
   function cycleRepeatMode() {
     repeatMode = repeatMode === "off" ? "all" : repeatMode === "all" ? "one" : "off";
     updateButtonsUi();
-    const msg = repeatMode === "off" ? "Repeat: OFF" : repeatMode === "all" ? "Repeat: ALL" : "Repeat: ONE";
-    setHint(msg);
+    const msg = repeatMode === "off" ? "Repeat off" : repeatMode === "all" ? "Repeat all" : "Repeat one";
     announceToScreenReader(msg);
   }
 
   function toggleShuffle() {
     shuffle = !shuffle;
     updateButtonsUi();
-    const msg = `Shuffle: ${shuffle ? "ON" : "OFF"}`;
-    setHint(msg);
-    announceToScreenReader(msg);
+    announceToScreenReader(`Shuffle ${shuffle ? "on" : "off"}`);
   }
 
   function clearPlaylist() {
     stop();
-    setTrackDisplay("No tracks loaded");
-    setHint(`Cleared playlist. Add MP3s or edit <code>tracks.js</code>.`, "warn");
+    setTrackDisplay(null);
+    announceToScreenReader("Playlist cleared");
 
     for (const t of tracks) {
       if (t._objectUrl) {
         try {
           URL.revokeObjectURL(t._objectUrl);
-        } catch {
-          // ignore
-        }
+        } catch { /* ignore */ }
       }
     }
 
@@ -1433,7 +2098,6 @@
     audio.load();
     updatePlaylistUi();
     updateTimeUi();
-    setStatus("STOP");
   }
 
   function addTracksFromFiles(fileList) {
@@ -1458,18 +2122,17 @@
       loadTrack(0, { autoplay: false });
     } else {
       updatePlaylistUi();
-      setHint(`Added ${newTracks.length} file(s).`);
     }
+
+    announceToScreenReader(`Added ${newTracks.length} track${newTracks.length > 1 ? "s" : ""}`);
   }
 
-  // ---- Media Session API (OS-level controls) ----
+  // ---- Media Session API ----
   function setMediaSessionPlaybackState() {
     if (!("mediaSession" in navigator)) return;
     try {
       navigator.mediaSession.playbackState = audio.paused ? "paused" : "playing";
-    } catch {
-      // Some browsers support MediaSession but not playbackState.
-    }
+    } catch { /* ignore */ }
   }
 
   function setMediaSessionPositionState() {
@@ -1481,9 +2144,7 @@
         position: audio.currentTime,
         playbackRate: audio.playbackRate || 1,
       });
-    } catch {
-      // setPositionState not supported everywhere.
-    }
+    } catch { /* ignore */ }
   }
 
   function updateMediaSession() {
@@ -1528,17 +2189,16 @@
           audio.currentTime = details.seekTime;
         }
       });
-    } catch {
-      // seekto not supported in all browsers
-    }
+    } catch { /* ignore */ }
   }
 
   initMediaSession();
 
-  // ---- Controls wiring ----
+  // ---- Initialize UI ----
   updateButtonsUi();
   updatePlaylistUi();
   updateTimeUi();
+  updateVolumeIcon();
 
   const VOLUME_STORAGE_KEY = "mysongs-volume";
   const LEGACY_VOLUME_STORAGE_KEY = "webamp-volume";
@@ -1550,7 +2210,6 @@
     volume.value = String(Math.round(v * 100));
     volume.style.setProperty("--progress", `${v * 100}%`);
   } else {
-    // Default: full volume (unless the user has a saved preference).
     audio.volume = 1;
     volume.value = "100";
     volume.style.setProperty("--progress", "100%");
@@ -1558,20 +2217,43 @@
 
   if (tracks.length) {
     loadTrack(currentIndex, { autoplay: false });
-    setHint(`Loaded ${tracks.length} hosted track(s) from <code>tracks.js</code>.`);
   } else {
-    setTrackDisplay("No tracks loaded");
-    setHint(`Add audio (ADD / drag-drop) or edit <code>tracks.js</code>.`, "warn");
+    setTrackDisplay(null);
   }
 
-  playBtn.addEventListener("click", () => void play());
-  pauseBtn.addEventListener("click", pause);
-  stopBtn.addEventListener("click", stop);
+  // ---- Event Listeners ----
+
+  // Play/Pause button
+  playPauseBtn.addEventListener("click", () => {
+    if (audio.paused) {
+      void play();
+    } else {
+      pause();
+    }
+  });
+
   nextBtn.addEventListener("click", () => next({ autoplay: true }));
   prevBtn.addEventListener("click", () => prev({ autoplay: true }));
   shuffleBtn.addEventListener("click", toggleShuffle);
   repeatBtn.addEventListener("click", cycleRepeatMode);
 
+  // Volume
+  volumeBtn.addEventListener("click", () => {
+    audio.muted = !audio.muted;
+    updateVolumeIcon();
+    announceToScreenReader(audio.muted ? "Muted" : "Unmuted");
+  });
+
+  volume.addEventListener("input", () => {
+    const v = clamp(Number(volume.value) / 100, 0, 1);
+    audio.volume = v;
+    audio.muted = false;
+    volume.style.setProperty("--progress", `${v * 100}%`);
+    localStorage.setItem(VOLUME_STORAGE_KEY, String(v));
+    updateVolumeIcon();
+  });
+
+  // Seek
   seek.addEventListener("pointerdown", () => {
     isSeeking = true;
     void checkRangeSupportOnce();
@@ -1590,30 +2272,107 @@
     updateTimeUi();
   });
 
-  volume.addEventListener("input", () => {
-    const v = clamp(Number(volume.value) / 100, 0, 1);
-    audio.volume = v;
-    volume.style.setProperty("--progress", `${v * 100}%`);
-    localStorage.setItem(VOLUME_STORAGE_KEY, String(v));
+  // Playlist modal
+  playlistBtn.addEventListener("click", () => {
+    playlistOpen ? closePlaylist() : openPlaylist();
   });
+  playlistBackdrop.addEventListener("click", closePlaylist);
+  closePlaylistBtn.addEventListener("click", closePlaylist);
 
-  togglePlaylistBtn.addEventListener("click", () => {
-    playlistVisible = !playlistVisible;
-    playlistWindow.classList.toggle("is-hidden", !playlistVisible);
-    app.classList.toggle("wa-app--playlist-hidden", !playlistVisible);
-  });
-
+  // Add/clear tracks
   addBtn.addEventListener("click", () => filePicker.click());
   filePicker.addEventListener("change", () => {
     if (!filePicker.files) return;
     addTracksFromFiles(filePicker.files);
     filePicker.value = "";
   });
-
   clearBtn.addEventListener("click", clearPlaylist);
 
+  // Filter
   filterInput.addEventListener("input", updatePlaylistUi);
 
+  // Visualizer settings
+  vizSettingsBtn.addEventListener("click", () => {
+    vizSettingsOpen ? closeVizSettings() : openVizSettings();
+  });
+  closeVizSettingsBtn.addEventListener("click", closeVizSettings);
+  resetVizSettingsBtn.addEventListener("click", resetVizParams);
+
+  vizAmplitude.addEventListener("input", () => {
+    vizParams.amplitude = clamp(Number(vizAmplitude.value) / 100, 0.2, 3);
+    updateVizParamDisplays();
+    saveVizParams();
+  });
+
+  vizSmoothing.addEventListener("input", () => {
+    vizParams.smoothing = clamp(Number(vizSmoothing.value) / 100, 0, 0.95);
+    updateVizParamDisplays();
+    applyVizSmoothing();
+    saveVizParams();
+  });
+
+  vizSpeed.addEventListener("input", () => {
+    vizParams.speed = clamp(Number(vizSpeed.value) / 100, 0.25, 2);
+    updateVizParamDisplays();
+    saveVizParams();
+  });
+
+  vizReactivity.addEventListener("input", () => {
+    vizParams.audioReactivity = clamp(Number(vizReactivity.value) / 100, 0, 1);
+    updateVizParamDisplays();
+    saveVizParams();
+  });
+
+  vizZoom.addEventListener("input", () => {
+    vizParams.zoom = clamp(Number(vizZoom.value) / 100, 0.25, 2);
+    updateVizParamDisplays();
+    applyVizZoom();
+    saveVizParams();
+  });
+
+  // Model settings sliders
+  if (modelScaleSlider) {
+    modelScaleSlider.addEventListener("input", () => {
+      modelOverrides.scale = clamp(Number(modelScaleSlider.value), 0.1, 5);
+      if (modelScaleValue) modelScaleValue.textContent = modelOverrides.scale.toFixed(1);
+      applyModelOverrides();
+    });
+  }
+
+  if (modelPosYSlider) {
+    modelPosYSlider.addEventListener("input", () => {
+      modelOverrides.posY = clamp(Number(modelPosYSlider.value), -5, 5);
+      if (modelPosYValue) modelPosYValue.textContent = modelOverrides.posY.toFixed(1);
+      applyModelOverrides();
+    });
+  }
+
+  if (modelRotYSlider) {
+    modelRotYSlider.addEventListener("input", () => {
+      modelOverrides.rotY = clamp(Number(modelRotYSlider.value), 0, 360);
+      if (modelRotYValue) modelRotYValue.textContent = `${Math.round(modelOverrides.rotY)}°`;
+      applyModelOverrides();
+    });
+  }
+
+  if (modelAnimSpeedSlider) {
+    modelAnimSpeedSlider.addEventListener("input", () => {
+      modelOverrides.animSpeed = clamp(Number(modelAnimSpeedSlider.value), 0, 3);
+      if (modelAnimSpeedValue) modelAnimSpeedValue.textContent = `${modelOverrides.animSpeed.toFixed(1)}x`;
+    });
+  }
+
+  if (scalePulseCheckbox) {
+    scalePulseCheckbox.addEventListener("change", () => {
+      modelOverrides.scalePulse = scalePulseCheckbox.checked;
+    });
+  }
+
+  if (copySettingsBtn) {
+    copySettingsBtn.addEventListener("click", copySettingsToClipboard);
+  }
+
+  // Playlist item click
   playlistEl.addEventListener("click", (e) => {
     const target = /** @type {HTMLElement} */ (e.target);
     const li = target.closest(".wa-item");
@@ -1641,15 +2400,14 @@
     updateTimeUi();
     setMediaSessionPositionState();
   });
-  audio.addEventListener("canplay", () => setLoadingState(false));
-  audio.addEventListener("loadstart", () => setLoadingState(true));
   audio.addEventListener("play", () => {
-    setStatus("PLAY");
+    updatePlayPauseBtn();
+    updateVizPauseState();
     setMediaSessionPlaybackState();
   });
   audio.addEventListener("pause", () => {
-    if (audio.currentTime === 0 || audio.ended) setStatus("STOP");
-    else setStatus("PAUSE");
+    updatePlayPauseBtn();
+    updateVizPauseState();
     setMediaSessionPlaybackState();
   });
   audio.addEventListener("ended", () => {
@@ -1664,27 +2422,14 @@
     }
   });
   audio.addEventListener("error", () => {
-    setStatus("STOP");
-    setLoadingState(false);
+    updatePlayPauseBtn();
+    updateVizPauseState();
     const track = tracks[currentIndex];
     const trackName = track ? trackLabel(track) : "track";
-    setHint(
-      `Couldn't load this track. Check the file path in <code>tracks.js</code> or re-add the file.`,
-      "warn",
-    );
-    showError(
-      "Playback Error",
-      `Could not load "${trackName}". The file may be missing or corrupted.`,
-      "Skip to Next",
-      () => {
-        if (tracks.length > 1) {
-          next({ autoplay: true });
-        }
-      }
-    );
+    announceToScreenReader(`Error loading ${trackName}`);
   });
 
-  // When the tab is hidden/locked, stop expensive visualization work.
+  // Visibility change
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible") {
       stopVizLoop();
@@ -1699,7 +2444,7 @@
     }
   });
 
-  // ---- Drag & drop files onto playlist ----
+  // ---- Drag & drop files ----
   function isFileDrag(e) {
     const dt = e.dataTransfer;
     if (!dt) return false;
@@ -1710,7 +2455,7 @@
     dropzone.classList.toggle("is-active", show);
   }
 
-  const dropTargets = [playlistWindow, playerWindow, document.body];
+  const dropTargets = [playlistModal, document.body];
   for (const target of dropTargets) {
     target.addEventListener("dragenter", (e) => {
       if (!isFileDrag(e)) return;
@@ -1741,58 +2486,40 @@
     const SWIPE_THRESHOLD = 60;
     const SWIPE_TIMEOUT = 350;
 
-    playerWindow.addEventListener("touchstart", (e) => {
+    controlBar.addEventListener("touchstart", (e) => {
       const touch = e.touches[0];
       touchStartX = touch.clientX;
       touchStartY = touch.clientY;
       touchStartTime = Date.now();
     }, { passive: true });
 
-    playerWindow.addEventListener("touchend", (e) => {
+    controlBar.addEventListener("touchend", (e) => {
       if (Date.now() - touchStartTime > SWIPE_TIMEOUT) return;
 
       const touch = e.changedTouches[0];
       const deltaX = touch.clientX - touchStartX;
       const deltaY = touch.clientY - touchStartY;
 
-      // Only horizontal swipes, ignore if vertical movement is significant
       if (Math.abs(deltaX) < SWIPE_THRESHOLD) return;
       if (Math.abs(deltaY) > Math.abs(deltaX) * 0.6) return;
 
       if (deltaX > 0) {
         prev({ autoplay: !audio.paused });
-        showSwipeFeedback("prev");
       } else {
         next({ autoplay: !audio.paused });
-        showSwipeFeedback("next");
       }
     }, { passive: true });
   }
 
-  function showSwipeFeedback(direction) {
-    const indicator = document.createElement("div");
-    indicator.className = `wa-swipe-indicator wa-swipe-indicator--${direction}`;
-    indicator.textContent = direction === "prev" ? "⏮" : "⏭";
-    playerWindow.appendChild(indicator);
-
-    requestAnimationFrame(() => {
-      indicator.classList.add("is-visible");
-      setTimeout(() => {
-        indicator.classList.remove("is-visible");
-        setTimeout(() => indicator.remove(), 200);
-      }, 250);
-    });
-  }
-
   initSwipeGestures();
 
-  // ---- Enhanced keyboard shortcuts ----
+  // ---- Keyboard shortcuts ----
   function showVolumeToast(vol) {
-    let toast = playerWindow.querySelector(".wa-volume-toast");
+    let toast = controlBar.querySelector(".wa-volume-toast");
     if (!toast) {
       toast = document.createElement("div");
       toast.className = "wa-volume-toast";
-      playerWindow.appendChild(toast);
+      controlBar.appendChild(toast);
     }
     toast.textContent = `Vol: ${Math.round(vol * 100)}%`;
     toast.classList.add("is-visible");
@@ -1802,25 +2529,21 @@
     }, 700);
   }
 
-  function showKeyboardHelp() {
-    const shortcuts = [
-      ["Space", "Play/Pause"],
-      ["←/→", "Seek ±5s"],
-      ["↑/↓", "Volume ±5%"],
-      ["Shift+←/→", "Prev/Next track"],
-      ["N / P", "Next/Previous"],
-      ["M", "Mute"],
-      ["S", "Shuffle"],
-      ["R", "Repeat"],
-      ["L", "Toggle playlist"],
-      ["F", "Focus search"],
-    ];
-    const content = shortcuts.map(([key, desc]) => `<kbd>${key}</kbd> ${desc}`).join("<br>");
-    setHint(`<b>Shortcuts:</b><br>${content}`);
-  }
-
   window.addEventListener("keydown", (e) => {
-    if (e.target && (/** @type {HTMLElement} */ (e.target)).closest("input, textarea, [contenteditable]")) return;
+    // Don't trigger when typing in inputs (unless it's the playlist modal filter)
+    if (e.target && (/** @type {HTMLElement} */ (e.target)).closest("input, textarea, [contenteditable]")) {
+      // Allow Escape to work in filter input
+      if (e.key === "Escape" && document.activeElement === filterInput) {
+        if (filterInput.value) {
+          filterInput.value = "";
+          updatePlaylistUi();
+        } else {
+          filterInput.blur();
+        }
+        return;
+      }
+      return;
+    }
 
     const key = e.key.toLowerCase();
 
@@ -1850,10 +2573,12 @@
       case "ArrowUp":
         e.preventDefault();
         audio.volume = clamp(audio.volume + 0.05, 0, 1);
+        audio.muted = false;
         volume.value = String(Math.round(audio.volume * 100));
         volume.style.setProperty("--progress", `${audio.volume * 100}%`);
         showVolumeToast(audio.volume);
         localStorage.setItem(VOLUME_STORAGE_KEY, String(audio.volume));
+        updateVolumeIcon();
         break;
 
       case "ArrowDown":
@@ -1863,47 +2588,43 @@
         volume.style.setProperty("--progress", `${audio.volume * 100}%`);
         showVolumeToast(audio.volume);
         localStorage.setItem(VOLUME_STORAGE_KEY, String(audio.volume));
+        updateVolumeIcon();
         break;
 
       default:
-        // Handle letter keys (case-insensitive)
         if (key === "n") {
           next({ autoplay: !audio.paused });
         } else if (key === "p") {
           prev({ autoplay: !audio.paused });
         } else if (key === "m") {
           audio.muted = !audio.muted;
-          setHint(audio.muted ? "Muted" : "Unmuted");
+          updateVolumeIcon();
+          announceToScreenReader(audio.muted ? "Muted" : "Unmuted");
         } else if (key === "s") {
           toggleShuffle();
         } else if (key === "r") {
           cycleRepeatMode();
         } else if (key === "l") {
-          playlistVisible = !playlistVisible;
-          playlistWindow.classList.toggle("is-hidden", !playlistVisible);
-          app.classList.toggle("wa-app--playlist-hidden", !playlistVisible);
+          playlistOpen ? closePlaylist() : openPlaylist();
+        } else if (key === "h") {
+          controlBar.classList.toggle("is-hidden");
         } else if (key === "f") {
           e.preventDefault();
-          filterInput.focus();
+          if (!playlistOpen) openPlaylist();
+          setTimeout(() => filterInput.focus(), 100);
         } else if (key === "escape") {
-          if (document.activeElement === filterInput) {
-            if (filterInput.value) {
-              filterInput.value = "";
-              updatePlaylistUi();
-            } else {
-              filterInput.blur();
-            }
+          if (vizSettingsOpen) {
+            closeVizSettings();
+          } else if (playlistOpen) {
+            closePlaylist();
           }
-        } else if (key === "?" || (e.shiftKey && e.key === "/")) {
-          showKeyboardHelp();
         }
         break;
     }
   });
 
-  // Keep the visualizer crisp when resizing.
+  // Resize handling
   window.addEventListener("resize", () => {
     if (threeReady) resizeThreeRenderer();
-    if (ensureViz2dContext()) resizeViz2dCanvas();
   });
 })();
