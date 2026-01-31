@@ -36,7 +36,7 @@ window.MODELS = [
     id: "butterfly",
     name: "Butterfly",
     url: "./models/butterfly/scene.gltf",
-    scale: 5.00,
+    scale: 7.00,
     position: [0, 0.00, 0],
     rotation: [0, 4.800, 0],
     animationSpeed: 1.10

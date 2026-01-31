@@ -349,6 +349,35 @@
   applyVizMode(normalizeVizMode(localStorage.getItem(VIZ_STORAGE_KEY) || bgVizMode));
   vizSelect.addEventListener("change", () => applyVizMode(vizSelect.value, { persist: true }));
 
+  // ---- Track Theme System ----
+  const TRACK_THEMES = window.TRACK_THEMES || {};
+  const DEFAULT_THEME = window.DEFAULT_THEME || { model: null, colorTheme: "midnight", vizMode: "grid" };
+
+  function applyTrackTheme(track) {
+    if (!track) return;
+
+    const theme = TRACK_THEMES[track.title] || DEFAULT_THEME;
+    console.log("Applying track theme:", track.title, "->", theme.name || "default");
+
+    // Apply color theme
+    if (theme.colorTheme) {
+      applyTheme(theme.colorTheme, { persist: false });
+    }
+
+    // Apply visualization mode
+    if (theme.vizMode) {
+      applyVizMode(theme.vizMode, { persist: false });
+    }
+
+    // Apply 3D model (deferred until Three.js is ready)
+    if (theme.model && typeof loadModel === "function") {
+      if (modelSelect) {
+        modelSelect.value = theme.model;
+      }
+      loadModel(theme.model);
+    }
+  }
+
   function escapeHtml(s) {
     return String(s)
       .replaceAll("&", "&amp;")
@@ -1935,8 +1964,8 @@
     audio.currentTime = 0;
     audio.load();
 
-    // Random model on track change
-    selectRandomModel();
+    // Apply track-specific theme (model, colors, viz mode)
+    applyTrackTheme(t);
 
     if (autoplay) {
       void play();
