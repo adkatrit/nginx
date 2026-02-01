@@ -351,7 +351,14 @@
 
   // ---- Track Theme System ----
   const TRACK_THEMES = window.TRACK_THEMES || {};
-  const DEFAULT_THEME = window.DEFAULT_THEME || { model: null, colorTheme: "midnight", vizMode: "grid" };
+  const DEFAULT_THEME = window.DEFAULT_THEME || {
+    model: null,
+    colorTheme: "midnight",
+    vizMode: "grid",
+    vizParams: { amplitude: 0.3, speed: 1.0, audioReactivity: 0.5, zoom: 0.25, smoothing: 0.15 },
+    spotlightColor: 0xffffff
+  };
+  let themeSpotlight = null;  // Track-specific accent spotlight
 
   function applyTrackTheme(track) {
     if (!track) return;
@@ -367,6 +374,34 @@
     // Apply visualization mode
     if (theme.vizMode) {
       applyVizMode(theme.vizMode, { persist: false });
+    }
+
+    // Apply visualization parameters
+    if (theme.vizParams) {
+      const p = theme.vizParams;
+      if (typeof p.amplitude === "number") vizParams.amplitude = clamp(p.amplitude, 0.2, 3);
+      if (typeof p.speed === "number") vizParams.speed = clamp(p.speed, 0.25, 2);
+      if (typeof p.audioReactivity === "number") vizParams.audioReactivity = clamp(p.audioReactivity, 0, 1);
+      if (typeof p.zoom === "number") vizParams.zoom = clamp(p.zoom, 0.25, 2);
+      if (typeof p.smoothing === "number") vizParams.smoothing = clamp(p.smoothing, 0, 0.95);
+
+      // Update UI sliders to reflect new values
+      if (vizAmplitude) vizAmplitude.value = String(Math.round(vizParams.amplitude * 100));
+      if (vizSmoothing) vizSmoothing.value = String(Math.round(vizParams.smoothing * 100));
+      if (vizSpeed) vizSpeed.value = String(Math.round(vizParams.speed * 100));
+      if (vizReactivity) vizReactivity.value = String(Math.round(vizParams.audioReactivity * 100));
+      if (vizZoom) vizZoom.value = String(Math.round(vizParams.zoom * 100));
+      updateVizParamDisplays();
+
+      // Apply smoothing to analyser
+      if (analyser) {
+        analyser.smoothingTimeConstant = vizParams.smoothing;
+      }
+    }
+
+    // Apply spotlight color (if Three.js is ready)
+    if (theme.spotlightColor !== undefined && themeSpotlight && three) {
+      themeSpotlight.color.setHex(theme.spotlightColor);
     }
 
     // Apply 3D model (deferred until Three.js is ready)
@@ -1460,7 +1495,14 @@
         dir.position.set(4, 5, 3);
         const dir2 = new DirectionalLight(0xffffff, 0.35);
         dir2.position.set(-4, 2, -5);
-        threeScene.add(ambient, dir, dir2);
+
+        // Track-specific colored spotlight for accent lighting
+        const { SpotLight } = mod;
+        themeSpotlight = new SpotLight(0xffffff, 2.0, 50, Math.PI / 6, 0.5, 1);
+        themeSpotlight.position.set(0, 10, 5);
+        themeSpotlight.target.position.set(0, 0, 0);
+
+        threeScene.add(ambient, dir, dir2, themeSpotlight, themeSpotlight.target);
 
         threeGroup = new Group();
         threeScene.add(threeGroup);
@@ -1909,6 +1951,7 @@
         threeModes = null;
         threeThemeTargets = [];
         threeLastNowMs = 0;
+        themeSpotlight = null;
         if (bgVizCanvas) bgVizCanvas.classList.remove("is-on");
         return false;
       }
