@@ -1349,15 +1349,6 @@
     console.log("Starting Three.js initialization...");
     threeInitPromise = (async () => {
       try {
-        // Check WebGL availability first
-        const testCanvas = document.createElement("canvas");
-        const gl = testCanvas.getContext("webgl") || testCanvas.getContext("experimental-webgl");
-        if (!gl) {
-          console.warn("WebGL not available on this device");
-          return false;
-        }
-        console.log("WebGL available, proceeding with Three.js");
-
         console.log("Importing Three.js from:", THREE_CDN);
         const mod = await import(THREE_CDN);
         console.log("Three.js imported successfully");
@@ -1420,21 +1411,14 @@
           gltfLoader = new GLTFLoader();
         }
 
-        // Detect mobile for performance optimizations
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-
         threeRenderer = new WebGLRenderer({
           canvas: bgVizCanvas,
-          antialias: !isMobile, // Disable antialiasing on mobile for performance
+          antialias: true,
           alpha: true,
-          powerPreference: isMobile ? "default" : "low-power",
-          failIfMajorPerformanceCaveat: false, // Don't fail on software rendering
+          powerPreference: "low-power",
         });
         threeRenderer.setClearAlpha(0);
-        // Lower pixel ratio on mobile for better performance
-        const maxPixelRatio = isMobile ? 1.0 : 1.5;
-        threeRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxPixelRatio));
-        console.log("WebGL renderer created, mobile:", isMobile, "pixelRatio:", threeRenderer.getPixelRatio());
+        threeRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
 
         try {
           if (mod.SRGBColorSpace && "outputColorSpace" in threeRenderer) {
@@ -1913,7 +1897,6 @@
         return true;
       } catch (err) {
         console.error("Three.js initialization failed:", err);
-        console.error("Error details:", err.message, err.stack);
         three = null;
         threeReady = false;
         threeInitPromise = null;
