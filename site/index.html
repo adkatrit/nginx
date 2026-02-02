@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#070a18" />
-    <title>MySongs Player</title>
+    <title>Audio Racer</title>
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-NRQ96GQ70K"></script>
     <script>
@@ -34,10 +34,20 @@
     <!-- Full-screen background visualization -->
     <canvas id="bgViz" class="immersive-bg-viz" aria-hidden="true"></canvas>
 
+    <!-- Racer HUD overlay -->
+    <div id="racerHud" class="racer-hud" aria-hidden="true">
+      <div class="racer-score">SCORE: <span id="racerScore">0</span></div>
+      <div class="racer-combo" id="racerCombo"></div>
+      <div class="racer-controls">
+        <span class="racer-key">A/←</span> LEFT
+        <span class="racer-key">D/→</span> RIGHT
+      </div>
+    </div>
+
     <!-- Screen reader announcements -->
     <div class="sr-only" role="status" aria-live="polite" id="ariaStatus"></div>
 
-    <main id="app" class="immersive-app" aria-label="MySongs Player">
+    <main id="app" class="immersive-app" aria-label="Audio Racer">
 
       <!-- Floating Control Bar -->
       <div class="control-bar" id="controlBar" role="region" aria-label="Playback controls">
@@ -87,21 +97,7 @@
             <input id="volume" type="range" min="0" max="100" value="100" step="1" class="volume-slider" aria-label="Volume" />
           </div>
 
-          <select id="vizSelect" class="select-mini" aria-label="Visualizer mode">
-            <option value="grid">Grid</option>
-            <option value="nebula">Nebula</option>
-            <option value="scope">Scope</option>
-            <option value="voyage">Voyage</option>
-            <option value="off">Off</option>
-          </select>
-
-          <select id="themeSelect" class="select-mini" aria-label="Theme">
-            <option value="neo">Neo</option>
-            <option value="midnight">Midnight</option>
-            <option value="winamp41">Classic</option>
-          </select>
-
-          <button class="ctrl-btn ctrl-btn--sm" id="vizSettingsBtn" type="button" aria-label="Visualizer settings" aria-expanded="false" title="Viz Settings">
+          <button class="ctrl-btn ctrl-btn--sm" id="vizSettingsBtn" type="button" aria-label="Game settings" aria-expanded="false" title="Settings">
             &#x2699;
           </button>
 
@@ -111,35 +107,11 @@
         </div>
       </div>
 
-      <!-- Visualizer Settings Panel -->
+      <!-- Game Settings Panel -->
       <div class="viz-settings" id="vizSettings" hidden>
         <div class="viz-settings__header">
-          <span class="viz-settings__title">Visualizer</span>
+          <span class="viz-settings__title">Game Settings</span>
           <button class="viz-settings__close" id="closeVizSettings" type="button" aria-label="Close settings">&#x2715;</button>
-        </div>
-        <div class="viz-settings__group">
-          <label class="viz-settings__label">
-            <span>Amplitude</span>
-            <span class="viz-settings__value" id="amplitudeValue">30%</span>
-          </label>
-          <input type="range" id="vizAmplitude" min="20" max="300" value="30" step="10" class="viz-settings__slider" />
-          <div class="viz-settings__hint">How much the audio moves the visualization</div>
-        </div>
-        <div class="viz-settings__group">
-          <label class="viz-settings__label">
-            <span>Smoothing</span>
-            <span class="viz-settings__value" id="smoothingValue">15%</span>
-          </label>
-          <input type="range" id="vizSmoothing" min="0" max="95" value="15" step="1" class="viz-settings__slider" />
-          <div class="viz-settings__hint">Lower = snappier, higher = smoother</div>
-        </div>
-        <div class="viz-settings__group">
-          <label class="viz-settings__label">
-            <span>Speed</span>
-            <span class="viz-settings__value" id="speedValue">200%</span>
-          </label>
-          <input type="range" id="vizSpeed" min="25" max="200" value="200" step="5" class="viz-settings__slider" />
-          <div class="viz-settings__hint">Base animation and rotation speed</div>
         </div>
         <div class="viz-settings__group">
           <label class="viz-settings__label">
@@ -147,68 +119,13 @@
             <span class="viz-settings__value" id="reactivityValue">100%</span>
           </label>
           <input type="range" id="vizReactivity" min="0" max="100" value="100" step="5" class="viz-settings__slider" />
-          <div class="viz-settings__hint">How much audio affects speed (0% = static, 100% = fully reactive)</div>
-        </div>
-        <div class="viz-settings__group">
-          <label class="viz-settings__label">
-            <span>Camera Zoom</span>
-            <span class="viz-settings__value" id="zoomValue">25%</span>
-          </label>
-          <input type="range" id="vizZoom" min="25" max="200" value="25" step="5" class="viz-settings__slider" />
-          <div class="viz-settings__hint">Camera distance from visualization</div>
-        </div>
-        <div class="viz-settings__group">
-          <label class="viz-settings__label">
-            <span>3D Model</span>
-          </label>
-          <select id="modelSelect" class="viz-settings__select">
-            <option value="">None</option>
-          </select>
-          <div class="viz-settings__hint">Add GLTF/GLB models to ./models/ folder</div>
-        </div>
-        <div class="viz-settings__group viz-settings__group--model" id="modelSettingsGroup" hidden>
-          <label class="viz-settings__label">
-            <span>Model Scale</span>
-            <span class="viz-settings__value" id="modelScaleValue">1.0</span>
-          </label>
-          <input type="range" id="modelScale" min="0.1" max="5" value="1" step="0.1" class="viz-settings__slider" />
-        </div>
-        <div class="viz-settings__group viz-settings__group--model" id="modelPosYGroup" hidden>
-          <label class="viz-settings__label">
-            <span>Model Y Position</span>
-            <span class="viz-settings__value" id="modelPosYValue">0</span>
-          </label>
-          <input type="range" id="modelPosY" min="-5" max="5" value="0" step="0.1" class="viz-settings__slider" />
-        </div>
-        <div class="viz-settings__group viz-settings__group--model" id="modelRotYGroup" hidden>
-          <label class="viz-settings__label">
-            <span>Model Rotation</span>
-            <span class="viz-settings__value" id="modelRotYValue">0°</span>
-          </label>
-          <input type="range" id="modelRotY" min="0" max="360" value="0" step="5" class="viz-settings__slider" />
-        </div>
-        <div class="viz-settings__group viz-settings__group--model" id="modelAnimSpeedGroup" hidden>
-          <label class="viz-settings__label">
-            <span>Animation Speed</span>
-            <span class="viz-settings__value" id="modelAnimSpeedValue">1.0x</span>
-          </label>
-          <input type="range" id="modelAnimSpeed" min="0" max="3" value="1" step="0.1" class="viz-settings__slider" />
-        </div>
-        <div class="viz-settings__group">
-          <label class="viz-settings__label">
-            <span>Scale Pulse</span>
-          </label>
-          <label class="viz-settings__checkbox">
-            <input type="checkbox" id="scalePulseEnabled" checked />
-            <span>React to bass</span>
-          </label>
+          <div class="viz-settings__hint">How much audio affects ship speed and track generation</div>
         </div>
         <div class="viz-settings__tip">
-          <strong>Tip:</strong> Click and drag on the visualization to rotate the camera. Scroll to zoom. Right-click and drag to pan.
+          <strong>Controls:</strong> A/← = Left, D/→ = Right, W = Boost
         </div>
         <div class="viz-settings__buttons">
-          <button class="viz-settings__btn viz-settings__btn--copy" id="copySettingsBtn" type="button">Copy Settings JSON</button>
-          <button class="viz-settings__btn viz-settings__btn--reset" id="resetVizSettings" type="button">Reset to Default</button>
+          <button class="viz-settings__btn viz-settings__btn--reset" id="restartGameBtn" type="button">Restart Game</button>
         </div>
       </div>
 
@@ -256,6 +173,8 @@
     <script src="./tracks.js"></script>
     <script src="./models.js"></script>
     <script src="./themes.js"></script>
+    <script src="./track-scenes.js"></script>
+    <script src="./racer.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

@@ -1,0 +1,11 @@
+Model Information:
+* title:	Racer Spaceship
+* source:	https://sketchfab.com/3d-models/racer-spaceship-23f43c4d0a7f4a42bb516fd376629bb7
+* author:	xeoncat (https://sketchfab.com/xeoncat)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Racer Spaceship" (https://sketchfab.com/3d-models/racer-spaceship-23f43c4d0a7f4a42bb516fd376629bb7) by xeoncat (https://sketchfab.com/xeoncat) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

@@ -8,11 +8,6 @@
   - colorTheme: UI color scheme (neo, midnight, winamp41)
   - vizMode: Visualization type (grid, nebula, scope, voyage)
   - vizParams: Visualization parameters
-    - amplitude: 0.2-3.0 (how much audio affects visuals)
-    - speed: 0.25-2.0 (animation speed)
-    - audioReactivity: 0-1.0 (how much audio affects speed)
-    - zoom: 0.25-2.0 (camera distance)
-    - smoothing: 0-0.95 (audio smoothing)
   - spotlightColor: RGB hex for accent lighting
 */
 
@@ -20,10 +15,11 @@ window.TRACK_THEMES = {
 
   // ═══════════════════════════════════════════════════════════════
   // DATA TIDE - Deep oceanic digital flow
+  // Model: Jellyfish - bioluminescent, floating, perfect for underwater
   // ═══════════════════════════════════════════════════════════════
   "Data Tide": {
     name: "Digital Ocean",
-    model: "blue-whale",
+    model: "jellyfish",
     colorTheme: "winamp41",
     vizMode: "voyage",
     vizParams: {
@@ -33,11 +29,12 @@ window.TRACK_THEMES = {
       zoom: 0.4,
       smoothing: 0.7
     },
-    spotlightColor: 0x00bfff  // Deep sky blue
+    spotlightColor: 0x00bfff
   },
 
   // ═══════════════════════════════════════════════════════════════
   // SOFT SYSTEMS - Gentle, floating, ethereal
+  // Model: Butterfly - delicate, graceful movement
   // ═══════════════════════════════════════════════════════════════
   "Soft Systems": {
     name: "Gentle Machine",
@@ -51,15 +48,16 @@ window.TRACK_THEMES = {
       zoom: 0.5,
       smoothing: 0.85
     },
-    spotlightColor: 0x98fb98  // Pale green
+    spotlightColor: 0x98fb98
   },
 
   // ═══════════════════════════════════════════════════════════════
   // BEAST MODE - Aggressive, intense, powerful
+  // Model: Godzilla - ultimate apex predator energy
   // ═══════════════════════════════════════════════════════════════
   "Beast Mode": {
     name: "Apex Predator",
-    model: "white-eagle",
+    model: "godzilla",
     colorTheme: "winamp41",
     vizMode: "nebula",
     vizParams: {
@@ -69,15 +67,16 @@ window.TRACK_THEMES = {
       zoom: 0.3,
       smoothing: 0.1
     },
-    spotlightColor: 0xff2200  // Aggressive red-orange
+    spotlightColor: 0xff2200
   },
 
   // ═══════════════════════════════════════════════════════════════
   // DREAMS BLEED INTO DASHBOARDS - Surreal, glitchy, neon
+  // Model: Biped Robot - tech meets dreams
   // ═══════════════════════════════════════════════════════════════
   "Dreams Bleed Into Dashboards": {
     name: "Neon Dream",
-    model: "butterfly",
+    model: "biped-robot",
     colorTheme: "neo",
     vizMode: "grid",
     vizParams: {
@@ -87,11 +86,12 @@ window.TRACK_THEMES = {
       zoom: 0.35,
       smoothing: 0.3
     },
-    spotlightColor: 0xff00ff  // Magenta
+    spotlightColor: 0xff00ff
   },
 
   // ═══════════════════════════════════════════════════════════════
   // SIGNAL INTEGRITY - Clean, precise, technical
+  // Model: White Eagle - clean lines, precision
   // ═══════════════════════════════════════════════════════════════
   "Signal Integrity": {
     name: "Clean Signal",
@@ -105,11 +105,12 @@ window.TRACK_THEMES = {
       zoom: 0.45,
       smoothing: 0.2
     },
-    spotlightColor: 0x00ffff  // Cyan
+    spotlightColor: 0x00ffff
   },
 
   // ═══════════════════════════════════════════════════════════════
   // GI MI DI REINS - Wild, free, untamed energy
+  // Model: White Eagle - soaring freedom
   // ═══════════════════════════════════════════════════════════════
   "Gi Mi Di Reins": {
     name: "Wild Freedom",
@@ -123,11 +124,12 @@ window.TRACK_THEMES = {
       zoom: 0.25,
       smoothing: 0.15
     },
-    spotlightColor: 0xffd700  // Gold
+    spotlightColor: 0xffd700
   },
 
   // ═══════════════════════════════════════════════════════════════
   // TRADE YOU MY HANDS - Emotional, intimate, organic
+  // Model: Butterfly - delicate, emotional
   // ═══════════════════════════════════════════════════════════════
   "Trade You My Hands": {
     name: "Tender Exchange",
@@ -141,15 +143,16 @@ window.TRACK_THEMES = {
       zoom: 0.6,
       smoothing: 0.8
     },
-    spotlightColor: 0xffb6c1  // Light pink
+    spotlightColor: 0xffb6c1
   },
 
   // ═══════════════════════════════════════════════════════════════
   // PUSH HARDER - Driven, relentless, powerful
+  // Model: Gorilla - raw strength and power
   // ═══════════════════════════════════════════════════════════════
   "Push Harder": {
     name: "Iron Will",
-    model: "white-eagle",
+    model: "gorilla",
     colorTheme: "midnight",
     vizMode: "grid",
     vizParams: {
@@ -159,33 +162,35 @@ window.TRACK_THEMES = {
       zoom: 0.3,
       smoothing: 0.05
     },
-    spotlightColor: 0xff4500  // Orange red
+    spotlightColor: 0xff4500
   },
 
   // ═══════════════════════════════════════════════════════════════
   // THE LAST DRAGON - Epic, mythical, ancient power
+  // Model: Ice Dragon - legendary creature
   // ═══════════════════════════════════════════════════════════════
   "The Last Dragon": {
     name: "Ancient Legend",
-    model: "loggerhead",
+    model: "icy-dragon",
     colorTheme: "midnight",
     vizMode: "nebula",
     vizParams: {
       amplitude: 1.5,
       speed: 0.8,
       audioReactivity: 0.7,
-      zoom: 0.35,
+      zoom: 0.05,
       smoothing: 0.5
     },
-    spotlightColor: 0xff6600  // Fire orange
+    spotlightColor: 0xff6600
   },
 
   // ═══════════════════════════════════════════════════════════════
   // WHO'S LEARNING WHO - Contemplative, questioning, AI-themed
+  // Model: Biped Robot - AI and machine learning theme
   // ═══════════════════════════════════════════════════════════════
   "Who's Learning Who": {
     name: "Neural Mirror",
-    model: "loggerhead",
+    model: "biped-robot",
     colorTheme: "neo",
     vizMode: "scope",
     vizParams: {
@@ -195,7 +200,7 @@ window.TRACK_THEMES = {
       zoom: 0.5,
       smoothing: 0.6
     },
-    spotlightColor: 0x00ff00  // Matrix green
+    spotlightColor: 0x00ff00
   }
 };
 

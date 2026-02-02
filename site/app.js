@@ -13,9 +13,6 @@
   const currentTimeEl = $("currentTime");
   const durationEl = $("duration");
 
-  const themeSelect = /** @type {HTMLSelectElement|null} */ ($("themeSelect"));
-  const vizSelect = /** @type {HTMLSelectElement|null} */ ($("vizSelect"));
-
   const prevBtn = $("prevBtn");
   const playPauseBtn = $("playPauseBtn");
   const nextBtn = $("nextBtn");
@@ -40,36 +37,30 @@
 
   const bgVizCanvas = /** @type {HTMLCanvasElement|null} */ ($("bgViz"));
 
-  // Visualizer settings elements
+  // Game settings elements
   const vizSettingsBtn = $("vizSettingsBtn");
   const vizSettings = $("vizSettings");
   const closeVizSettingsBtn = $("closeVizSettings");
-  const vizAmplitude = /** @type {HTMLInputElement|null} */ ($("vizAmplitude"));
-  const vizSmoothing = /** @type {HTMLInputElement|null} */ ($("vizSmoothing"));
-  const vizSpeed = /** @type {HTMLInputElement|null} */ ($("vizSpeed"));
   const vizReactivity = /** @type {HTMLInputElement|null} */ ($("vizReactivity"));
-  const vizZoom = /** @type {HTMLInputElement|null} */ ($("vizZoom"));
-  const modelSelect = /** @type {HTMLSelectElement|null} */ ($("modelSelect"));
-  const modelSettingsGroup = $("modelSettingsGroup");
-  const modelPosYGroup = $("modelPosYGroup");
-  const modelRotYGroup = $("modelRotYGroup");
-  const modelAnimSpeedGroup = $("modelAnimSpeedGroup");
-  const modelScaleSlider = /** @type {HTMLInputElement|null} */ ($("modelScale"));
-  const modelPosYSlider = /** @type {HTMLInputElement|null} */ ($("modelPosY"));
-  const modelRotYSlider = /** @type {HTMLInputElement|null} */ ($("modelRotY"));
-  const modelAnimSpeedSlider = /** @type {HTMLInputElement|null} */ ($("modelAnimSpeed"));
-  const modelScaleValue = $("modelScaleValue");
-  const modelPosYValue = $("modelPosYValue");
-  const modelRotYValue = $("modelRotYValue");
-  const modelAnimSpeedValue = $("modelAnimSpeedValue");
-  const scalePulseCheckbox = /** @type {HTMLInputElement|null} */ ($("scalePulseEnabled"));
-  const copySettingsBtn = $("copySettingsBtn");
-  const amplitudeValue = $("amplitudeValue");
-  const smoothingValue = $("smoothingValue");
-  const speedValue = $("speedValue");
   const reactivityValue = $("reactivityValue");
-  const zoomValue = $("zoomValue");
-  const resetVizSettingsBtn = $("resetVizSettings");
+  const restartGameBtn = $("restartGameBtn");
+
+  // Model settings elements (removed from UI but kept for compatibility)
+  const modelSelect = null;
+  const modelSettingsGroup = null;
+  const modelPosYGroup = null;
+  const modelRotYGroup = null;
+  const modelAnimSpeedGroup = null;
+  const modelScaleSlider = null;
+  const modelPosYSlider = null;
+  const modelRotYSlider = null;
+  const modelAnimSpeedSlider = null;
+  const modelScaleValue = null;
+  const modelPosYValue = null;
+  const modelRotYValue = null;
+  const modelAnimSpeedValue = null;
+  const scalePulseCheckbox = null;
+  const copySettingsBtn = null;
 
   if (
     !app ||
@@ -79,13 +70,7 @@
     !nowPlayingCover ||
     !currentTimeEl ||
     !durationEl ||
-    !themeSelect ||
-    !vizSelect ||
-    !prevBtn ||
     !playPauseBtn ||
-    !nextBtn ||
-    !shuffleBtn ||
-    !repeatBtn ||
     !volumeBtn ||
     !seek ||
     !volume ||
@@ -101,18 +86,9 @@
     !dropzone ||
     !vizSettingsBtn ||
     !vizSettings ||
-    !closeVizSettingsBtn ||
-    !vizAmplitude ||
-    !vizSmoothing ||
-    !vizSpeed ||
-    !vizZoom ||
-    !amplitudeValue ||
-    !smoothingValue ||
-    !speedValue ||
-    !zoomValue ||
-    !resetVizSettingsBtn
+    !closeVizSettingsBtn
   ) {
-    console.error("MySongs: Missing required DOM elements");
+    console.error("AudioRacer: Missing required DOM elements");
     return;
   }
 
@@ -135,7 +111,7 @@
   /** @type {number[]} */
   let visibleIndices = [];
 
-  let shuffle = true;
+  let shuffle = false;
   /** @type {"off"|"all"|"one"} */
   let repeatMode = "all";
 
@@ -270,8 +246,8 @@
     bg: "#050505",
   };
 
-  /** @type {"grid" | "nebula" | "scope" | "off"} */
-  let bgVizMode = "grid";
+  /** @type {"grid" | "nebula" | "scope" | "racer" | "off"} */
+  let bgVizMode = "racer";
 
   const prefersReducedMotion = (() => {
     try {
@@ -311,7 +287,6 @@
   function applyTheme(theme, { persist = false } = {}) {
     const t = normalizeTheme(theme);
     document.documentElement.dataset.theme = t;
-    themeSelect.value = t;
     if (persist) localStorage.setItem(THEME_STORAGE_KEY, t);
     refreshVizPalette();
     refreshThreeTheme();
@@ -322,43 +297,35 @@
       localStorage.getItem(THEME_STORAGE_KEY) ||
         localStorage.getItem(LEGACY_THEME_STORAGE_KEY) ||
         document.documentElement.dataset.theme ||
-        "midnight",
+        "neo",
     ),
   );
-  themeSelect.addEventListener("change", () => applyTheme(themeSelect.value, { persist: true }));
 
-  function normalizeVizMode(value) {
-    return value === "grid" || value === "nebula" || value === "scope" || value === "voyage" || value === "off"
-      ? value
-      : "grid";
-  }
+  // Visualization is now always "racer" mode
+  const bgVizModeFixed = "racer";
 
-  const VIZ_STORAGE_KEY = "mysongs-viz-mode";
-
-  function applyVizMode(mode, { persist = false } = {}) {
-    const m = normalizeVizMode(mode);
-    bgVizMode = m;
-    vizSelect.value = m;
-    if (persist) localStorage.setItem(VIZ_STORAGE_KEY, m);
-
+  function applyVizMode() {
+    bgVizMode = bgVizModeFixed;
     if (threeReady) syncThreeVizMode();
-
     if (bgVizCanvas) bgVizCanvas.classList.toggle("is-on", threeReady && bgVizMode !== "off");
   }
 
-  applyVizMode(normalizeVizMode(localStorage.getItem(VIZ_STORAGE_KEY) || bgVizMode));
-  vizSelect.addEventListener("change", () => applyVizMode(vizSelect.value, { persist: true }));
+  applyVizMode();
 
   // ---- Track Theme System ----
   const TRACK_THEMES = window.TRACK_THEMES || {};
   const DEFAULT_THEME = window.DEFAULT_THEME || {
     model: null,
     colorTheme: "midnight",
-    vizMode: "grid",
+    vizMode: "racer",
     vizParams: { amplitude: 0.3, speed: 1.0, audioReactivity: 0.5, zoom: 0.25, smoothing: 0.15 },
     spotlightColor: 0xffffff
   };
   let themeSpotlight = null;  // Track-specific accent spotlight
+  let currentTrackScene = null;  // Custom scene for current track
+  const TrackScenes = window.TrackScenes || null;
+  const AudioRacer = window.AudioRacer || null;
+  let racerInstance = null;  // Racing game instance
 
   function applyTrackTheme(track) {
     if (!track) return;
@@ -371,10 +338,8 @@
       applyTheme(theme.colorTheme, { persist: false });
     }
 
-    // Apply visualization mode
-    if (theme.vizMode) {
-      applyVizMode(theme.vizMode, { persist: false });
-    }
+    // Visualization mode is always "racer" now
+    applyVizMode();
 
     // Apply visualization parameters
     if (theme.vizParams) {
@@ -385,12 +350,8 @@
       if (typeof p.zoom === "number") vizParams.zoom = clamp(p.zoom, 0.25, 2);
       if (typeof p.smoothing === "number") vizParams.smoothing = clamp(p.smoothing, 0, 0.95);
 
-      // Update UI sliders to reflect new values
-      if (vizAmplitude) vizAmplitude.value = String(Math.round(vizParams.amplitude * 100));
-      if (vizSmoothing) vizSmoothing.value = String(Math.round(vizParams.smoothing * 100));
-      if (vizSpeed) vizSpeed.value = String(Math.round(vizParams.speed * 100));
+      // Update UI slider to reflect new value
       if (vizReactivity) vizReactivity.value = String(Math.round(vizParams.audioReactivity * 100));
-      if (vizZoom) vizZoom.value = String(Math.round(vizParams.zoom * 100));
       updateVizParamDisplays();
 
       // Apply smoothing to analyser
@@ -410,6 +371,19 @@
         modelSelect.value = theme.model;
       }
       loadModel(theme.model);
+    }
+
+    // Build custom track scene (if available and Three.js is ready)
+    if (TrackScenes && threeReady && threeScene && three) {
+      // Dispose previous custom scene
+      if (currentTrackScene) {
+        currentTrackScene.dispose();
+        currentTrackScene = null;
+      }
+
+      // Build new custom scene for this track
+      currentTrackScene = TrackScenes.build(track.title, three, threeScene, { freqData, timeData });
+      console.log("Custom track scene built:", track.title, currentTrackScene ? "success" : "not available");
     }
   }
 
@@ -506,21 +480,6 @@
   function updateVizPauseState() {
     if (bgVizCanvas) {
       bgVizCanvas.classList.toggle("is-paused", audio.paused);
-    }
-  }
-
-  function updateButtonsUi() {
-    shuffleBtn.setAttribute("aria-pressed", String(shuffle));
-
-    if (repeatMode === "off") {
-      repeatBtn.setAttribute("aria-pressed", "false");
-      repeatBtn.innerHTML = "&#x1F501;";
-    } else if (repeatMode === "all") {
-      repeatBtn.setAttribute("aria-pressed", "true");
-      repeatBtn.innerHTML = "&#x1F501;";
-    } else {
-      repeatBtn.setAttribute("aria-pressed", "true");
-      repeatBtn.innerHTML = "&#x1F502;"; // repeat-one emoji
     }
   }
 
@@ -667,12 +626,8 @@
       }
     } catch { /* ignore */ }
 
-    // Sync sliders with loaded values
-    vizAmplitude.value = String(Math.round(vizParams.amplitude * 100));
-    vizSmoothing.value = String(Math.round(vizParams.smoothing * 100));
-    vizSpeed.value = String(Math.round(vizParams.speed * 100));
-    vizReactivity.value = String(Math.round(vizParams.audioReactivity * 100));
-    vizZoom.value = String(Math.round(vizParams.zoom * 100));
+    // Sync reactivity slider with loaded value
+    if (vizReactivity) vizReactivity.value = String(Math.round(vizParams.audioReactivity * 100));
     updateVizParamDisplays();
     applyVizSmoothing();
   }
@@ -684,11 +639,9 @@
   }
 
   function updateVizParamDisplays() {
-    amplitudeValue.textContent = `${Math.round(vizParams.amplitude * 100)}%`;
-    smoothingValue.textContent = `${Math.round(vizParams.smoothing * 100)}%`;
-    speedValue.textContent = `${Math.round(vizParams.speed * 100)}%`;
-    reactivityValue.textContent = `${Math.round(vizParams.audioReactivity * 100)}%`;
-    zoomValue.textContent = `${Math.round(vizParams.zoom * 100)}%`;
+    if (reactivityValue) {
+      reactivityValue.textContent = `${Math.round(vizParams.audioReactivity * 100)}%`;
+    }
   }
 
   function applyVizSmoothing() {
@@ -699,6 +652,8 @@
 
   function applyVizZoom() {
     if (!threeReady || !threeCamera) return;
+    // Skip zoom adjustment during racer mode (racer has its own camera)
+    if (bgVizMode === "racer") return;
     // Base position is (0, -1.2, 9.5), zoom affects distance from target
     // Higher zoom = closer, lower zoom = further
     const baseDistance = 9.5;
@@ -749,21 +704,9 @@
     vizParams.speed = 2.0;
     vizParams.audioReactivity = 1.0;
     vizParams.zoom = 0.25;
-    vizAmplitude.value = "30";
-    vizSmoothing.value = "15";
-    vizSpeed.value = "200";
-    vizReactivity.value = "100";
-    vizZoom.value = "25";
+    if (vizReactivity) vizReactivity.value = "100";
     updateVizParamDisplays();
     applyVizSmoothing();
-
-    // Reset camera position and OrbitControls
-    if (threeCamera && orbitControls) {
-      threeCamera.position.set(0, -1.2, 9.5);
-      orbitControls.target.set(0, 0.5, 0);
-      orbitControls.update();
-    }
-    applyVizZoom();
     saveVizParams();
     // Reset model selection
     if (modelSelect) {
@@ -1201,9 +1144,35 @@
     const on = bgVizMode !== "off";
     bgVizCanvas.classList.toggle("is-on", on);
 
+    // Handle racer mode specially
+    const isRacer = bgVizMode === "racer";
+
+    // Dispose racer if switching away from it
+    if (racerInstance && !isRacer) {
+      racerInstance.dispose();
+      racerInstance = null;
+      // Reset camera to default position
+      if (threeCamera) {
+        threeCamera.position.set(0, -1.2, 9.5);
+        threeCamera.lookAt(0, 0.5, 0);
+        threeCamera.fov = 75;
+        threeCamera.updateProjectionMatrix();
+      }
+    }
+
+    // Initialize racer if switching to it
+    if (isRacer && !racerInstance && AudioRacer && three && threeScene && threeCamera && threeRenderer) {
+      racerInstance = AudioRacer.init(three, threeScene, threeCamera, threeRenderer, gltfLoader);
+    }
+
+    // Disable OrbitControls during racer mode (racer has its own camera controller)
+    if (orbitControls) {
+      orbitControls.enabled = !isRacer;
+    }
+
     for (const [mode, cfg] of Object.entries(threeModes)) {
       if (!cfg?.group) continue;
-      cfg.group.visible = on && mode === bgVizMode;
+      cfg.group.visible = on && mode === bgVizMode && !isRacer;
     }
 
     if (threeCore) {
@@ -1211,7 +1180,12 @@
     }
 
     if (threeStars) {
-      threeStars.visible = on;
+      threeStars.visible = on && !isRacer;
+    }
+
+    // Hide 3D model during racer mode
+    if (currentModel) {
+      currentModel.visible = !isRacer;
     }
 
     resizeThreeRenderer();
@@ -1318,26 +1292,36 @@
       threeStars.rotation.x = -0.08;
     }
 
-    const modeKey = bgVizMode in threeModes ? bgVizMode : "grid";
-    const mode = /** @type {any} */ (threeModes[modeKey]);
-    if (mode?.update) {
-      mode.update({
-        nowMs,
-        t,
-        dt,
-        energy,
-        bass,
-        mid,
-        treble,
-        amplitude,
-        analyser,
-        freqData,
-        timeData,
-      });
+    // Handle racer mode separately
+    if (bgVizMode === "racer" && racerInstance) {
+      racerInstance.update(t, freqData, amplitude);
+    } else {
+      const modeKey = bgVizMode in threeModes ? bgVizMode : "grid";
+      const mode = /** @type {any} */ (threeModes[modeKey]);
+      if (mode?.update) {
+        mode.update({
+          nowMs,
+          t,
+          dt,
+          energy,
+          bass,
+          mid,
+          treble,
+          amplitude,
+          analyser,
+          freqData,
+          timeData,
+        });
+      }
+
+      // Update custom track scene (bespoke visual experience)
+      if (currentTrackScene && currentTrackScene.update) {
+        currentTrackScene.update(t, freqData, timeData, amplitude);
+      }
     }
 
-    // Update OrbitControls for smooth damping
-    if (orbitControls) {
+    // Update OrbitControls for smooth damping (skip during racer mode)
+    if (orbitControls && orbitControls.enabled) {
       orbitControls.update();
     }
 
@@ -1952,6 +1936,10 @@
         threeThemeTargets = [];
         threeLastNowMs = 0;
         themeSpotlight = null;
+        if (currentTrackScene) {
+          currentTrackScene.dispose();
+          currentTrackScene = null;
+        }
         if (bgVizCanvas) bgVizCanvas.classList.remove("is-on");
         return false;
       }
@@ -1988,6 +1976,42 @@
     } catch { /* ignore */ }
   }
 
+  // ---- URL Track Linking ----
+
+  /** Convert track title to URL-friendly slug */
+  function slugify(str) {
+    return str
+      .toLowerCase()
+      .replace(/['']/g, '')  // Remove apostrophes
+      .replace(/[^a-z0-9]+/g, '-')  // Replace non-alphanumeric with hyphens
+      .replace(/^-+|-+$/g, '');  // Trim leading/trailing hyphens
+  }
+
+  /** Find track index by slug */
+  function findTrackBySlug(slug) {
+    if (!slug) return -1;
+    const normalizedSlug = slug.toLowerCase();
+    return tracks.findIndex(t => {
+      const trackSlug = slugify(t.title || '');
+      return trackSlug === normalizedSlug;
+    });
+  }
+
+  /** Update URL hash with current track */
+  function updateUrlHash(track) {
+    if (!track || !track.title) return;
+    const slug = slugify(track.title);
+    if (slug) {
+      history.replaceState(null, '', `#${slug}`);
+    }
+  }
+
+  /** Get track slug from URL hash */
+  function getTrackSlugFromUrl() {
+    const hash = window.location.hash;
+    return hash ? hash.slice(1) : null;
+  }
+
   // ---- Playback Functions ----
 
   function loadTrack(index, { autoplay = false } = {}) {
@@ -2009,6 +2033,9 @@
 
     // Apply track-specific theme (model, colors, viz mode)
     applyTrackTheme(t);
+
+    // Update URL with track slug
+    updateUrlHash(t);
 
     if (autoplay) {
       void play();
@@ -2151,6 +2178,22 @@
     announceToScreenReader(`Shuffle ${shuffle ? "on" : "off"}`);
   }
 
+  function updateButtonsUi() {
+    if (shuffleBtn) shuffleBtn.setAttribute("aria-pressed", String(shuffle));
+    if (repeatBtn) {
+      if (repeatMode === "off") {
+        repeatBtn.setAttribute("aria-pressed", "false");
+        repeatBtn.innerHTML = "&#x1F501;";
+      } else if (repeatMode === "all") {
+        repeatBtn.setAttribute("aria-pressed", "true");
+        repeatBtn.innerHTML = "&#x1F501;";
+      } else {
+        repeatBtn.setAttribute("aria-pressed", "true");
+        repeatBtn.innerHTML = "&#x1F502;";
+      }
+    }
+  }
+
   function clearPlaylist() {
     stop();
     setTrackDisplay(null);
@@ -2287,11 +2330,29 @@
     volume.style.setProperty("--progress", "100%");
   }
 
+  // Check URL hash for track to load
   if (tracks.length) {
-    loadTrack(currentIndex, { autoplay: false });
+    const urlSlug = getTrackSlugFromUrl();
+    const urlTrackIndex = findTrackBySlug(urlSlug);
+
+    if (urlTrackIndex >= 0) {
+      // Load track from URL and attempt autoplay
+      loadTrack(urlTrackIndex, { autoplay: true });
+    } else {
+      loadTrack(currentIndex, { autoplay: false });
+    }
   } else {
     setTrackDisplay(null);
   }
+
+  // Handle browser back/forward navigation
+  window.addEventListener('hashchange', () => {
+    const slug = getTrackSlugFromUrl();
+    const idx = findTrackBySlug(slug);
+    if (idx >= 0 && idx !== currentIndex) {
+      loadTrack(idx, { autoplay: !audio.paused });
+    }
+  });
 
   // ---- Event Listeners ----
 
@@ -2304,10 +2365,11 @@
     }
   });
 
-  nextBtn.addEventListener("click", () => next({ autoplay: true }));
-  prevBtn.addEventListener("click", () => prev({ autoplay: true }));
-  shuffleBtn.addEventListener("click", toggleShuffle);
-  repeatBtn.addEventListener("click", cycleRepeatMode);
+  // Track navigation
+  if (nextBtn) nextBtn.addEventListener("click", () => next({ autoplay: true }));
+  if (prevBtn) prevBtn.addEventListener("click", () => prev({ autoplay: true }));
+  if (shuffleBtn) shuffleBtn.addEventListener("click", toggleShuffle);
+  if (repeatBtn) repeatBtn.addEventListener("click", cycleRepeatMode);
 
   // Volume
   volumeBtn.addEventListener("click", () => {
@@ -2363,46 +2425,31 @@
   // Filter
   filterInput.addEventListener("input", updatePlaylistUi);
 
-  // Visualizer settings
+  // Game settings
   vizSettingsBtn.addEventListener("click", () => {
     vizSettingsOpen ? closeVizSettings() : openVizSettings();
   });
   closeVizSettingsBtn.addEventListener("click", closeVizSettings);
-  resetVizSettingsBtn.addEventListener("click", resetVizParams);
 
-  vizAmplitude.addEventListener("input", () => {
-    vizParams.amplitude = clamp(Number(vizAmplitude.value) / 100, 0.2, 3);
-    updateVizParamDisplays();
-    saveVizParams();
-  });
+  // Restart game button
+  if (restartGameBtn) {
+    restartGameBtn.addEventListener("click", () => {
+      if (window.AudioRacer && window.AudioRacer.instance) {
+        window.AudioRacer.instance.restart();
+      }
+    });
+  }
 
-  vizSmoothing.addEventListener("input", () => {
-    vizParams.smoothing = clamp(Number(vizSmoothing.value) / 100, 0, 0.95);
-    updateVizParamDisplays();
-    applyVizSmoothing();
-    saveVizParams();
-  });
+  // Audio reactivity slider
+  if (vizReactivity) {
+    vizReactivity.addEventListener("input", () => {
+      vizParams.audioReactivity = clamp(Number(vizReactivity.value) / 100, 0, 1);
+      updateVizParamDisplays();
+      saveVizParams();
+    });
+  }
 
-  vizSpeed.addEventListener("input", () => {
-    vizParams.speed = clamp(Number(vizSpeed.value) / 100, 0.25, 2);
-    updateVizParamDisplays();
-    saveVizParams();
-  });
-
-  vizReactivity.addEventListener("input", () => {
-    vizParams.audioReactivity = clamp(Number(vizReactivity.value) / 100, 0, 1);
-    updateVizParamDisplays();
-    saveVizParams();
-  });
-
-  vizZoom.addEventListener("input", () => {
-    vizParams.zoom = clamp(Number(vizZoom.value) / 100, 0.25, 2);
-    updateVizParamDisplays();
-    applyVizZoom();
-    saveVizParams();
-  });
-
-  // Model settings sliders
+  // Model settings sliders (kept for future use)
   if (modelScaleSlider) {
     modelScaleSlider.addEventListener("input", () => {
       modelOverrides.scale = clamp(Number(modelScaleSlider.value), 0.1, 5);
@@ -2619,79 +2666,25 @@
 
     const key = e.key.toLowerCase();
 
-    switch (e.key) {
-      case " ":
-        e.preventDefault();
-        if (audio.paused) void play();
-        else pause();
-        break;
-
-      case "ArrowRight":
-        if (e.shiftKey) {
-          next({ autoplay: !audio.paused });
-        } else {
-          audio.currentTime = clamp(audio.currentTime + 5, 0, Number.isFinite(audio.duration) ? audio.duration : 1e9);
-        }
-        break;
-
-      case "ArrowLeft":
-        if (e.shiftKey) {
-          prev({ autoplay: !audio.paused });
-        } else {
-          audio.currentTime = clamp(audio.currentTime - 5, 0, 1e9);
-        }
-        break;
-
-      case "ArrowUp":
-        e.preventDefault();
-        audio.volume = clamp(audio.volume + 0.05, 0, 1);
-        audio.muted = false;
-        volume.value = String(Math.round(audio.volume * 100));
-        volume.style.setProperty("--progress", `${audio.volume * 100}%`);
-        showVolumeToast(audio.volume);
-        localStorage.setItem(VOLUME_STORAGE_KEY, String(audio.volume));
-        updateVolumeIcon();
-        break;
-
-      case "ArrowDown":
-        e.preventDefault();
-        audio.volume = clamp(audio.volume - 0.05, 0, 1);
-        volume.value = String(Math.round(audio.volume * 100));
-        volume.style.setProperty("--progress", `${audio.volume * 100}%`);
-        showVolumeToast(audio.volume);
-        localStorage.setItem(VOLUME_STORAGE_KEY, String(audio.volume));
-        updateVolumeIcon();
-        break;
-
-      default:
-        if (key === "n") {
-          next({ autoplay: !audio.paused });
-        } else if (key === "p") {
-          prev({ autoplay: !audio.paused });
-        } else if (key === "m") {
-          audio.muted = !audio.muted;
-          updateVolumeIcon();
-          announceToScreenReader(audio.muted ? "Muted" : "Unmuted");
-        } else if (key === "s") {
-          toggleShuffle();
-        } else if (key === "r") {
-          cycleRepeatMode();
-        } else if (key === "l") {
-          playlistOpen ? closePlaylist() : openPlaylist();
-        } else if (key === "h") {
-          controlBar.classList.toggle("is-hidden");
-        } else if (key === "f") {
-          e.preventDefault();
-          if (!playlistOpen) openPlaylist();
-          setTimeout(() => filterInput.focus(), 100);
-        } else if (key === "escape") {
-          if (vizSettingsOpen) {
-            closeVizSettings();
-          } else if (playlistOpen) {
-            closePlaylist();
-          }
-        }
-        break;
+    // Only handle non-game keys (arrow keys, space, WASD are used by racer)
+    if (key === "m") {
+      audio.muted = !audio.muted;
+      updateVolumeIcon();
+      announceToScreenReader(audio.muted ? "Muted" : "Unmuted");
+    } else if (key === "l") {
+      playlistOpen ? closePlaylist() : openPlaylist();
+    } else if (key === "h") {
+      controlBar.classList.toggle("is-hidden");
+    } else if (key === "f") {
+      e.preventDefault();
+      if (!playlistOpen) openPlaylist();
+      setTimeout(() => filterInput.focus(), 100);
+    } else if (key === "escape") {
+      if (vizSettingsOpen) {
+        closeVizSettings();
+      } else if (playlistOpen) {
+        closePlaylist();
+      }
     }
   });
 

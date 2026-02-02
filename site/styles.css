@@ -1405,6 +1405,218 @@ input[type="range"]:active::-moz-range-thumb {
   cursor: grabbing;
 }
 
+/* Racer HUD overlay */
+.racer-hud {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 20px 30px;
+  z-index: 100;
+  pointer-events: none;
+  font-family: 'Orbitron', 'Courier New', monospace;
+  display: none;
+}
+
+.racer-hud.is-active {
+  display: block;
+}
+
+.racer-score {
+  font-size: 24px;
+  font-weight: bold;
+  color: #00ffff;
+  text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff;
+  letter-spacing: 2px;
+}
+
+.racer-combo {
+  font-size: 18px;
+  color: #ffff00;
+  text-shadow: 0 0 10px #ffff00;
+  margin-top: 5px;
+  min-height: 24px;
+}
+
+.racer-controls {
+  position: fixed;
+  bottom: 120px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+  text-align: center;
+}
+
+.racer-key {
+  display: inline-block;
+  background: rgba(0, 255, 255, 0.2);
+  border: 1px solid rgba(0, 255, 255, 0.5);
+  border-radius: 4px;
+  padding: 2px 8px;
+  margin: 0 5px;
+  font-weight: bold;
+  color: #00ffff;
+}
+
+/* Racer Shield Bar */
+.racer-shield-container {
+  position: fixed;
+  top: 20px;
+  right: 30px;
+  text-align: right;
+}
+
+.racer-shield-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  letter-spacing: 2px;
+  margin-bottom: 4px;
+}
+
+.racer-shield-bar {
+  width: 200px;
+  height: 8px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(0, 255, 170, 0.4);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.racer-shield-fill {
+  height: 100%;
+  width: 100%;
+  background: #00ffaa;
+  transition: width 0.1s ease-out, background 0.3s ease;
+  box-shadow: 0 0 10px currentColor;
+}
+
+/* Racer Boost Bar */
+.racer-boost-container {
+  position: fixed;
+  top: 60px;
+  right: 30px;
+  text-align: right;
+}
+
+.racer-boost-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  letter-spacing: 2px;
+  margin-bottom: 4px;
+}
+
+.racer-boost-bar {
+  width: 200px;
+  height: 8px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(0, 255, 255, 0.3);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.racer-boost-fill {
+  height: 100%;
+  width: 0%;
+  background: #00ffff;
+  transition: width 0.1s ease-out, background 0.2s ease;
+  box-shadow: 0 0 10px currentColor;
+}
+
+/* Racer Speed Display */
+.racer-speed-display {
+  position: fixed;
+  bottom: 120px;
+  right: 30px;
+  font-size: 48px;
+  font-weight: bold;
+  color: #00ffff;
+  text-shadow: 0 0 20px #00ffff, 0 0 40px #00ffff;
+  letter-spacing: -2px;
+}
+
+.racer-speed-unit {
+  font-size: 14px;
+  color: rgba(0, 255, 255, 0.6);
+  letter-spacing: 1px;
+  vertical-align: super;
+}
+
+/* Racer Game Over Screen */
+.racer-game-over {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 1000;
+}
+
+.racer-game-over-title {
+  font-size: 72px;
+  font-weight: bold;
+  color: #ff0044;
+  text-shadow: 0 0 30px #ff0044, 0 0 60px #ff0044;
+  letter-spacing: 8px;
+  margin-bottom: 30px;
+  animation: racer-pulse 1s ease-in-out infinite;
+}
+
+.racer-game-over-score {
+  font-size: 36px;
+  color: #00ffff;
+  text-shadow: 0 0 20px #00ffff;
+  letter-spacing: 4px;
+  margin-bottom: 40px;
+}
+
+.racer-game-over-restart {
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.6);
+  letter-spacing: 2px;
+  animation: racer-blink 1.5s ease-in-out infinite;
+}
+
+@keyframes racer-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.02); }
+}
+
+@keyframes racer-blink {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* Racer Countdown */
+.racer-countdown {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 180px;
+  font-weight: bold;
+  color: #00ffff;
+  text-shadow: 0 0 40px #00ffff, 0 0 80px #00ffff, 0 0 120px #0088ff;
+  letter-spacing: 8px;
+  z-index: 999;
+  pointer-events: none;
+  animation: racer-countdown-pulse 0.3s ease-out;
+}
+
+@keyframes racer-countdown-pulse {
+  0% { transform: scale(1.3); opacity: 0.5; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
 /* Immersive app container */
 .immersive-app {
   min-height: 100vh;

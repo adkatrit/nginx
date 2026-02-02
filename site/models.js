@@ -3,60 +3,103 @@
   -----------------------
   Add your downloaded GLTF/GLB models from Sketchfab here.
 
-  How to add models:
-  1. Download a model from https://sketchfab.com (choose GLTF format)
-  2. Extract the zip to ./models/<model-name>/
-  3. Add an entry below with the path to the .gltf or .glb file
-
   Properties:
   - id: Unique identifier for the model
   - name: Display name shown in the selector
   - url: Path to the .gltf or .glb file
-  - scale: Optional scale multiplier (default: 1)
-  - position: Optional [x, y, z] position offset (default: [0, 0, 0])
-  - rotation: Optional [x, y, z] rotation in radians (default: [0, 0, 0])
-  - animationSpeed: Optional base animation speed multiplier (default: 1)
-
-  Attribution:
-  Many Sketchfab models require attribution under Creative Commons.
-  Keep the attribution info in a README in each model's folder.
+  - scale: Scale multiplier
+  - position: [x, y, z] position offset
+  - rotation: [x, y, z] rotation in radians
+  - animationSpeed: Base animation speed multiplier
 */
 
 window.MODELS = [
+  // === OCEAN CREATURES ===
   {
     id: "blue-whale",
     name: "Blue Whale",
     url: "./models/blue-whale/scene.gltf",
     scale: 0.01,
-    position: [0, 0.30, 0],
+    position: [0, 0.3, 0],
     rotation: [0, 4.538, 0],
-    animationSpeed: 1.00
+    animationSpeed: 1.0
   },
   {
-    id: "butterfly",
-    name: "Butterfly",
-    url: "./models/butterfly/scene.gltf",
-    scale: 7.00,
-    position: [0, 0.00, 0],
-    rotation: [0, 4.800, 0],
-    animationSpeed: 1.10
+    id: "jellyfish",
+    name: "Jellyfish",
+    url: "./models/jellyfish/scene.gltf",
+    scale: 2.0,
+    position: [0, 0.5, 0],
+    rotation: [0, 0, 0],
+    animationSpeed: 0.6
   },
   {
     id: "loggerhead",
     name: "Loggerhead Turtle",
     url: "./models/loggerhead/scene.gltf",
-    scale: 0.10,
-    position: [0, -0.50, 0],
+    scale: 0.1,
+    position: [0, -0.5, 0],
     rotation: [0, 1.571, 0],
-    animationSpeed: 1.00
+    animationSpeed: 1.0
+  },
+
+  // === FLYING CREATURES ===
+  {
+    id: "butterfly",
+    name: "Butterfly",
+    url: "./models/butterfly/scene.gltf",
+    scale: 7.0,
+    position: [0, 0, 0],
+    rotation: [0, 4.8, 0],
+    animationSpeed: 1.1
   },
   {
     id: "white-eagle",
     name: "White Eagle",
     url: "./models/white-eagle/scene.gltf",
-    scale: 0.10,
-    position: [0, 1.20, 0],
-    rotation: [0, 3.140, 0],
-    animationSpeed: 1.20
+    scale: 0.1,
+    position: [0, 1.2, 0],
+    rotation: [0, 3.14, 0],
+    animationSpeed: 1.2
+  },
+  {
+    id: "icy-dragon",
+    name: "Ice Dragon",
+    url: "./models/icy_dragon/scene.gltf",
+    scale: 0.08,
+    position: [0, 0, 0],
+    rotation: [0, 3.14, 0],
+    animationSpeed: 0.8
+  },
+
+  // === POWERFUL BEASTS ===
+  {
+    id: "godzilla",
+    name: "Godzilla",
+    url: "./models/godzilla/scene.gltf",
+    scale: 0.05,
+    position: [0, -1.5, 0],
+    rotation: [0, 3.14, 0],
+    animationSpeed: 0.9
+  },
+  {
+    id: "gorilla",
+    name: "Gorilla",
+    url: "./models/gorilla/scene.gltf",
+    scale: 1.5,
+    position: [0, -1.2, 0],
+    rotation: [0, 3.14, 0],
+    animationSpeed: 1.0
+  },
+
+  // === TECH / ROBOTS ===
+  {
+    id: "biped-robot",
+    name: "Biped Robot",
+    url: "./models/biped_robot/scene.gltf",
+    scale: 0.12,
+    position: [0, -1.5, 0],
+    rotation: [0, 3.14, 0],
+    animationSpeed: 1.0
   },
 ];

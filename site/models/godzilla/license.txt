@@ -1,0 +1,11 @@
+Model Information:
+* title:	Godzilla
+* source:	https://sketchfab.com/3d-models/godzilla-ca862e19cad04f95af49263405ee04dd
+* author:	savounited (https://sketchfab.com/savounited)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Godzilla" (https://sketchfab.com/3d-models/godzilla-ca862e19cad04f95af49263405ee04dd) by savounited (https://sketchfab.com/savounited) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
