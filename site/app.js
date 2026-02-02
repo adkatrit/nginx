@@ -43,7 +43,23 @@
   const closeVizSettingsBtn = $("closeVizSettings");
   const vizReactivity = /** @type {HTMLInputElement|null} */ ($("vizReactivity"));
   const reactivityValue = $("reactivityValue");
-  const restartGameBtn = $("restartGameBtn");
+
+  // Score HUD elements
+  const scoreHud = $("scoreHud");
+  const scoreValue = $("scoreValue");
+  const comboDisplay = $("comboDisplay");
+  const comboValue = $("comboValue");
+  const highScoreValue = $("highScoreValue");
+  const hitFeedback = $("hitFeedback");
+
+  // High score modal elements
+  const highScoreModal = $("highScoreModal");
+  const finalScoreDisplay = $("finalScoreDisplay");
+  const finalTrackDisplay = $("finalTrackDisplay");
+  const initialsInput = /** @type {HTMLInputElement|null} */ ($("initialsInput"));
+  const saveScoreBtn = $("saveScoreBtn");
+  const skipScoreBtn = $("skipScoreBtn");
+  const leaderboardDisplay = $("leaderboardDisplay");
 
   // Model settings elements (removed from UI but kept for compatibility)
   const modelSelect = null;
@@ -88,7 +104,7 @@
     !vizSettings ||
     !closeVizSettingsBtn
   ) {
-    console.error("AudioRacer: Missing required DOM elements");
+    console.error("App: Missing required DOM elements");
     return;
   }
 
@@ -246,8 +262,8 @@
     bg: "#050505",
   };
 
-  /** @type {"grid" | "nebula" | "scope" | "racer" | "off"} */
-  let bgVizMode = "racer";
+  /** @type {"grid" | "nebula" | "scope" | "environment" | "off"} */
+  let bgVizMode = "environment";  // Default to environment mode
 
   const prefersReducedMotion = (() => {
     try {
@@ -301,8 +317,8 @@
     ),
   );
 
-  // Visualization is now always "racer" mode
-  const bgVizModeFixed = "racer";
+  // Environment mode is the only visualization mode
+  let bgVizModeFixed = "environment";
 
   function applyVizMode() {
     bgVizMode = bgVizModeFixed;
@@ -317,15 +333,16 @@
   const DEFAULT_THEME = window.DEFAULT_THEME || {
     model: null,
     colorTheme: "midnight",
-    vizMode: "racer",
+    vizMode: "environment",
     vizParams: { amplitude: 0.3, speed: 1.0, audioReactivity: 0.5, zoom: 0.25, smoothing: 0.15 },
     spotlightColor: 0xffffff
   };
   let themeSpotlight = null;  // Track-specific accent spotlight
   let currentTrackScene = null;  // Custom scene for current track
   const TrackScenes = window.TrackScenes || null;
-  const AudioRacer = window.AudioRacer || null;
-  let racerInstance = null;  // Racing game instance
+  const EnvironmentMode = window.EnvironmentMode || null;
+  let environmentInstance = null; // Themed environment instance
+  let currentTrackTitle = null; // Track title for environment theming
 
   function applyTrackTheme(track) {
     if (!track) return;
@@ -333,12 +350,18 @@
     const theme = TRACK_THEMES[track.title] || DEFAULT_THEME;
     console.log("Applying track theme:", track.title, "->", theme.name || "default");
 
+    // Store current track title for environment mode
+    currentTrackTitle = track.title;
+
+    // Reset session high score for new track
+    resetSessionHighScore();
+
     // Apply color theme
     if (theme.colorTheme) {
       applyTheme(theme.colorTheme, { persist: false });
     }
 
-    // Visualization mode is always "racer" now
+    // Apply environment visualization mode
     applyVizMode();
 
     // Apply visualization parameters
@@ -385,6 +408,15 @@
       currentTrackScene = TrackScenes.build(track.title, three, threeScene, { freqData, timeData });
       console.log("Custom track scene built:", track.title, currentTrackScene ? "success" : "not available");
     }
+
+    // Change environment theme when track changes (for existing environment instance)
+    if (EnvironmentMode && environmentInstance) {
+      EnvironmentMode.changeTrack(track.title);
+      console.log("Environment theme changed to:", track.title);
+    }
+
+    // Update high score display for the new track
+    updateHighScoreDisplay();
   }
 
   function escapeHtml(s) {
@@ -652,8 +684,8 @@
 
   function applyVizZoom() {
     if (!threeReady || !threeCamera) return;
-    // Skip zoom adjustment during racer mode (racer has its own camera)
-    if (bgVizMode === "racer") return;
+    // Skip zoom adjustment during environment mode (it has its own camera)
+    if (bgVizMode === "environment") return;
     // Base position is (0, -1.2, 9.5), zoom affects distance from target
     // Higher zoom = closer, lower zoom = further
     const baseDistance = 9.5;
@@ -1138,41 +1170,175 @@
     }
   }
 
+  // ---- Score Management ----
+  let pendingHighScore = null;
+  let sessionHighScore = 0;  // Peak score during current run
+
+  function updateScoreHUD(score, combo) {
+    if (scoreValue) scoreValue.textContent = String(score);
+    if (comboValue) comboValue.textContent = String(combo);
+
+    // Update session high if current score exceeds it
+    if (score > sessionHighScore) {
+      sessionHighScore = score;
+      if (highScoreValue) highScoreValue.textContent = String(sessionHighScore);
+    }
+
+    // Pulse combo display when combo increases
+    if (comboDisplay && combo > 1) {
+      comboDisplay.classList.add('pulse');
+      setTimeout(() => comboDisplay.classList.remove('pulse'), 100);
+    }
+  }
+
+  function resetSessionHighScore() {
+    sessionHighScore = 0;
+    if (highScoreValue) highScoreValue.textContent = '0';
+  }
+
+  function updateHighScoreDisplay() {
+    // Now shows session high, initialized to 0
+    if (highScoreValue) highScoreValue.textContent = String(sessionHighScore);
+  }
+
+  function showHitFeedback(pointsLost) {
+    if (hitFeedback) {
+      hitFeedback.classList.add('active');
+      setTimeout(() => hitFeedback.classList.remove('active'), 200);
+    }
+  }
+
+  function showHighScoreModal(score, trackTitle) {
+    if (!highScoreModal || !EnvironmentMode) return;
+
+    // Check if it's a high score
+    if (!EnvironmentMode.isHighScore(trackTitle, score)) {
+      return;  // Not a high score, skip modal
+    }
+
+    pendingHighScore = { score, trackTitle };
+
+    if (finalScoreDisplay) finalScoreDisplay.textContent = String(score);
+    if (finalTrackDisplay) finalTrackDisplay.textContent = trackTitle;
+    if (initialsInput) initialsInput.value = '';
+
+    // Show current leaderboard
+    updateLeaderboardDisplay(trackTitle);
+
+    highScoreModal.hidden = false;
+    if (initialsInput) initialsInput.focus();
+  }
+
+  function hideHighScoreModal() {
+    if (highScoreModal) highScoreModal.hidden = true;
+    pendingHighScore = null;
+  }
+
+  function saveHighScore() {
+    if (!pendingHighScore || !EnvironmentMode || !initialsInput) return;
+
+    const initials = initialsInput.value.trim() || 'AAA';
+    EnvironmentMode.saveHighScore(pendingHighScore.trackTitle, initials, pendingHighScore.score);
+    updateHighScoreDisplay();
+    hideHighScoreModal();
+  }
+
+  function updateLeaderboardDisplay(trackTitle) {
+    if (!leaderboardDisplay || !EnvironmentMode) return;
+
+    const scores = EnvironmentMode.getHighScores(trackTitle);
+    if (scores.length === 0) {
+      leaderboardDisplay.innerHTML = '';
+      return;
+    }
+
+    let html = '<h3>Leaderboard</h3>';
+    scores.forEach((entry, i) => {
+      html += `
+        <div class="leaderboard-entry">
+          <span class="leaderboard-rank">${i + 1}.</span>
+          <span class="leaderboard-initials">${entry.initials}</span>
+          <span class="leaderboard-score">${entry.score}</span>
+        </div>
+      `;
+    });
+    leaderboardDisplay.innerHTML = html;
+  }
+
+  // High score modal event handlers
+  if (saveScoreBtn) {
+    saveScoreBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      saveHighScore();
+    });
+  }
+  if (skipScoreBtn) {
+    skipScoreBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      hideHighScoreModal();
+    });
+  }
+  if (initialsInput) {
+    initialsInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') saveHighScore();
+      if (e.key === 'Escape') hideHighScoreModal();
+    });
+  }
+  // Close modal when clicking backdrop (outside content)
+  if (highScoreModal) {
+    highScoreModal.addEventListener('click', (e) => {
+      if (e.target === highScoreModal) {
+        hideHighScoreModal();
+      }
+    });
+  }
+
   function syncThreeVizMode() {
     if (!threeReady || !threeModes || !bgVizCanvas) return;
 
     const on = bgVizMode !== "off";
     bgVizCanvas.classList.toggle("is-on", on);
 
-    // Handle racer mode specially
-    const isRacer = bgVizMode === "racer";
+    // Environment mode is the only visualization mode
+    const isEnvironment = bgVizMode === "environment";
 
-    // Dispose racer if switching away from it
-    if (racerInstance && !isRacer) {
-      racerInstance.dispose();
-      racerInstance = null;
-      // Reset camera to default position
-      if (threeCamera) {
-        threeCamera.position.set(0, -1.2, 9.5);
-        threeCamera.lookAt(0, 0.5, 0);
-        threeCamera.fov = 75;
-        threeCamera.updateProjectionMatrix();
-      }
+    // Dispose environment if switching away from it
+    if (environmentInstance && !isEnvironment) {
+      if (EnvironmentMode) EnvironmentMode.dispose();
+      environmentInstance = null;
+      console.log("Environment disposed");
     }
 
-    // Initialize racer if switching to it
-    if (isRacer && !racerInstance && AudioRacer && three && threeScene && threeCamera && threeRenderer) {
-      racerInstance = AudioRacer.init(three, threeScene, threeCamera, threeRenderer, gltfLoader);
+    // Initialize environment mode
+    if (isEnvironment && !environmentInstance && EnvironmentMode && three && threeScene && threeCamera && threeRenderer) {
+      environmentInstance = EnvironmentMode.init(three, threeScene, threeCamera, threeRenderer, currentTrackTitle);
+      console.log("Environment mode initialized for track:", currentTrackTitle);
+
+      // Set up score callbacks
+      EnvironmentMode.setScoreCallback((score, combo) => {
+        updateScoreHUD(score, combo);
+      });
+      EnvironmentMode.setHitCallback((pointsLost) => {
+        showHitFeedback(pointsLost);
+      });
+
+      // Update high score display
+      updateHighScoreDisplay();
     }
 
-    // Disable OrbitControls during racer mode (racer has its own camera controller)
+    // Show/hide score HUD based on environment mode
+    if (scoreHud) {
+      scoreHud.style.display = isEnvironment ? 'flex' : 'none';
+    }
+
+    // Disable OrbitControls during environment mode
     if (orbitControls) {
-      orbitControls.enabled = !isRacer;
+      orbitControls.enabled = !isEnvironment;
     }
 
     for (const [mode, cfg] of Object.entries(threeModes)) {
       if (!cfg?.group) continue;
-      cfg.group.visible = on && mode === bgVizMode && !isRacer;
+      cfg.group.visible = on && mode === bgVizMode && !isEnvironment;
     }
 
     if (threeCore) {
@@ -1180,12 +1346,12 @@
     }
 
     if (threeStars) {
-      threeStars.visible = on && !isRacer;
+      threeStars.visible = on && !isEnvironment;
     }
 
-    // Hide 3D model during racer mode
+    // Hide 3D model during environment mode
     if (currentModel) {
-      currentModel.visible = !isRacer;
+      currentModel.visible = !isEnvironment;
     }
 
     resizeThreeRenderer();
@@ -1292,35 +1458,17 @@
       threeStars.rotation.x = -0.08;
     }
 
-    // Handle racer mode separately
-    if (bgVizMode === "racer" && racerInstance) {
-      racerInstance.update(t, freqData, amplitude);
-    } else {
-      const modeKey = bgVizMode in threeModes ? bgVizMode : "grid";
-      const mode = /** @type {any} */ (threeModes[modeKey]);
-      if (mode?.update) {
-        mode.update({
-          nowMs,
-          t,
-          dt,
-          energy,
-          bass,
-          mid,
-          treble,
-          amplitude,
-          analyser,
-          freqData,
-          timeData,
-        });
-      }
-
-      // Update custom track scene (bespoke visual experience)
-      if (currentTrackScene && currentTrackScene.update) {
-        currentTrackScene.update(t, freqData, timeData, amplitude);
-      }
+    // Update environment mode with audio data
+    if (bgVizMode === "environment" && EnvironmentMode) {
+      EnvironmentMode.update(dt, {
+        bass: bass,
+        mid: mid,
+        treble: treble,
+        energy: energy
+      });
     }
 
-    // Update OrbitControls for smooth damping (skip during racer mode)
+    // Update OrbitControls for smooth damping
     if (orbitControls && orbitControls.enabled) {
       orbitControls.update();
     }
@@ -2431,14 +2579,6 @@
   });
   closeVizSettingsBtn.addEventListener("click", closeVizSettings);
 
-  // Restart game button
-  if (restartGameBtn) {
-    restartGameBtn.addEventListener("click", () => {
-      if (window.AudioRacer && window.AudioRacer.instance) {
-        window.AudioRacer.instance.restart();
-      }
-    });
-  }
 
   // Audio reactivity slider
   if (vizReactivity) {
@@ -2530,6 +2670,14 @@
     setMediaSessionPlaybackState();
   });
   audio.addEventListener("ended", () => {
+    // Check for high score when track ends
+    if (EnvironmentMode && bgVizMode === "environment" && currentTrackTitle) {
+      const finalScore = EnvironmentMode.getScore();
+      if (finalScore > 0) {
+        showHighScoreModal(finalScore, currentTrackTitle);
+      }
+    }
+
     if (repeatMode === "one") {
       next({ autoplay: true });
       return;
@@ -2666,7 +2814,7 @@
 
     const key = e.key.toLowerCase();
 
-    // Only handle non-game keys (arrow keys, space, WASD are used by racer)
+    // Handle keyboard shortcuts
     if (key === "m") {
       audio.muted = !audio.muted;
       updateVolumeIcon();

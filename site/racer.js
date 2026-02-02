@@ -11,10 +11,10 @@
   // ============================================================================
   const PHYSICS = {
     // Core movement
-    thrust: 0.02,
-    airResist: 0.02,
-    maxSpeed: 7.0,      // Increased for higher top speed
-    boosterSpeed: 0.8,  // Boost power
+    thrust: 0.01,
+    airResist: 0.03,
+    maxSpeed: 3.0,      // Slower, more relaxed pace
+    boosterSpeed: 0.4,  // Boost power
     boosterDecay: 0.08, // Fast boost decay
 
     // Steering
@@ -35,12 +35,12 @@
 
     // Audio modifiers - DIRECT SPEED CONTROL
     // Speed is now directly tied to audio intensity:
-    // - Quiet music = slow ship (~150 km/h)
-    // - Loud/intense music = fast ship (up to ~800 km/h)
-    audioThrustMod: 2.0,      // Bass boosts acceleration rate
-    audioSpeedCapMod: 1.3,    // Energy can push max speed higher
+    // - Quiet music = slow ship (~80 km/h)
+    // - Loud/intense music = fast ship (up to ~350 km/h)
+    audioThrustMod: 1.2,      // Bass boosts acceleration rate
+    audioSpeedCapMod: 1.0,    // Energy can push max speed higher
     audioAngularMod: 0.3,     // Mid frequencies affect handling
-    audioBaseSpeedMod: 0.95   // How strongly audio controls target speed (0-1)
+    audioBaseSpeedMod: 0.7    // How strongly audio controls target speed (0-1)
   };
 
   const TRACK = {
@@ -406,6 +406,37 @@
   }
 
   // ============================================================================
+  // DEFAULT TRACK COLORS - Used when no theme is applied
+  // ============================================================================
+  const DEFAULT_TRACK_COLORS = {
+    floorPrimary: 0x0a0a18,
+    floorSecondary: 0x0f0f22,
+    wallBase: 0x1a0033,
+    wallAccent: 0xff00ff,
+    obstacle: 0xff0044,
+    boostPad: 0x00ffff,
+    centerMarker: 0xff00ff,
+    fogColor: 0x000008,
+    fogNear: 30,
+    fogFar: 200,
+    ambientLight: 0x111122,
+    ambientIntensity: 0.3
+  };
+
+  // ============================================================================
+  // DEFAULT VISUAL STYLE - Used when no style is specified
+  // ============================================================================
+  const DEFAULT_VISUAL_STYLE = {
+    wallStyle: "solid",
+    floorPattern: "solid",
+    glowIntensity: 0.5,
+    particleType: "sparks",
+    particleDensity: 0.4,
+    pulseWithBeat: true,
+    skyGradient: [0x000005, 0x000010]
+  };
+
+  // ============================================================================
   // TRACK SEGMENT - Individual track piece
   // ============================================================================
   class TrackSegment {
@@ -419,34 +450,254 @@
       this.obstacles = [];
       this.boostPads = [];
       this.colliders = [];
+      this.colors = DEFAULT_TRACK_COLORS;
+      this.visualStyle = DEFAULT_VISUAL_STYLE;
+
+      // True curve data (set by generator)
+      this.pathX = 0;
+      this.pathZ = 0;
+      this.trackAngle = 0;
+      this.bankAngle = 0;
     }
 
-    build(accentColor) {
+    build(colors, visualStyle) {
       const THREE = this.THREE;
       const halfWidth = this.width / 2;
+      this.colors = colors || DEFAULT_TRACK_COLORS;
+      this.visualStyle = visualStyle || DEFAULT_VISUAL_STYLE;
 
-      // Floor
-      const floorGeom = new THREE.PlaneGeometry(this.width, TRACK.segmentLength);
+      // Floor - uses theme colors and pattern
+      this.buildFloor(THREE, halfWidth);
+
+      // Walls - use theme colors and style
+      this.buildWalls(THREE, halfWidth);
+
+      // Center line markers every 4th segment - uses theme color
+      if (this.index % 4 === 0) {
+        this.buildCenterMarker(THREE);
+      }
+
+      // Position segment along curved path
+      this.group.position.x = this.pathX;
+      this.group.position.z = this.pathZ;
+
+      // Rotate segment to face travel direction
+      this.group.rotation.y = -this.trackAngle;
+
+      // Apply banking (roll) for curves
+      this.group.rotation.z = this.bankAngle;
+    }
+
+    buildFloor(THREE, halfWidth) {
+      const floorColor = this.index % 2 === 0 ? this.colors.floorPrimary : this.colors.floorSecondary;
+      const pattern = this.visualStyle.floorPattern || "solid";
+      const glowIntensity = this.visualStyle.glowIntensity || 0.5;
+
+      // Base floor
+      const floorGeom = new THREE.PlaneGeometry(this.width, TRACK.segmentLength, 8, 8);
       const floorMat = new THREE.MeshStandardMaterial({
-        color: this.index % 2 === 0 ? 0x0a0a18 : 0x0f0f22,
-        metalness: 0.3,
-        roughness: 0.8
+        color: floorColor,
+        emissive: floorColor,
+        emissiveIntensity: glowIntensity * 0.1,
+        metalness: 0.4,
+        roughness: 0.6
       });
       const floor = new THREE.Mesh(floorGeom, floorMat);
       floor.rotation.x = -Math.PI / 2;
       floor.position.z = TRACK.segmentLength / 2;
       this.group.add(floor);
 
-      // Left wall
-      const wallGeom = new THREE.BoxGeometry(TRACK.wallThickness, TRACK.wallHeight, TRACK.segmentLength);
+      // Add pattern overlay based on style
+      if (pattern !== "solid") {
+        this.addFloorPattern(THREE, pattern, halfWidth, glowIntensity);
+      }
+    }
+
+    addFloorPattern(THREE, pattern, halfWidth, glowIntensity) {
+      const accentColor = this.colors.wallAccent;
+
+      switch (pattern) {
+        case "grid": {
+          // Grid lines
+          const gridMat = new THREE.MeshBasicMaterial({
+            color: accentColor,
+            transparent: true,
+            opacity: 0.15 + glowIntensity * 0.1,
+            blending: THREE.AdditiveBlending
+          });
+          // Horizontal lines
+          for (let i = 0; i < 4; i++) {
+            const lineGeom = new THREE.PlaneGeometry(this.width, 0.1);
+            const line = new THREE.Mesh(lineGeom, gridMat);
+            line.rotation.x = -Math.PI / 2;
+            line.position.set(0, 0.01, (i + 0.5) * (TRACK.segmentLength / 4));
+            this.group.add(line);
+          }
+          // Vertical lines
+          for (let i = -2; i <= 2; i++) {
+            const lineGeom = new THREE.PlaneGeometry(0.1, TRACK.segmentLength);
+            const line = new THREE.Mesh(lineGeom, gridMat);
+            line.rotation.x = -Math.PI / 2;
+            line.position.set(i * (this.width / 5), 0.01, TRACK.segmentLength / 2);
+            this.group.add(line);
+          }
+          break;
+        }
+        case "stripes": {
+          // Racing stripes
+          const stripeMat = new THREE.MeshBasicMaterial({
+            color: accentColor,
+            transparent: true,
+            opacity: 0.2 + glowIntensity * 0.15,
+            blending: THREE.AdditiveBlending
+          });
+          // Edge stripes
+          const stripeGeom = new THREE.PlaneGeometry(0.5, TRACK.segmentLength);
+          const leftStripe = new THREE.Mesh(stripeGeom, stripeMat);
+          leftStripe.rotation.x = -Math.PI / 2;
+          leftStripe.position.set(-halfWidth + 1, 0.01, TRACK.segmentLength / 2);
+          this.group.add(leftStripe);
+
+          const rightStripe = new THREE.Mesh(stripeGeom, stripeMat);
+          rightStripe.rotation.x = -Math.PI / 2;
+          rightStripe.position.set(halfWidth - 1, 0.01, TRACK.segmentLength / 2);
+          this.group.add(rightStripe);
+          break;
+        }
+        case "circuit": {
+          // Circuit board pattern
+          const circuitMat = new THREE.MeshBasicMaterial({
+            color: accentColor,
+            transparent: true,
+            opacity: 0.12 + glowIntensity * 0.08,
+            blending: THREE.AdditiveBlending
+          });
+          // Random circuit-like lines
+          const seed = this.index * 12345;
+          for (let i = 0; i < 6; i++) {
+            const x = ((seed * (i + 1) * 7) % 100) / 100 * this.width - halfWidth;
+            const length = 5 + ((seed * (i + 2)) % 15);
+            const lineGeom = new THREE.PlaneGeometry(0.08, length);
+            const line = new THREE.Mesh(lineGeom, circuitMat);
+            line.rotation.x = -Math.PI / 2;
+            line.position.set(x, 0.01, (seed * (i + 3) % 30));
+            this.group.add(line);
+          }
+          break;
+        }
+        case "waves": {
+          // Wave pattern (underwater feel)
+          const waveMat = new THREE.MeshBasicMaterial({
+            color: accentColor,
+            transparent: true,
+            opacity: 0.1 + glowIntensity * 0.1,
+            blending: THREE.AdditiveBlending
+          });
+          for (let i = 0; i < 3; i++) {
+            const waveGeom = new THREE.PlaneGeometry(this.width * 0.8, 0.3);
+            const wave = new THREE.Mesh(waveGeom, waveMat);
+            wave.rotation.x = -Math.PI / 2;
+            wave.position.set(
+              Math.sin(this.index * 0.5 + i) * 2,
+              0.01,
+              (i + 0.5) * (TRACK.segmentLength / 3)
+            );
+            this.group.add(wave);
+          }
+          break;
+        }
+        case "hexagon": {
+          // Hexagonal pattern
+          const hexMat = new THREE.MeshBasicMaterial({
+            color: accentColor,
+            transparent: true,
+            opacity: 0.12 + glowIntensity * 0.1,
+            blending: THREE.AdditiveBlending
+          });
+          const hexSize = 2;
+          for (let row = 0; row < 3; row++) {
+            for (let col = -2; col <= 2; col++) {
+              const hexGeom = new THREE.CircleGeometry(hexSize * 0.4, 6);
+              const hex = new THREE.Mesh(hexGeom, hexMat);
+              hex.rotation.x = -Math.PI / 2;
+              const offset = row % 2 === 0 ? 0 : hexSize;
+              hex.position.set(
+                col * hexSize * 2 + offset,
+                0.01,
+                row * hexSize * 1.7 + hexSize
+              );
+              this.group.add(hex);
+            }
+          }
+          break;
+        }
+      }
+    }
+
+    buildWalls(THREE, halfWidth) {
       const isAccentSegment = this.index % 4 === 0;
-      const wallMat = new THREE.MeshStandardMaterial({
-        color: isAccentSegment ? accentColor : 0x1a0033,
-        emissive: isAccentSegment ? accentColor : 0x1a0033,
-        emissiveIntensity: isAccentSegment ? 0.5 : 0.1,
-        metalness: 0.7,
-        roughness: 0.3
-      });
+      const wallColor = isAccentSegment ? this.colors.wallAccent : this.colors.wallBase;
+      const wallStyle = this.visualStyle.wallStyle || "solid";
+      const glowIntensity = this.visualStyle.glowIntensity || 0.5;
+
+      let wallMat;
+      let wallGeom;
+
+      switch (wallStyle) {
+        case "wireframe": {
+          wallGeom = new THREE.BoxGeometry(TRACK.wallThickness, TRACK.wallHeight, TRACK.segmentLength);
+          wallMat = new THREE.MeshBasicMaterial({
+            color: wallColor,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.6 + glowIntensity * 0.3
+          });
+          break;
+        }
+        case "energy": {
+          // Energy barrier style - tall thin glowing panels
+          wallGeom = new THREE.BoxGeometry(TRACK.wallThickness * 0.3, TRACK.wallHeight * 1.5, TRACK.segmentLength);
+          wallMat = new THREE.MeshBasicMaterial({
+            color: wallColor,
+            transparent: true,
+            opacity: 0.4 + glowIntensity * 0.4,
+            blending: THREE.AdditiveBlending
+          });
+          break;
+        }
+        case "glass": {
+          wallGeom = new THREE.BoxGeometry(TRACK.wallThickness, TRACK.wallHeight, TRACK.segmentLength);
+          wallMat = new THREE.MeshPhysicalMaterial({
+            color: wallColor,
+            metalness: 0.1,
+            roughness: 0.1,
+            transmission: 0.6,
+            transparent: true,
+            opacity: 0.5
+          });
+          break;
+        }
+        case "glow": {
+          wallGeom = new THREE.BoxGeometry(TRACK.wallThickness, TRACK.wallHeight, TRACK.segmentLength);
+          wallMat = new THREE.MeshStandardMaterial({
+            color: wallColor,
+            emissive: wallColor,
+            emissiveIntensity: isAccentSegment ? glowIntensity : glowIntensity * 0.3,
+            metalness: 0.2,
+            roughness: 0.5
+          });
+          break;
+        }
+        default: // solid
+          wallGeom = new THREE.BoxGeometry(TRACK.wallThickness, TRACK.wallHeight, TRACK.segmentLength);
+          wallMat = new THREE.MeshStandardMaterial({
+            color: wallColor,
+            emissive: wallColor,
+            emissiveIntensity: isAccentSegment ? 0.5 : 0.1,
+            metalness: 0.7,
+            roughness: 0.3
+          });
+      }
 
       const leftWall = new THREE.Mesh(wallGeom, wallMat);
       leftWall.position.set(-halfWidth, TRACK.wallHeight / 2, TRACK.segmentLength / 2);
@@ -461,33 +712,31 @@
       rightWall.userData.side = 'right';
       this.group.add(rightWall);
       this.colliders.push(rightWall);
+    }
 
-      // Center line markers every 4th segment
-      if (this.index % 4 === 0) {
-        const markerGeom = new THREE.PlaneGeometry(0.3, TRACK.segmentLength * 0.8);
-        const markerMat = new THREE.MeshBasicMaterial({
-          color: 0xff00ff,
-          transparent: true,
-          opacity: 0.4
-        });
-        const marker = new THREE.Mesh(markerGeom, markerMat);
-        marker.rotation.x = -Math.PI / 2;
-        marker.position.set(0, 0.01, TRACK.segmentLength / 2);
-        this.group.add(marker);
-      }
-
-      // Apply curvature as accumulated offset for smooth curves
-      this.group.position.x = this.curvature;
-      this.group.position.z = this.zPosition;
+    buildCenterMarker(THREE) {
+      const markerGeom = new THREE.PlaneGeometry(0.3, TRACK.segmentLength * 0.8);
+      const glowIntensity = this.visualStyle.glowIntensity || 0.5;
+      const markerMat = new THREE.MeshBasicMaterial({
+        color: this.colors.centerMarker,
+        transparent: true,
+        opacity: 0.3 + glowIntensity * 0.2,
+        blending: THREE.AdditiveBlending
+      });
+      const marker = new THREE.Mesh(markerGeom, markerMat);
+      marker.rotation.x = -Math.PI / 2;
+      marker.position.set(0, 0.01, TRACK.segmentLength / 2);
+      this.group.add(marker);
     }
 
     addObstacle(type, xOffset) {
       const THREE = this.THREE;
 
+      // Obstacle uses theme color
       const obstacleGeom = new THREE.BoxGeometry(2, 2, 1);
       const obstacleMat = new THREE.MeshStandardMaterial({
-        color: 0xff0044,
-        emissive: 0xff0044,
+        color: this.colors.obstacle,
+        emissive: this.colors.obstacle,
         emissiveIntensity: 0.4,
         transparent: true,
         opacity: 0.85
@@ -503,9 +752,10 @@
     addBoostPad(xOffset = 0) {
       const THREE = this.THREE;
 
+      // Boost pad uses theme color
       const padGeom = new THREE.PlaneGeometry(3, 6);
       const padMat = new THREE.MeshBasicMaterial({
-        color: 0x00ffff,
+        color: this.colors.boostPad,
         transparent: true,
         opacity: 0.6,
         blending: THREE.AdditiveBlending
@@ -727,6 +977,18 @@
       this.accumulatedCurve = 0;
       this.accentColor = 0x00ffff;
 
+      // True curved track system - angle-based positioning
+      this.trackAngle = 0;           // Current heading angle (radians)
+      this.pathX = 0;                // Current X position on curved path
+      this.pathZ = 0;                // Current Z position on curved path
+      this.bankAngle = 0;            // Current banking angle
+
+      // Theme colors for track elements
+      this.themeColors = { ...DEFAULT_TRACK_COLORS };
+
+      // Visual style for track appearance
+      this.visualStyle = { ...DEFAULT_VISUAL_STYLE };
+
       // Pattern queue system
       this.patternQueue = [];      // Queue of segment definitions to generate
       this.currentPattern = null;  // Name of current pattern being generated
@@ -734,6 +996,21 @@
 
       // Reusable vector for boost pad checks
       this._tempVec = new THREE.Vector3();
+    }
+
+    setThemeColors(colors, visualStyle) {
+      if (colors) {
+        // Merge provided colors with defaults
+        this.themeColors = { ...DEFAULT_TRACK_COLORS, ...colors };
+        // Update accent color for backwards compatibility
+        if (colors.wallAccent) {
+          this.accentColor = colors.wallAccent;
+        }
+      }
+      if (visualStyle) {
+        // Merge provided visual style with defaults
+        this.visualStyle = { ...DEFAULT_VISUAL_STYLE, ...visualStyle };
+      }
     }
 
     generateInitial(count) {
@@ -812,7 +1089,25 @@
       const targetCurve = segDef.curve;
       this.curvature += (targetCurve - this.curvature) * 0.3;
 
-      // Accumulate curvature for smooth curves
+      // Convert curvature to angular change (radians per segment)
+      // Curvature of 5 = about 3 degrees per segment = noticeable curve
+      const angleChange = this.curvature * 0.012;
+      this.trackAngle += angleChange;
+
+      // Calculate segment position along curved path
+      const segX = this.pathX;
+      const segZ = this.pathZ;
+
+      // Advance path position using current heading angle
+      this.pathX += Math.sin(this.trackAngle) * TRACK.segmentLength;
+      this.pathZ += Math.cos(this.trackAngle) * TRACK.segmentLength;
+
+      // Calculate banking angle (tilt into curves)
+      // Positive curvature = right turn = bank left (negative roll)
+      const targetBank = -this.curvature * 0.04;
+      this.bankAngle += (targetBank - this.bankAngle) * 0.3;
+
+      // Legacy accumulated curve for compatibility
       this.accumulatedCurve += this.curvature * 0.8;
 
       // Calculate width (pattern width * audio narrowing)
@@ -847,7 +1142,13 @@
         );
       }
 
-      segment.build(this.accentColor);
+      // Store curve data for positioning
+      segment.pathX = segX;
+      segment.pathZ = segZ;
+      segment.trackAngle = this.trackAngle;
+      segment.bankAngle = this.bankAngle;
+
+      segment.build(this.themeColors, this.visualStyle);
 
       // Add obstacle if pattern defines one
       if (segDef.obstacle !== null) {
@@ -870,16 +1171,16 @@
     }
 
     update(shipZ, audio) {
-      // Remove segments behind the ship
+      // Remove segments behind the ship (use pathZ for curved tracks)
       while (this.segments.length > 0 &&
-             this.segments[0].zPosition < shipZ - TRACK.segmentLength * TRACK.visibleBehind) {
+             this.segments[0].pathZ < shipZ - TRACK.segmentLength * TRACK.visibleBehind) {
         const oldSegment = this.segments.shift();
         this.scene.remove(oldSegment.group);
         this.segmentPool.push(oldSegment);
       }
 
-      // Generate new segments ahead
-      while (this.lastSegmentZ < shipZ + TRACK.segmentLength * TRACK.visibleAhead) {
+      // Generate new segments ahead (use pathZ for curved tracks)
+      while (this.pathZ < shipZ + TRACK.segmentLength * TRACK.visibleAhead) {
         this.generateNext(audio);
       }
 
@@ -917,6 +1218,27 @@
       this.accentColor = color;
     }
 
+    // Get track info at a given Z position (for ship following)
+    getTrackInfoAtZ(z) {
+      // Find the segment at or near this Z position
+      for (const seg of this.segments) {
+        const segStart = seg.pathZ;
+        const segEnd = seg.pathZ + TRACK.segmentLength;
+        if (z >= segStart && z < segEnd) {
+          // Interpolate within segment
+          const t = (z - segStart) / TRACK.segmentLength;
+          return {
+            angle: seg.trackAngle,
+            bankAngle: seg.bankAngle,
+            centerX: seg.pathX + Math.sin(seg.trackAngle) * TRACK.segmentLength * t,
+            centerZ: seg.pathZ + Math.cos(seg.trackAngle) * TRACK.segmentLength * t
+          };
+        }
+      }
+      // Default if no segment found
+      return { angle: 0, bankAngle: 0, centerX: 0, centerZ: z };
+    }
+
     reset() {
       // Clear all segments
       this.segments.forEach(seg => {
@@ -928,8 +1250,16 @@
       this.nextSegmentIndex = 0;
       this.lastSegmentZ = 0;
       this.curvature = 0;
-      this.targetCurvature = 0;
       this.accumulatedCurve = 0;
+      // Reset curved track state
+      this.trackAngle = 0;
+      this.pathX = 0;
+      this.pathZ = 0;
+      this.bankAngle = 0;
+      // Clear pattern queue to prevent stale data after restart
+      this.patternQueue = [];
+      this.currentPattern = null;
+      this.patternCooldown = 0;
     }
 
     dispose() {
@@ -1081,6 +1411,9 @@
       this.scene = scene;
 
       this.systems = {};
+      this.ambientType = "sparks";
+      this.ambientColor = 0xffffff;
+      this.ambientDensity = 0.4;
       this.createSystems();
     }
 
@@ -1090,6 +1423,177 @@
 
       // Collision sparks
       this.systems.sparks = this.createSparks();
+
+      // Ambient particles (themed per track)
+      this.systems.ambient = this.createAmbientParticles();
+    }
+
+    setAmbientStyle(type, color, density) {
+      this.ambientType = type || "sparks";
+      this.ambientColor = color || 0xffffff;
+      this.ambientDensity = density || 0.4;
+
+      // Update ambient particle appearance
+      if (this.systems.ambient && this.systems.ambient.mesh) {
+        const mat = this.systems.ambient.mesh.material;
+        mat.color.setHex(this.ambientColor);
+
+        // Adjust size and opacity based on type
+        switch (this.ambientType) {
+          case "bubbles":
+            mat.size = 0.4;
+            mat.opacity = 0.3;
+            break;
+          case "embers":
+            mat.size = 0.15;
+            mat.opacity = 0.8;
+            break;
+          case "dust":
+            mat.size = 0.08;
+            mat.opacity = 0.4;
+            break;
+          case "energy":
+            mat.size = 0.2;
+            mat.opacity = 0.6;
+            break;
+          case "rain":
+            mat.size = 0.05;
+            mat.opacity = 0.5;
+            break;
+          case "snow":
+            mat.size = 0.12;
+            mat.opacity = 0.6;
+            break;
+          default: // sparks
+            mat.size = 0.1;
+            mat.opacity = 0.5;
+        }
+        mat.needsUpdate = true;
+      }
+    }
+
+    createAmbientParticles() {
+      const THREE = this.THREE;
+      const count = 300;
+
+      const geometry = new THREE.BufferGeometry();
+      const positions = new Float32Array(count * 3);
+      const velocities = [];
+
+      for (let i = 0; i < count; i++) {
+        positions[i * 3] = (Math.random() - 0.5) * 40;
+        positions[i * 3 + 1] = Math.random() * 15;
+        positions[i * 3 + 2] = Math.random() * 120;
+        velocities.push({
+          x: (Math.random() - 0.5) * 0.3,
+          y: (Math.random() - 0.5) * 0.2,
+          z: -0.5 - Math.random() * 1.5,
+          phase: Math.random() * Math.PI * 2
+        });
+      }
+
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+      const material = new THREE.PointsMaterial({
+        color: 0xffffff,
+        size: 0.1,
+        transparent: true,
+        opacity: 0.5,
+        blending: THREE.AdditiveBlending
+      });
+
+      const points = new THREE.Points(geometry, material);
+      this.scene.add(points);
+
+      return {
+        mesh: points,
+        geometry,
+        positions,
+        velocities,
+        count
+      };
+    }
+
+    updateAmbientParticles(ambient, dt, time, shipZ, shipSpeed, audio) {
+      const type = this.ambientType;
+      const density = this.ambientDensity;
+      const visibleCount = Math.floor(ambient.count * density);
+
+      for (let i = 0; i < ambient.count; i++) {
+        const idx = i * 3;
+        const vel = ambient.velocities[i];
+
+        // Only animate visible particles
+        if (i >= visibleCount) {
+          ambient.positions[idx + 1] = -100; // Hide excess particles
+          continue;
+        }
+
+        switch (type) {
+          case "bubbles":
+            // Slow rising motion with wobble
+            ambient.positions[idx] += Math.sin(time * 2 + vel.phase) * 0.02;
+            ambient.positions[idx + 1] += 0.03 + audio.mid * 0.02;
+            ambient.positions[idx + 2] -= shipSpeed * dt * 0.3;
+            break;
+
+          case "embers":
+            // Rising with flickering
+            ambient.positions[idx] += vel.x * (1 + Math.sin(time * 10 + vel.phase) * 0.5);
+            ambient.positions[idx + 1] += 0.05 + audio.bass * 0.03;
+            ambient.positions[idx + 2] -= shipSpeed * dt * 0.5;
+            break;
+
+          case "dust":
+            // Slow floating
+            ambient.positions[idx] += Math.sin(time * 0.5 + vel.phase) * 0.01;
+            ambient.positions[idx + 1] += Math.cos(time * 0.3 + vel.phase) * 0.01;
+            ambient.positions[idx + 2] -= shipSpeed * dt * 0.2;
+            break;
+
+          case "energy":
+            // Rapid movement with audio reactivity
+            ambient.positions[idx] += Math.sin(time * 5 + vel.phase) * 0.05 * (1 + audio.treble);
+            ambient.positions[idx + 1] += Math.cos(time * 4 + vel.phase) * 0.03;
+            ambient.positions[idx + 2] -= shipSpeed * dt * 0.4;
+            break;
+
+          case "rain":
+            // Fast falling
+            ambient.positions[idx] += vel.x * 0.1;
+            ambient.positions[idx + 1] -= 0.3 + audio.energy * 0.1;
+            ambient.positions[idx + 2] -= shipSpeed * dt * 0.6;
+            break;
+
+          case "snow":
+            // Gentle falling with drift
+            ambient.positions[idx] += Math.sin(time + vel.phase) * 0.02;
+            ambient.positions[idx + 1] -= 0.05;
+            ambient.positions[idx + 2] -= shipSpeed * dt * 0.3;
+            break;
+
+          default: // sparks
+            // Default movement
+            ambient.positions[idx] += vel.x * dt;
+            ambient.positions[idx + 1] += vel.y * dt;
+            ambient.positions[idx + 2] -= shipSpeed * dt * 0.4;
+        }
+
+        // Wrap particles around
+        if (ambient.positions[idx + 2] < shipZ - 30) {
+          ambient.positions[idx] = (Math.random() - 0.5) * 40;
+          ambient.positions[idx + 1] = Math.random() * 15;
+          ambient.positions[idx + 2] = shipZ + 100 + Math.random() * 20;
+        }
+        // Wrap Y for rising particles
+        if (ambient.positions[idx + 1] > 20) {
+          ambient.positions[idx + 1] = -2;
+        }
+        if (ambient.positions[idx + 1] < -5) {
+          ambient.positions[idx + 1] = 15;
+        }
+      }
+      ambient.geometry.attributes.position.needsUpdate = true;
     }
 
     createSpeedLines() {
@@ -1201,6 +1705,8 @@
     }
 
     update(dt, shipZ, shipSpeed, audio) {
+      const time = performance.now() * 0.001;
+
       // Update speed lines
       const lines = this.systems.speedLines;
       if (!lines || !lines.mesh) return;
@@ -1220,6 +1726,12 @@
         }
       }
       lines.geometry.attributes.position.needsUpdate = true;
+
+      // Update ambient particles based on type
+      const ambient = this.systems.ambient;
+      if (ambient && ambient.mesh) {
+        this.updateAmbientParticles(ambient, dt, time, shipZ, shipSpeed, audio);
+      }
 
       // Update sparks
       const sparks = this.systems.sparks;
@@ -1546,25 +2058,131 @@
       this.ambientLight = null;
       this.directionalLight = null;
 
+      // Theme colors
+      this.themeColors = { ...DEFAULT_TRACK_COLORS };
+
+      // Visual style
+      this.visualStyle = { ...DEFAULT_VISUAL_STYLE };
+
+      // Sky mesh for gradient background
+      this.skyMesh = null;
+
+      // Restart debounce flag
+      this.restartPending = false;
+
       this.initialized = false;
     }
 
-    init() {
+    setThemeColors(colors, visualStyle, regenerateTrack = false) {
+      // Merge with defaults
+      if (colors) {
+        this.themeColors = { ...DEFAULT_TRACK_COLORS, ...colors };
+      }
+      if (visualStyle) {
+        this.visualStyle = { ...DEFAULT_VISUAL_STYLE, ...visualStyle };
+      }
+
+      // Update track generator colors and visual style
+      if (this.track) {
+        this.track.setThemeColors(this.themeColors, this.visualStyle);
+
+        // Regenerate track with new colors if requested (for track switching)
+        if (regenerateTrack && this.initialized) {
+          this.track.reset();
+          this.track.generateInitial(TRACK.visibleAhead);
+          // Reset ship position to start of new track
+          if (this.ship) {
+            this.ship.reset();
+          }
+          if (this.cameraController) {
+            this.cameraController.reset();
+          }
+          // Reset to countdown state for new track
+          this.state = this.states.COUNTDOWN;
+          this.countdownTime = 3;
+          this.distance = 0;
+        }
+      }
+
+      // Update fog
+      if (this.scene && this.themeColors.fogColor !== undefined) {
+        if (this.scene.fog) {
+          this.scene.fog.color.setHex(this.themeColors.fogColor);
+        } else {
+          this.scene.fog = new this.THREE.FogExp2(this.themeColors.fogColor, 0.008);
+        }
+      }
+
+      // Update ambient light
+      if (this.ambientLight && this.themeColors.ambientLight !== undefined) {
+        this.ambientLight.color.setHex(this.themeColors.ambientLight);
+        if (this.themeColors.ambientIntensity !== undefined) {
+          this.ambientLight.intensity = this.themeColors.ambientIntensity;
+        }
+      }
+
+      // Update sky gradient if provided
+      if (visualStyle && visualStyle.skyGradient) {
+        this.updateSkyGradient(visualStyle.skyGradient);
+      }
+
+      // Update ambient particles if provided
+      if (visualStyle && this.particles) {
+        const particleColor = this.themeColors.wallAccent || 0xffffff;
+        this.particles.setAmbientStyle(
+          visualStyle.particleType || "sparks",
+          particleColor,
+          visualStyle.particleDensity || 0.4
+        );
+      }
+    }
+
+    updateSkyGradient(gradient) {
+      // Create a gradient background using a shader or simple color
+      if (this.scene && gradient && gradient.length >= 2) {
+        // For now, use the darker gradient color as background
+        this.scene.background = new this.THREE.Color(gradient[1]);
+      }
+    }
+
+    init(initialColors, initialVisualStyle) {
       if (this.initialized) return;
 
-      // Setup lighting
+      // Apply initial theme colors BEFORE creating track
+      if (initialColors) {
+        this.themeColors = { ...DEFAULT_TRACK_COLORS, ...initialColors };
+      }
+      if (initialVisualStyle) {
+        this.visualStyle = { ...DEFAULT_VISUAL_STYLE, ...initialVisualStyle };
+      }
+
+      // Setup lighting (uses theme colors)
       this.setupLighting();
 
       // Create systems
       this.ship = new Ship(this.THREE, this.scene, this.gltfLoader);
       this.track = new TrackGenerator(this.THREE, this.scene);
+
+      // Apply theme colors to track generator BEFORE generating
+      this.track.setThemeColors(this.themeColors, this.visualStyle);
+
       this.collision = new CollisionSystem(this.THREE, this.ship, this.track);
       this.cameraController = new CameraController(this.THREE, this.camera, this.ship.mesh);
       this.particles = new ParticleManager(this.THREE, this.scene);
       this.hud = new HUD();
       this.input = new InputHandler(this.ship);
 
-      // Generate initial track
+      // Apply ambient particle style
+      if (this.visualStyle && this.particles) {
+        const particleColor = this.themeColors.wallAccent || 0xffffff;
+        this.particles.setAmbientStyle(
+          this.visualStyle.particleType || "sparks",
+          particleColor,
+          this.visualStyle.particleDensity || 0.4
+        );
+      }
+
+      // Generate initial track WITH theme colors applied
       this.track.generateInitial(TRACK.visibleAhead);
 
       // Start countdown
@@ -1576,8 +2194,10 @@
     }
 
     setupLighting() {
-      // Ambient light
-      this.ambientLight = new this.THREE.AmbientLight(0x222244, 0.5);
+      // Ambient light - uses theme colors
+      const ambientColor = this.themeColors.ambientLight || 0x222244;
+      const ambientIntensity = this.themeColors.ambientIntensity || 0.5;
+      this.ambientLight = new this.THREE.AmbientLight(ambientColor, ambientIntensity);
       this.scene.add(this.ambientLight);
 
       // Directional light (sun)
@@ -1585,8 +2205,14 @@
       this.directionalLight.position.set(5, 10, 5);
       this.scene.add(this.directionalLight);
 
-      // Fog for depth
-      this.scene.fog = new this.THREE.FogExp2(0x000011, 0.008);
+      // Fog for depth - uses theme colors
+      const fogColor = this.themeColors.fogColor || 0x000011;
+      this.scene.fog = new this.THREE.FogExp2(fogColor, 0.008);
+
+      // Sky/background color - uses theme visual style
+      if (this.visualStyle && this.visualStyle.skyGradient) {
+        this.scene.background = new this.THREE.Color(this.visualStyle.skyGradient[1]);
+      }
     }
 
     update(timestamp, dt, freqData) {
@@ -1636,6 +2262,26 @@
       // Update ship physics
       this.ship.update(dt, this.audioReactor);
 
+      // Apply curved track following - pull ship toward track center
+      const trackInfo = this.track.getTrackInfoAtZ(this.ship.position.z);
+      if (trackInfo) {
+        // Calculate offset from track center
+        const offsetX = this.ship.position.x - trackInfo.centerX;
+
+        // Gentle force pulling toward center (stronger when further off)
+        // This keeps the ship on curved tracks without feeling restrictive
+        const pullStrength = 0.15;
+        const maxPull = 0.3;
+        const pullForce = Math.max(-maxPull, Math.min(maxPull, -offsetX * pullStrength * dt * 60));
+        this.ship.position.x += pullForce;
+
+        // Optional: tilt ship to match track banking
+        if (this.ship.mesh) {
+          const targetBankTilt = trackInfo.bankAngle * 0.5; // Partial banking for feel
+          this.ship.mesh.rotation.z = this.ship.roll + targetBankTilt;
+        }
+      }
+
       // Check collisions
       const collision = this.collision.check();
       if (collision.hit) {
@@ -1675,9 +2321,13 @@
     }
 
     updateGameOver(dt) {
-      // Wait for restart input
-      if (this.input.isRestartPressed()) {
+      // Wait for restart input (only trigger on first press, not while held)
+      const restartPressed = this.input.isRestartPressed();
+      if (restartPressed && !this.restartPending) {
+        this.restartPending = true;
         this.restart();
+      } else if (!restartPressed) {
+        this.restartPending = false;
       }
 
       // Slowly drift camera up
@@ -1758,12 +2408,12 @@
     instance: null,
     lastTime: 0,
 
-    init: function(THREE, scene, camera, renderer, gltfLoader) {
+    init: function(THREE, scene, camera, renderer, gltfLoader, initialColors, initialVisualStyle) {
       if (this.instance) {
         this.instance.dispose();
       }
       this.instance = new RacerGame(THREE, scene, camera, renderer, gltfLoader);
-      this.instance.init();
+      this.instance.init(initialColors, initialVisualStyle);
       this.lastTime = 0;
       // Return AudioRacer itself so update() calls go through the proper wrapper
       return this;
@@ -1795,10 +2445,30 @@
       this.lastTime = 0;
     },
 
+    setThemeColors: function(colors, visualStyle, regenerateTrack = false) {
+      if (this.instance) {
+        this.instance.setThemeColors(colors, visualStyle, regenerateTrack);
+      }
+    },
+
     restart: function() {
       if (this.instance) {
         this.instance.restart();
       }
+    },
+
+    getShipPosition: function() {
+      if (this.instance && this.instance.ship) {
+        return this.instance.ship.position;
+      }
+      return null;
+    },
+
+    getShipSpeed: function() {
+      if (this.instance && this.instance.ship) {
+        return this.instance.ship.speed;
+      }
+      return 0;
     }
   };
 

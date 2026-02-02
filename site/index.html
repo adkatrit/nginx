@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#070a18" />
-    <title>Audio Racer</title>
+    <title>Audio Environments</title>
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-NRQ96GQ70K"></script>
     <script>
@@ -34,20 +34,47 @@
     <!-- Full-screen background visualization -->
     <canvas id="bgViz" class="immersive-bg-viz" aria-hidden="true"></canvas>
 
-    <!-- Racer HUD overlay -->
-    <div id="racerHud" class="racer-hud" aria-hidden="true">
-      <div class="racer-score">SCORE: <span id="racerScore">0</span></div>
-      <div class="racer-combo" id="racerCombo"></div>
-      <div class="racer-controls">
-        <span class="racer-key">A/←</span> LEFT
-        <span class="racer-key">D/→</span> RIGHT
+    <!-- Score HUD overlay -->
+    <div id="scoreHud" class="score-hud" aria-hidden="true">
+      <div class="score-display">
+        <span class="score-label">SCORE</span>
+        <span class="score-value" id="scoreValue">0</span>
+      </div>
+      <div class="combo-display" id="comboDisplay">
+        <span class="combo-value" id="comboValue">1</span>
+        <span class="combo-label">x COMBO</span>
+      </div>
+      <div class="high-score-display">
+        <span class="high-score-label">HIGH</span>
+        <span class="high-score-value" id="highScoreValue">0</span>
+      </div>
+    </div>
+
+    <!-- Hit feedback overlay -->
+    <div id="hitFeedback" class="hit-feedback" aria-hidden="true"></div>
+
+    <!-- High Score Entry Modal -->
+    <div id="highScoreModal" class="high-score-modal" hidden>
+      <div class="high-score-modal__content">
+        <h2 class="high-score-modal__title">NEW HIGH SCORE!</h2>
+        <div class="high-score-modal__score" id="finalScoreDisplay">0</div>
+        <div class="high-score-modal__track" id="finalTrackDisplay"></div>
+        <div class="high-score-modal__input">
+          <label>Enter your initials:</label>
+          <input type="text" id="initialsInput" maxlength="3" placeholder="AAA" autocomplete="off" />
+        </div>
+        <div class="high-score-modal__buttons">
+          <button id="saveScoreBtn" class="high-score-modal__btn">SAVE</button>
+          <button id="skipScoreBtn" class="high-score-modal__btn high-score-modal__btn--skip">SKIP</button>
+        </div>
+        <div class="high-score-modal__leaderboard" id="leaderboardDisplay"></div>
       </div>
     </div>
 
     <!-- Screen reader announcements -->
     <div class="sr-only" role="status" aria-live="polite" id="ariaStatus"></div>
 
-    <main id="app" class="immersive-app" aria-label="Audio Racer">
+    <main id="app" class="immersive-app" aria-label="Audio Player">
 
       <!-- Floating Control Bar -->
       <div class="control-bar" id="controlBar" role="region" aria-label="Playback controls">
@@ -97,7 +124,7 @@
             <input id="volume" type="range" min="0" max="100" value="100" step="1" class="volume-slider" aria-label="Volume" />
           </div>
 
-          <button class="ctrl-btn ctrl-btn--sm" id="vizSettingsBtn" type="button" aria-label="Game settings" aria-expanded="false" title="Settings">
+          <button class="ctrl-btn ctrl-btn--sm" id="vizSettingsBtn" type="button" aria-label="Visualization settings" aria-expanded="false" title="Settings">
             &#x2699;
           </button>
 
@@ -107,10 +134,10 @@
         </div>
       </div>
 
-      <!-- Game Settings Panel -->
+      <!-- Visualization Settings Panel -->
       <div class="viz-settings" id="vizSettings" hidden>
         <div class="viz-settings__header">
-          <span class="viz-settings__title">Game Settings</span>
+          <span class="viz-settings__title">Settings</span>
           <button class="viz-settings__close" id="closeVizSettings" type="button" aria-label="Close settings">&#x2715;</button>
         </div>
         <div class="viz-settings__group">
@@ -119,13 +146,7 @@
             <span class="viz-settings__value" id="reactivityValue">100%</span>
           </label>
           <input type="range" id="vizReactivity" min="0" max="100" value="100" step="5" class="viz-settings__slider" />
-          <div class="viz-settings__hint">How much audio affects ship speed and track generation</div>
-        </div>
-        <div class="viz-settings__tip">
-          <strong>Controls:</strong> A/← = Left, D/→ = Right, W = Boost
-        </div>
-        <div class="viz-settings__buttons">
-          <button class="viz-settings__btn viz-settings__btn--reset" id="restartGameBtn" type="button">Restart Game</button>
+          <div class="viz-settings__hint">How much audio affects the environment visuals</div>
         </div>
       </div>
 
@@ -174,7 +195,7 @@
     <script src="./models.js"></script>
     <script src="./themes.js"></script>
     <script src="./track-scenes.js"></script>
-    <script src="./racer.js"></script>
+    <script src="./environments.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

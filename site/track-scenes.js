@@ -161,10 +161,13 @@ window.TrackScenes = (function() {
 
     return {
       group,
-      update(time, freq, amplitude) {
+      update(time, freq, amplitude, shipPos, shipSpeed) {
         const bassEnergy = freq ? (freq[0] + freq[1] + freq[2]) / 3 / 255 : 0;
         const midEnergy = freq ? (freq[10] + freq[20] + freq[30]) / 3 / 255 : 0;
         const highEnergy = freq ? (freq[60] + freq[80] + freq[100]) / 3 / 255 : 0;
+
+        // Follow the ship's Z position so scene stays with racer
+        const shipZ = shipPos ? shipPos.z : 0;
 
         // Animate bioluminescent point lights
         bioLights.forEach((bl, i) => {
@@ -215,10 +218,10 @@ window.TrackScenes = (function() {
         particleMat.opacity = 0.6 + bassEnergy * 0.4;
         particleMat.size = 0.15 + midEnergy * 0.15;
 
-        // Smooth oscillating zoom effect - moves group toward/away from camera
+        // Follow ship Z position with smooth oscillation overlay
         const zoomOscillation = Math.sin(time * 0.15) * 4 + Math.sin(time * 0.08) * 2;
-        const audioZoom = bassEnergy * 1.5; // Extra push on bass
-        group.position.z = zoomOscillation - audioZoom;
+        const audioZoom = bassEnergy * 1.5;
+        group.position.z = shipZ + zoomOscillation - audioZoom;
 
         // Gentle vertical drift
         group.position.y = Math.sin(time * 0.1) * 0.5;
@@ -349,10 +352,13 @@ window.TrackScenes = (function() {
 
     return {
       group,
-      update(time, freq, amplitude) {
+      update(time, freq, amplitude, shipPos, shipSpeed) {
         const bassEnergy = freq ? (freq[0] + freq[1] + freq[2] + freq[3]) / 4 / 255 : 0;
         const highEnergy = freq ? (freq[80] + freq[100] + freq[120]) / 3 / 255 : 0;
         const midEnergy = freq ? (freq[20] + freq[40] + freq[60]) / 3 / 255 : 0;
+
+        // Follow the ship's Z position
+        const shipZ = shipPos ? shipPos.z : 0;
 
         // Detect bass hits for explosions
         if (bassEnergy > 0.7 && time - lastBassHit > 0.15) {
@@ -412,11 +418,11 @@ window.TrackScenes = (function() {
         const hue = 0.02 + bassEnergy * 0.05;
         mainSpot.color.setHSL(hue, 1, 0.5);
 
-        // Camera shake effect
+        // Camera shake effect + follow ship Z
         group.position.set(
           (Math.random() - 0.5) * screenShake * 1.5,
           (Math.random() - 0.5) * screenShake * 1.5,
-          (Math.random() - 0.5) * screenShake
+          shipZ + (Math.random() - 0.5) * screenShake
         );
       },
       dispose() {
@@ -502,9 +508,10 @@ window.TrackScenes = (function() {
 
     return {
       group,
-      update(time, freq, amplitude) {
+      update(time, freq, amplitude, shipPos, shipSpeed) {
         const bassEnergy = freq ? (freq[0] + freq[1]) / 2 / 255 : 0;
         const midEnergy = freq ? (freq[20] + freq[40]) / 2 / 255 : 0;
+        const shipZ = shipPos ? shipPos.z : 0;
 
         // Gentle breathing spheres
         spheres.forEach(sphere => {
@@ -528,9 +535,9 @@ window.TrackScenes = (function() {
         // Light pulse
         softLight.intensity = 0.8 + midEnergy * 0.5;
 
-        // Gentle oscillating zoom - slow dreamy movement
+        // Follow ship Z + gentle oscillating zoom
         const zoomOscillation = Math.sin(time * 0.1) * 3 + Math.sin(time * 0.05) * 1.5;
-        group.position.z = zoomOscillation;
+        group.position.z = shipZ + zoomOscillation;
 
         // Slight vertical and horizontal sway
         group.position.y = Math.sin(time * 0.08) * 0.8;
@@ -657,10 +664,14 @@ window.TrackScenes = (function() {
 
     return {
       group,
-      update(time, freq, amplitude) {
+      update(time, freq, amplitude, shipPos, shipSpeed) {
         const bassEnergy = freq ? (freq[0] + freq[2]) / 2 / 255 : 0;
         const highEnergy = freq ? (freq[60] + freq[80] + freq[100]) / 3 / 255 : 0;
         const midEnergy = freq ? (freq[20] + freq[40]) / 2 / 255 : 0;
+        const shipZ = shipPos ? shipPos.z : 0;
+
+        // Follow ship position
+        group.position.z = shipZ;
 
         // Trigger glitch on bass hits
         if (bassEnergy > 0.7) {
@@ -822,7 +833,10 @@ window.TrackScenes = (function() {
 
     return {
       group,
-      update(time, freq, timeData, amplitude) {
+      update(time, freq, timeData, amplitude, shipPos, shipSpeed) {
+        const shipZ = shipPos ? shipPos.z : 0;
+        group.position.z = shipZ;
+
         // Update oscilloscope from time domain data
         const wavePos = waveGeom.attributes.position.array;
         if (timeData) {
@@ -938,9 +952,13 @@ window.TrackScenes = (function() {
 
     return {
       group,
-      update(time, freq, amplitude) {
+      update(time, freq, amplitude, shipPos, shipSpeed) {
         const bassEnergy = freq ? (freq[0] + freq[1] + freq[2]) / 3 / 255 : 0;
         const energy = freq ? freq.reduce((a, b) => a + b, 0) / freq.length / 255 : 0;
+        const shipZ = shipPos ? shipPos.z : 0;
+
+        // Follow ship position
+        group.position.z = shipZ;
 
         const speedMultiplier = 1 + bassEnergy * 3;
 
@@ -1061,8 +1079,12 @@ window.TrackScenes = (function() {
 
     return {
       group,
-      update(time, freq, amplitude) {
+      update(time, freq, amplitude, shipPos, shipSpeed) {
         const midEnergy = freq ? (freq[20] + freq[40] + freq[60]) / 3 / 255 : 0;
+        const shipZ = shipPos ? shipPos.z : 0;
+
+        // Follow ship position
+        group.position.z = shipZ;
 
         // Gentle particle drift
         const pos = particleGeom.attributes.position.array;
@@ -1159,9 +1181,13 @@ window.TrackScenes = (function() {
 
     return {
       group,
-      update(time, freq, amplitude) {
+      update(time, freq, amplitude, shipPos, shipSpeed) {
         const bassEnergy = freq ? (freq[0] + freq[1] + freq[2] + freq[3]) / 4 / 255 : 0;
         const energy = freq ? freq.reduce((a, b) => a + b, 0) / freq.length / 255 : 0;
+        const shipZ = shipPos ? shipPos.z : 0;
+
+        // Follow ship position
+        group.position.z = shipZ;
 
         // Build intensity over time
         intensity = lerp(intensity, bassEnergy, 0.1);
@@ -1316,7 +1342,8 @@ window.TrackScenes = (function() {
 
     return {
       group,
-      update(time, freq, amplitude) {
+      update(time, freq, amplitude, shipPos, shipSpeed) {
+        const shipZ = shipPos ? shipPos.z : 0;
         const bassEnergy = freq ? (freq[0] + freq[1] + freq[2]) / 3 / 255 : 0;
         const midEnergy = freq ? (freq[20] + freq[40]) / 2 / 255 : 0;
         const energy = freq ? freq.reduce((a, b) => a + b, 0) / freq.length / 255 : 0;
@@ -1376,7 +1403,7 @@ window.TrackScenes = (function() {
         // Epic zoom oscillation - dramatic sweeping movement
         const zoomOscillation = Math.sin(time * 0.12) * 5 + Math.sin(time * 0.07) * 2.5;
         const bassZoom = bassEnergy * 2; // Push in on heavy hits
-        group.position.z = zoomOscillation - bassZoom;
+        group.position.z = shipZ + zoomOscillation - bassZoom;
 
         // Slight tilt for epic feel
         group.rotation.x = Math.sin(time * 0.08) * 0.03;
@@ -1495,7 +1522,8 @@ window.TrackScenes = (function() {
 
     return {
       group,
-      update(time, freq, amplitude) {
+      update(time, freq, amplitude, shipPos, shipSpeed) {
+        const shipZ = shipPos ? shipPos.z : 0;
         const energy = freq ? freq.reduce((a, b) => a + b, 0) / freq.length / 255 : 0;
         const bassEnergy = freq ? (freq[0] + freq[1]) / 2 / 255 : 0;
 
@@ -1528,6 +1556,9 @@ window.TrackScenes = (function() {
 
         greenLight.intensity = 1 + energy * 2;
         codeMat.opacity = 0.3 + energy * 0.4;
+
+        // Follow the ship
+        group.position.z = shipZ;
       },
       dispose() {
         group.traverse(child => {
