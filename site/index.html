@@ -137,16 +137,320 @@
       <!-- Visualization Settings Panel -->
       <div class="viz-settings" id="vizSettings" hidden>
         <div class="viz-settings__header">
-          <span class="viz-settings__title">Settings</span>
+          <span class="viz-settings__title">Effects Control</span>
           <button class="viz-settings__close" id="closeVizSettings" type="button" aria-label="Close settings">&#x2715;</button>
         </div>
-        <div class="viz-settings__group">
-          <label class="viz-settings__label">
-            <span>Audio Reactivity</span>
-            <span class="viz-settings__value" id="reactivityValue">100%</span>
-          </label>
-          <input type="range" id="vizReactivity" min="0" max="100" value="100" step="5" class="viz-settings__slider" />
-          <div class="viz-settings__hint">How much audio affects the environment visuals</div>
+
+        <div class="viz-settings__body">
+          <!-- Audio Reactivity -->
+          <details class="viz-settings__section" open>
+            <summary class="viz-settings__section-header">Audio Reactivity</summary>
+            <div class="viz-settings__section-content">
+              <div class="viz-settings__group">
+                <label class="viz-settings__label">
+                  <span>Reactivity</span>
+                  <span class="viz-settings__value" id="reactivityValue">100%</span>
+                </label>
+                <input type="range" id="vizReactivity" min="0" max="100" value="100" step="5" class="viz-settings__slider" />
+              </div>
+            </div>
+          </details>
+
+          <!-- Lightning Effects -->
+          <details class="viz-settings__section">
+            <summary class="viz-settings__section-header">
+              <span>Lightning</span>
+              <label class="viz-settings__toggle" onclick="event.stopPropagation()">
+                <input type="checkbox" id="lightningEnabled" />
+                <span class="viz-settings__toggle-slider"></span>
+              </label>
+            </summary>
+            <div class="viz-settings__section-content">
+              <div class="viz-settings__group">
+                <label class="viz-settings__label">
+                  <span>Intensity</span>
+                  <span class="viz-settings__value" id="lightningIntensityValue">50%</span>
+                </label>
+                <input type="range" id="lightningIntensity" min="0" max="100" value="50" step="5" class="viz-settings__slider" />
+              </div>
+              <div class="viz-settings__group">
+                <label class="viz-settings__label">
+                  <span>Frequency</span>
+                  <span class="viz-settings__value" id="lightningFrequencyValue">30%</span>
+                </label>
+                <input type="range" id="lightningFrequency" min="0" max="100" value="30" step="5" class="viz-settings__slider" />
+              </div>
+              <div class="viz-settings__group">
+                <label class="viz-settings__label"><span>Audio Band</span></label>
+                <div class="viz-settings__band-select">
+                  <button class="viz-settings__band-btn active" data-effect="lightning" data-band="bass">Bass</button>
+                  <button class="viz-settings__band-btn" data-effect="lightning" data-band="mid">Mid</button>
+                  <button class="viz-settings__band-btn" data-effect="lightning" data-band="treble">Treble</button>
+                  <button class="viz-settings__band-btn" data-effect="lightning" data-band="energy">Energy</button>
+                </div>
+              </div>
+              <div class="viz-settings__group">
+                <label class="viz-settings__label"><span>Color</span></label>
+                <div class="viz-settings__color-row">
+                  <input type="color" id="lightningColor" value="#00ffff" class="viz-settings__color-input" />
+                  <span class="viz-settings__hint">Bolt color</span>
+                </div>
+              </div>
+            </div>
+          </details>
+
+          <!-- Aurora Effects -->
+          <details class="viz-settings__section">
+            <summary class="viz-settings__section-header">
+              <span>Aurora</span>
+              <label class="viz-settings__toggle" onclick="event.stopPropagation()">
+                <input type="checkbox" id="auroraEnabled" />
+                <span class="viz-settings__toggle-slider"></span>
+              </label>
+            </summary>
+            <div class="viz-settings__section-content">
+              <div class="viz-settings__group">
+                <label class="viz-settings__label">
+                  <span>Intensity</span>
+                  <span class="viz-settings__value" id="auroraIntensityValue">50%</span>
+                </label>
+                <input type="range" id="auroraIntensity" min="0" max="100" value="50" step="5" class="viz-settings__slider" />
+              </div>
+              <div class="viz-settings__group">
+                <label class="viz-settings__label">
+                  <span>Wave Speed</span>
+                  <span class="viz-settings__value" id="auroraSpeedValue">50%</span>
+                </label>
+                <input type="range" id="auroraSpeed" min="0" max="100" value="50" step="5" class="viz-settings__slider" />
+              </div>
+              <div class="viz-settings__group">
+                <label class="viz-settings__label">
+                  <span>Ribbons</span>
+                  <span class="viz-settings__value" id="auroraRibbonsValue">5</span>
+                </label>
+                <input type="range" id="auroraRibbons" min="1" max="10" value="5" step="1" class="viz-settings__slider" />
+              </div>
+              <div class="viz-settings__group">
+                <label class="viz-settings__label"><span>Audio Band</span></label>
+                <div class="viz-settings__band-select">
+                  <button class="viz-settings__band-btn" data-effect="aurora" data-band="bass">Bass</button>
+                  <button class="viz-settings__band-btn active" data-effect="aurora" data-band="mid">Mid</button>
+                  <button class="viz-settings__band-btn" data-effect="aurora" data-band="treble">Treble</button>
+                  <button class="viz-settings__band-btn" data-effect="aurora" data-band="energy">Energy</button>
+                </div>
+              </div>
+            </div>
+          </details>
+
+          <!-- Grid Lines -->
+          <details class="viz-settings__section">
+            <summary class="viz-settings__section-header">
+              <span>Grid Lines</span>
+              <label class="viz-settings__toggle" onclick="event.stopPropagation()">
+                <input type="checkbox" id="gridEnabled" />
+                <span class="viz-settings__toggle-slider"></span>
+              </label>
+            </summary>
+            <div class="viz-settings__section-content">
+              <div class="viz-settings__group">
+                <label class="viz-settings__label">
+                  <span>Intensity</span>
+                  <span class="viz-settings__value" id="gridIntensityValue">40%</span>
+                </label>
+                <input type="range" id="gridIntensity" min="0" max="100" value="40" step="5" class="viz-settings__slider" />
+              </div>
+              <div class="viz-settings__group">
+                <label class="viz-settings__label">
+                  <span>Spacing</span>
+                  <span class="viz-settings__value" id="gridSpacingValue">5</span>
+                </label>
+                <input type="range" id="gridSpacing" min="2" max="20" value="5" step="1" class="viz-settings__slider" />
+              </div>
+              <div class="viz-settings__group viz-settings__checkboxes">
+                <label class="viz-settings__checkbox-label">
+                  <input type="checkbox" id="gridFloor" checked />
+                  <span>Floor Grid</span>
+                </label>
+                <label class="viz-settings__checkbox-label">
+                  <input type="checkbox" id="gridPerspective" />
+                  <span>Perspective Lines</span>
+                </label>
+              </div>
+              <div class="viz-settings__group">
+                <label class="viz-settings__label"><span>Audio Band</span></label>
+                <div class="viz-settings__band-select">
+                  <button class="viz-settings__band-btn" data-effect="grid" data-band="bass">Bass</button>
+                  <button class="viz-settings__band-btn" data-effect="grid" data-band="mid">Mid</button>
+                  <button class="viz-settings__band-btn" data-effect="grid" data-band="treble">Treble</button>
+                  <button class="viz-settings__band-btn active" data-effect="grid" data-band="energy">Energy</button>
+                </div>
+              </div>
+              <div class="viz-settings__group">
+                <label class="viz-settings__label"><span>Color</span></label>
+                <div class="viz-settings__color-row">
+                  <input type="color" id="gridColor" value="#00ffff" class="viz-settings__color-input" />
+                </div>
+              </div>
+            </div>
+          </details>
+
+          <!-- Light Sources -->
+          <details class="viz-settings__section">
+            <summary class="viz-settings__section-header">
+              <span>Light Sources</span>
+              <label class="viz-settings__toggle" onclick="event.stopPropagation()">
+                <input type="checkbox" id="lightsEnabled" />
+                <span class="viz-settings__toggle-slider"></span>
+              </label>
+            </summary>
+            <div class="viz-settings__section-content">
+              <div class="viz-settings__group viz-settings__checkboxes">
+                <label class="viz-settings__checkbox-label">
+                  <input type="checkbox" id="godRaysEnabled" />
+                  <span>God Rays</span>
+                </label>
+                <label class="viz-settings__checkbox-label">
+                  <input type="checkbox" id="pulseLights" checked />
+                  <span>Pulse with Beat</span>
+                </label>
+              </div>
+              <div class="viz-settings__group">
+                <label class="viz-settings__label">
+                  <span>God Ray Intensity</span>
+                  <span class="viz-settings__value" id="godRayIntensityValue">30%</span>
+                </label>
+                <input type="range" id="godRayIntensity" min="0" max="100" value="30" step="5" class="viz-settings__slider" />
+              </div>
+              <div class="viz-settings__group">
+                <label class="viz-settings__label"><span>Audio Band</span></label>
+                <div class="viz-settings__band-select">
+                  <button class="viz-settings__band-btn active" data-effect="lights" data-band="bass">Bass</button>
+                  <button class="viz-settings__band-btn" data-effect="lights" data-band="mid">Mid</button>
+                  <button class="viz-settings__band-btn" data-effect="lights" data-band="treble">Treble</button>
+                  <button class="viz-settings__band-btn" data-effect="lights" data-band="energy">Energy</button>
+                </div>
+              </div>
+            </div>
+          </details>
+
+          <!-- Particles -->
+          <details class="viz-settings__section">
+            <summary class="viz-settings__section-header">
+              <span>Particles</span>
+              <label class="viz-settings__toggle" onclick="event.stopPropagation()">
+                <input type="checkbox" id="particlesEnabled" checked />
+                <span class="viz-settings__toggle-slider"></span>
+              </label>
+            </summary>
+            <div class="viz-settings__section-content">
+              <div class="viz-settings__group">
+                <label class="viz-settings__label"><span>Type</span></label>
+                <select id="particleType" class="viz-settings__select">
+                  <option value="dust">Dust</option>
+                  <option value="sparks">Sparks</option>
+                  <option value="bubbles">Bubbles</option>
+                  <option value="embers">Embers</option>
+                  <option value="snow">Snow</option>
+                  <option value="rain">Rain</option>
+                </select>
+              </div>
+              <div class="viz-settings__group">
+                <label class="viz-settings__label">
+                  <span>Count</span>
+                  <span class="viz-settings__value" id="particleCountValue">500</span>
+                </label>
+                <input type="range" id="particleCount" min="100" max="2000" value="500" step="100" class="viz-settings__slider" />
+              </div>
+              <div class="viz-settings__group">
+                <label class="viz-settings__label">
+                  <span>Size</span>
+                  <span class="viz-settings__value" id="particleSizeValue">0.3</span>
+                </label>
+                <input type="range" id="particleSize" min="10" max="100" value="30" step="5" class="viz-settings__slider" />
+              </div>
+              <div class="viz-settings__group">
+                <label class="viz-settings__label">
+                  <span>Speed</span>
+                  <span class="viz-settings__value" id="particleSpeedValue">1.0</span>
+                </label>
+                <input type="range" id="particleSpeed" min="10" max="300" value="100" step="10" class="viz-settings__slider" />
+              </div>
+              <div class="viz-settings__group">
+                <label class="viz-settings__label"><span>Audio Band</span></label>
+                <div class="viz-settings__band-select">
+                  <button class="viz-settings__band-btn" data-effect="particles" data-band="bass">Bass</button>
+                  <button class="viz-settings__band-btn" data-effect="particles" data-band="mid">Mid</button>
+                  <button class="viz-settings__band-btn" data-effect="particles" data-band="treble">Treble</button>
+                  <button class="viz-settings__band-btn active" data-effect="particles" data-band="energy">Energy</button>
+                </div>
+              </div>
+            </div>
+          </details>
+
+          <!-- Racer Settings -->
+          <details class="viz-settings__section" open>
+            <summary class="viz-settings__section-header">Racer</summary>
+            <div class="viz-settings__section-content">
+              <div class="viz-settings__group">
+                <label class="viz-settings__label"><span>Model</span></label>
+                <select id="racerModelSelect" class="viz-settings__select">
+                  <option value="white-eagle">White Eagle</option>
+                  <option value="icy_dragon">Icy Dragon</option>
+                  <option value="racer_spaceship">Spaceship</option>
+                  <option value="butterfly">Butterfly</option>
+                  <option value="blue-whale">Blue Whale</option>
+                  <option value="jellyfish">Jellyfish</option>
+                  <option value="godzilla">Godzilla</option>
+                  <option value="gorilla">Gorilla</option>
+                  <option value="biped_robot">Robot</option>
+                  <option value="loggerhead">Sea Turtle</option>
+                </select>
+              </div>
+              <div class="viz-settings__group">
+                <label class="viz-settings__label">
+                  <span>Cruise Speed</span>
+                  <span class="viz-settings__value" id="cruiseSpeedValue">1.0x</span>
+                </label>
+                <input type="range" id="cruiseSpeed" min="25" max="200" value="100" step="5" class="viz-settings__slider" />
+                <span class="viz-settings__hint">Lower = more chill, Higher = intense</span>
+              </div>
+            </div>
+          </details>
+
+          <!-- Visual Style -->
+          <details class="viz-settings__section">
+            <summary class="viz-settings__section-header">Visual Style</summary>
+            <div class="viz-settings__section-content">
+              <div class="viz-settings__group">
+                <label class="viz-settings__label">
+                  <span>Fog Density</span>
+                  <span class="viz-settings__value" id="fogDensityValue">100%</span>
+                </label>
+                <input type="range" id="fogDensity" min="0" max="200" value="100" step="10" class="viz-settings__slider" />
+              </div>
+              <div class="viz-settings__group">
+                <label class="viz-settings__label">
+                  <span>Speed Lines</span>
+                  <span class="viz-settings__value" id="speedLinesValue">100%</span>
+                </label>
+                <input type="range" id="speedLinesIntensity" min="0" max="100" value="100" step="5" class="viz-settings__slider" />
+              </div>
+              <div class="viz-settings__group viz-settings__checkboxes">
+                <label class="viz-settings__checkbox-label">
+                  <input type="checkbox" id="colorShiftEnabled" />
+                  <span>Color Shift</span>
+                </label>
+                <label class="viz-settings__checkbox-label">
+                  <input type="checkbox" id="screenShakeEnabled" checked />
+                  <span>Screen Shake</span>
+                </label>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <div class="viz-settings__footer">
+          <button class="viz-settings__btn viz-settings__btn--reset" id="resetEffectsBtn" type="button">Reset All</button>
         </div>
       </div>
 

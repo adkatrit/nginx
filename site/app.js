@@ -44,6 +44,11 @@
   const vizReactivity = /** @type {HTMLInputElement|null} */ ($("vizReactivity"));
   const reactivityValue = $("reactivityValue");
 
+  // Racer settings elements
+  const racerModelSelect = /** @type {HTMLSelectElement|null} */ ($("racerModelSelect"));
+  const cruiseSpeedSlider = /** @type {HTMLInputElement|null} */ ($("cruiseSpeed"));
+  const cruiseSpeedValue = $("cruiseSpeedValue");
+
   // Score HUD elements
   const scoreHud = $("scoreHud");
   const scoreValue = $("scoreValue");
@@ -1311,7 +1316,7 @@
 
     // Initialize environment mode
     if (isEnvironment && !environmentInstance && EnvironmentMode && three && threeScene && threeCamera && threeRenderer) {
-      environmentInstance = EnvironmentMode.init(three, threeScene, threeCamera, threeRenderer, currentTrackTitle);
+      environmentInstance = EnvironmentMode.init(three, threeScene, threeCamera, threeRenderer, currentTrackTitle, gltfLoader);
       console.log("Environment mode initialized for track:", currentTrackTitle);
 
       // Set up score callbacks
@@ -2586,6 +2591,36 @@
       vizParams.audioReactivity = clamp(Number(vizReactivity.value) / 100, 0, 1);
       updateVizParamDisplays();
       saveVizParams();
+    });
+  }
+
+  // Racer model selector
+  if (racerModelSelect) {
+    // Load saved model selection
+    const savedModel = localStorage.getItem('mysongs-racer-model') || 'white-eagle';
+    racerModelSelect.value = savedModel;
+
+    racerModelSelect.addEventListener("change", () => {
+      const modelId = racerModelSelect.value;
+      if (EnvironmentMode) {
+        EnvironmentMode.setRacerModel(modelId);
+      }
+    });
+  }
+
+  // Cruise speed slider
+  if (cruiseSpeedSlider) {
+    // Load saved speed
+    const savedSpeed = parseFloat(localStorage.getItem('mysongs-cruise-speed') || '1.0');
+    cruiseSpeedSlider.value = String(Math.round(savedSpeed * 100));
+    if (cruiseSpeedValue) cruiseSpeedValue.textContent = savedSpeed.toFixed(1) + 'x';
+
+    cruiseSpeedSlider.addEventListener("input", () => {
+      const multiplier = Number(cruiseSpeedSlider.value) / 100;
+      if (cruiseSpeedValue) cruiseSpeedValue.textContent = multiplier.toFixed(1) + 'x';
+      if (EnvironmentMode) {
+        EnvironmentMode.setSpeedMultiplier(multiplier);
+      }
     });
   }
 

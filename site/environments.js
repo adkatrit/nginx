@@ -14,8 +14,8 @@
       skyTop: 0x000510,
       skyBottom: 0x001830,
       fogColor: 0x000810,
-      fogNear: 20,
-      fogFar: 300,
+      fogNear: 50,
+      fogFar: 600,
       scenery: ["coral", "seaweed", "fish"],
       particleColor: 0x00bfff,
       particleType: "bubbles"
@@ -26,8 +26,8 @@
       skyTop: 0x87ceeb,
       skyBottom: 0xc8e6c9,
       fogColor: 0xc8e6c9,
-      fogNear: 40,
-      fogFar: 350,
+      fogNear: 80,
+      fogFar: 700,
       scenery: ["flowers", "grass", "butterflies"],
       particleColor: 0x98fb98,
       particleType: "petals"
@@ -38,8 +38,8 @@
       skyTop: 0x0a0000,
       skyBottom: 0x1a0505,
       fogColor: 0x0a0000,
-      fogNear: 15,
-      fogFar: 200,
+      fogNear: 40,
+      fogFar: 500,
       scenery: ["rocks", "lava", "flames"],
       particleColor: 0xff4400,
       particleType: "embers"
@@ -50,8 +50,8 @@
       skyTop: 0x05000a,
       skyBottom: 0x150020,
       fogColor: 0x08000f,
-      fogNear: 25,
-      fogFar: 250,
+      fogNear: 60,
+      fogFar: 550,
       scenery: ["towers", "holograms", "grids"],
       particleColor: 0xff00ff,
       particleType: "data"
@@ -62,8 +62,8 @@
       skyTop: 0x87ceeb,
       skyBottom: 0xe0f7fa,
       fogColor: 0xe0f7fa,
-      fogNear: 30,
-      fogFar: 400,
+      fogNear: 70,
+      fogFar: 800,
       scenery: ["crystals", "icebergs", "snowdrifts"],
       particleColor: 0x88ffff,
       particleType: "snow"
@@ -74,8 +74,8 @@
       skyTop: 0xff8c00,
       skyBottom: 0xffd700,
       fogColor: 0xffecd2,
-      fogNear: 40,
-      fogFar: 400,
+      fogNear: 80,
+      fogFar: 800,
       scenery: ["acacias", "grass", "rocks"],
       particleColor: 0xffd700,
       particleType: "dust"
@@ -86,8 +86,8 @@
       skyTop: 0xffb6c1,
       skyBottom: 0xffc0cb,
       fogColor: 0xffc0cb,
-      fogNear: 35,
-      fogFar: 300,
+      fogNear: 70,
+      fogFar: 650,
       scenery: ["cherrytrees", "petals", "lanterns"],
       particleColor: 0xffb6c1,
       particleType: "petals"
@@ -98,8 +98,8 @@
       skyTop: 0x2a2020,
       skyBottom: 0x100808,
       fogColor: 0x100808,
-      fogNear: 20,
-      fogFar: 200,
+      fogNear: 50,
+      fogFar: 500,
       scenery: ["pipes", "girders", "sparks"],
       particleColor: 0xff4500,
       particleType: "sparks"
@@ -110,8 +110,8 @@
       skyTop: 0x030208,
       skyBottom: 0x100818,
       fogColor: 0x050310,
-      fogNear: 25,
-      fogFar: 280,
+      fogNear: 60,
+      fogFar: 600,
       scenery: ["ruins", "pillars", "torches"],
       particleColor: 0xff6600,
       particleType: "embers"
@@ -122,8 +122,8 @@
       skyTop: 0x000400,
       skyBottom: 0x001000,
       fogColor: 0x001000,
-      fogNear: 20,
-      fogFar: 250,
+      fogNear: 50,
+      fogFar: 550,
       scenery: ["nodes", "datastreams", "grids"],
       particleColor: 0x00ff00,
       particleType: "code"
@@ -137,30 +137,32 @@
     skyTop: 0x4a90c2,
     skyBottom: 0xffecd2,
     fogColor: 0xffecd2,
-    fogNear: 30,
-    fogFar: 400,
+    fogNear: 70,
+    fogFar: 800,
     scenery: ["rocks", "cacti"],
     particleColor: 0xd4a574,
     particleType: "dust"
   };
 
   const CONFIG = {
-    // Movement
-    baseSpeed: 2.0,
-    maxSpeed: 4.0,
-    boostSpeed: 6.0,
+    // Movement - reduced defaults for smoother, chiller experience
+    baseSpeed: 1.0,        // Reduced from 2.0 for relaxed cruising
+    maxSpeed: 2.5,         // Reduced from 4.0
+    boostSpeed: 4.0,       // Reduced from 6.0
     boostDuration: 2.5,
+    speedMultiplier: 1.0,  // Can be adjusted via UI (0.25 - 2.0)
 
-    // Terrain
+    // Terrain - increased for better visibility at high speeds
     chunkSize: 100,
-    chunksAhead: 4,
+    chunksAhead: 8,      // Increased from 4 for longer draw distance
     chunksBehind: 1,
-    viewDistance: 400,
+    viewDistance: 800,   // Increased from 400
 
     // Camera
     cameraHeight: 4,
     cameraDistance: 12,
     cameraLookAhead: 20,
+    cameraFar: 1200,     // Camera far plane for long draw distance
     cameraShakeIntensity: 0.5,
     cameraShakeDuration: 0.3,
 
@@ -192,12 +194,27 @@
     hitCooldownTime: 1.0
   };
 
+  // Available racer models - rotationY: Math.PI = facing away, Math.PI/2 = facing right (towards screen)
+  const RACER_MODELS = {
+    'racer_spaceship': { url: './models/racer_spaceship/scene.gltf', scale: 0.5, rotationY: Math.PI },
+    'white-eagle': { url: './models/white-eagle/scene.gltf', scale: 0.02, rotationY: Math.PI * 0.5 },  // 90deg towards screen
+    'icy_dragon': { url: './models/icy_dragon/scene.gltf', scale: 0.8, rotationY: Math.PI },
+    'butterfly': { url: './models/butterfly/scene.gltf', scale: 0.05, rotationY: Math.PI },
+    'biped_robot': { url: './models/biped_robot/scene.gltf', scale: 0.5, rotationY: Math.PI },
+    'jellyfish': { url: './models/jellyfish/scene.gltf', scale: 0.5, rotationY: Math.PI },
+    'blue-whale': { url: './models/blue-whale/scene.gltf', scale: 0.02, rotationY: Math.PI },
+    'godzilla': { url: './models/godzilla/scene.gltf', scale: 0.3, rotationY: Math.PI },
+    'gorilla': { url: './models/gorilla/scene.gltf', scale: 0.02, rotationY: Math.PI },
+    'loggerhead': { url: './models/loggerhead/scene.gltf', scale: 0.1, rotationY: Math.PI }
+  };
+
   class ThemedEnvironment {
-    constructor(THREE, scene, camera, renderer) {
+    constructor(THREE, scene, camera, renderer, gltfLoader) {
       this.THREE = THREE;
       this.scene = scene;
       this.camera = camera;
       this.renderer = renderer;
+      this.gltfLoader = gltfLoader;
 
       this.theme = { ...DEFAULT_ENV };
       this.distance = 0;
@@ -215,12 +232,21 @@
       this.particles = null;
       this.groundPlane = null;
       this.player = null;
+      this.playerModel = null;   // GLTF model reference
+      this.modelAnimationMixer = null;  // Animation mixer for GLTF model
       this.leftGlow = null;
       this.rightGlow = null;
 
       this.audioData = { bass: 0, mid: 0, treble: 0, energy: 0 };
       this.time = 0;
       this.initialized = false;
+
+      // Racer model configuration
+      this.racerModelId = localStorage.getItem('mysongs-racer-model') || 'white-eagle';
+
+      // Speed multiplier (0.25 to 2.0, default 1.0)
+      const savedSpeed = parseFloat(localStorage.getItem('mysongs-cruise-speed') || '1.0');
+      this.speedMultiplier = Math.max(0.25, Math.min(2.0, savedSpeed));
 
       // Scoring system
       this.score = 0;
@@ -253,6 +279,12 @@
       this.comboTimer = 0;
       this.lastHitTime = 0;
       this.hitCooldown = 0;
+
+      // Set camera far plane for long draw distance
+      if (this.camera) {
+        this.camera.far = CONFIG.cameraFar;
+        this.camera.updateProjectionMatrix();
+      }
 
       this.scene.fog = new THREE.Fog(this.theme.fogColor, this.theme.fogNear, this.theme.fogFar);
 
@@ -335,9 +367,25 @@
     createPlayer() {
       const THREE = this.THREE;
       this.player = new THREE.Group();
+      this.player.position.set(0, 0.8, 0);
+      this.scene.add(this.player);
 
-      // Speeder body - color based on theme
+      // Create a fallback simple ship first (will be hidden if GLTF loads)
+      this.createFallbackPlayer();
+
+      // Try to load GLTF model
+      const modelConfig = RACER_MODELS[this.racerModelId];
+      if (this.gltfLoader && modelConfig) {
+        this.loadRacerModel(this.racerModelId);
+      }
+    }
+
+    createFallbackPlayer() {
+      const THREE = this.THREE;
       const accentColor = this.theme.particleColor;
+
+      // Simple fallback ship
+      this.fallbackShip = new THREE.Group();
 
       const bodyGeom = new THREE.BoxGeometry(1.2, 0.4, 3);
       const bodyMat = new THREE.MeshStandardMaterial({
@@ -347,14 +395,14 @@
       });
       const body = new THREE.Mesh(bodyGeom, bodyMat);
       body.position.y = 0.5;
-      this.player.add(body);
+      this.fallbackShip.add(body);
 
       // Accent stripe
       const stripeGeom = new THREE.BoxGeometry(1.25, 0.1, 3.05);
       const stripeMat = new THREE.MeshBasicMaterial({ color: accentColor });
       const stripe = new THREE.Mesh(stripeGeom, stripeMat);
       stripe.position.y = 0.55;
-      this.player.add(stripe);
+      this.fallbackShip.add(stripe);
 
       // Cockpit
       const cockpitGeom = new THREE.SphereGeometry(0.5, 16, 16);
@@ -366,7 +414,7 @@
       });
       const cockpit = new THREE.Mesh(cockpitGeom, cockpitMat);
       cockpit.position.set(0, 0.7, 0.3);
-      this.player.add(cockpit);
+      this.fallbackShip.add(cockpit);
 
       // Engine pods
       const podGeom = new THREE.CylinderGeometry(0.2, 0.3, 1.5, 8);
@@ -379,12 +427,12 @@
       const leftPod = new THREE.Mesh(podGeom, podMat);
       leftPod.rotation.x = Math.PI / 2;
       leftPod.position.set(-0.8, 0.4, -0.8);
-      this.player.add(leftPod);
+      this.fallbackShip.add(leftPod);
 
       const rightPod = new THREE.Mesh(podGeom, podMat);
       rightPod.rotation.x = Math.PI / 2;
       rightPod.position.set(0.8, 0.4, -0.8);
-      this.player.add(rightPod);
+      this.fallbackShip.add(rightPod);
 
       // Engine glow with theme color
       const glowGeom = new THREE.SphereGeometry(0.25, 8, 8);
@@ -396,14 +444,128 @@
 
       this.leftGlow = new THREE.Mesh(glowGeom, glowMat.clone());
       this.leftGlow.position.set(-0.8, 0.4, -1.6);
-      this.player.add(this.leftGlow);
+      this.fallbackShip.add(this.leftGlow);
 
       this.rightGlow = new THREE.Mesh(glowGeom, glowMat.clone());
       this.rightGlow.position.set(0.8, 0.4, -1.6);
-      this.player.add(this.rightGlow);
+      this.fallbackShip.add(this.rightGlow);
 
-      this.player.position.set(0, 0.8, 0);
-      this.scene.add(this.player);
+      this.player.add(this.fallbackShip);
+    }
+
+    loadRacerModel(modelId) {
+      const modelConfig = RACER_MODELS[modelId];
+      if (!modelConfig || !this.gltfLoader) {
+        console.warn('Cannot load racer model:', modelId);
+        return;
+      }
+
+      const THREE = this.THREE;
+      console.log('Loading racer model:', modelId);
+
+      this.gltfLoader.load(
+        modelConfig.url,
+        (gltf) => {
+          // Remove fallback ship when model loads
+          if (this.fallbackShip) {
+            this.player.remove(this.fallbackShip);
+            this.fallbackShip = null;
+          }
+
+          // Stop old animations and remove old model if switching
+          if (this.modelAnimationMixer) {
+            this.modelAnimationMixer.stopAllAction();
+            this.modelAnimationMixer = null;
+          }
+          if (this.playerModel) {
+            this.player.remove(this.playerModel);
+          }
+
+          const model = gltf.scene;
+          const scale = modelConfig.scale || 1;
+          model.scale.set(scale, scale, scale);
+
+          // Rotate model to face forward
+          if (modelConfig.rotationY !== undefined) {
+            model.rotation.y = modelConfig.rotationY;
+          }
+
+          // Set up animations if the model has any
+          if (gltf.animations && gltf.animations.length > 0) {
+            this.modelAnimationMixer = new THREE.AnimationMixer(model);
+            gltf.animations.forEach((clip) => {
+              const action = this.modelAnimationMixer.clipAction(clip);
+              action.play();
+            });
+            console.log(`Playing ${gltf.animations.length} animation(s) for ${modelId}`);
+          }
+
+          // Add engine glow effect to loaded model
+          this.addModelGlow(model);
+
+          this.playerModel = model;
+          this.player.add(model);
+
+          // Save selection
+          localStorage.setItem('mysongs-racer-model', modelId);
+          this.racerModelId = modelId;
+
+          console.log('Racer model loaded:', modelId);
+        },
+        (progress) => {
+          // Loading progress
+        },
+        (error) => {
+          console.error('Failed to load racer model:', modelId, error);
+          // Fallback ship is already visible
+        }
+      );
+    }
+
+    addModelGlow(model) {
+      const THREE = this.THREE;
+      const accentColor = this.theme.particleColor;
+
+      // Add subtle glow lights to the model
+      const glowLight = new THREE.PointLight(accentColor, 1, 5);
+      glowLight.position.set(0, 0, -1);
+      model.add(glowLight);
+
+      // Create engine trail glow spheres attached to model
+      const glowGeom = new THREE.SphereGeometry(0.3, 8, 8);
+      const glowMat = new THREE.MeshBasicMaterial({
+        color: accentColor,
+        transparent: true,
+        opacity: 0.6
+      });
+
+      this.leftGlow = new THREE.Mesh(glowGeom, glowMat.clone());
+      this.leftGlow.position.set(-0.5, 0, -1.5);
+      model.add(this.leftGlow);
+
+      this.rightGlow = new THREE.Mesh(glowGeom, glowMat.clone());
+      this.rightGlow.position.set(0.5, 0, -1.5);
+      model.add(this.rightGlow);
+    }
+
+    setRacerModel(modelId) {
+      if (RACER_MODELS[modelId]) {
+        this.loadRacerModel(modelId);
+      }
+    }
+
+    getAvailableRacerModels() {
+      return Object.keys(RACER_MODELS);
+    }
+
+    setSpeedMultiplier(multiplier) {
+      this.speedMultiplier = Math.max(0.25, Math.min(2.0, multiplier));
+      localStorage.setItem('mysongs-cruise-speed', String(this.speedMultiplier));
+      console.log('Cruise speed set to:', this.speedMultiplier.toFixed(2) + 'x');
+    }
+
+    getSpeedMultiplier() {
+      return this.speedMultiplier;
     }
 
     createParticles() {
@@ -922,14 +1084,14 @@
         }
       }
 
-      // Speed - boost overrides normal speed
+      // Speed - boost overrides normal speed, apply speedMultiplier for user-adjustable cruising
       let targetSpeed;
       if (this.boosting) {
-        targetSpeed = CONFIG.boostSpeed;
+        targetSpeed = CONFIG.boostSpeed * this.speedMultiplier;
       } else {
-        targetSpeed = CONFIG.baseSpeed + (CONFIG.maxSpeed - CONFIG.baseSpeed) * energy;
+        targetSpeed = (CONFIG.baseSpeed + (CONFIG.maxSpeed - CONFIG.baseSpeed) * energy) * this.speedMultiplier;
       }
-      this.speed += (targetSpeed - this.speed) * 0.15;
+      this.speed += (targetSpeed - this.speed) * 0.1;  // Smoother acceleration (was 0.15)
       this.distance += this.speed * dt * 60;
 
       // Steering
@@ -968,6 +1130,11 @@
           this.rightGlow.material.opacity = glowIntensity;
           this.rightGlow.material.color.setHex(this.boosting ? 0x00ffff : 0xff6600);
         }
+      }
+
+      // Update model animations
+      if (this.modelAnimationMixer) {
+        this.modelAnimationMixer.update(dt);
       }
 
       this.updateChunks();
@@ -1235,18 +1402,30 @@
   window.ThemedEnvironment = ThemedEnvironment;
   window.ENVIRONMENT_THEMES = ENVIRONMENT_THEMES;
 
+  // Export racer models list
+  window.RACER_MODELS = RACER_MODELS;
+
   window.EnvironmentMode = {
     instance: null,
     currentTrack: null,
+    gltfLoader: null,
 
-    init(THREE, scene, camera, renderer, trackTitle) {
+    init(THREE, scene, camera, renderer, trackTitle, gltfLoader) {
       if (this.instance) {
         this.instance.dispose();
       }
       this.currentTrack = trackTitle;
-      this.instance = new ThemedEnvironment(THREE, scene, camera, renderer);
+      this.gltfLoader = gltfLoader || this.gltfLoader;
+      this.instance = new ThemedEnvironment(THREE, scene, camera, renderer, this.gltfLoader);
       this.instance.init(trackTitle);
       return this.instance;
+    },
+
+    setGltfLoader(loader) {
+      this.gltfLoader = loader;
+      if (this.instance) {
+        this.instance.gltfLoader = loader;
+      }
     },
 
     update(dt, audioData) {
@@ -1270,6 +1449,26 @@
         this.instance.setTheme(trackTitle);
       }
       this.currentTrack = trackTitle;
+    },
+
+    setRacerModel(modelId) {
+      if (this.instance) {
+        this.instance.setRacerModel(modelId);
+      }
+    },
+
+    getAvailableRacerModels() {
+      return Object.keys(RACER_MODELS);
+    },
+
+    setSpeedMultiplier(multiplier) {
+      if (this.instance) {
+        this.instance.setSpeedMultiplier(multiplier);
+      }
+    },
+
+    getSpeedMultiplier() {
+      return this.instance ? this.instance.getSpeedMultiplier() : 1.0;
     },
 
     dispose() {
