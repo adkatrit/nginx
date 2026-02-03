@@ -1490,6 +1490,81 @@
     }
   }
 
+  // iOS-specific audio graph (bypasses canUseWebAudioViz check)
+  function ensureIOSAudioGraph() {
+    if (!isIOS) return;
+    if (audioCtx && analyser && freqData) return;
+
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      audioCtx = new Ctx();
+      const source = audioCtx.createMediaElementSource(audio);
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.8; // Smoother for iOS
+      source.connect(analyser);
+      analyser.connect(audioCtx.destination);
+      freqData = new Uint8Array(analyser.frequencyBinCount);
+      timeData = new Uint8Array(analyser.fftSize);
+      console.log("iOS audio graph created successfully");
+    } catch (err) {
+      console.warn("iOS audio graph failed:", err);
+      audioCtx = null;
+      analyser = null;
+      freqData = null;
+      timeData = null;
+    }
+  }
+
+  // iOS visualization update - feeds audio data to iOS viz
+  let iosVizRaf = 0;
+  function updateIOSViz() {
+    if (!iosViz || !isIOS) return;
+
+    // Get frequency data if available
+    let bass = 0, mid = 0, treble = 0, energy = 0;
+
+    if (analyser && freqData) {
+      analyser.getByteFrequencyData(freqData);
+
+      // Calculate frequency bands (same logic as main viz)
+      const avgBins = (start, end) => {
+        const s = Math.max(0, Math.floor(start));
+        const e = Math.min(freqData.length, Math.floor(end));
+        const n = Math.max(1, e - s);
+        let sum = 0;
+        for (let i = s; i < e; i++) sum += freqData[i] || 0;
+        return sum / (n * 255);
+      };
+
+      energy = avgBins(0, freqData.length);
+      bass = avgBins(0, Math.max(6, Math.floor(freqData.length * 0.08)));
+      mid = avgBins(Math.floor(freqData.length * 0.12), Math.floor(freqData.length * 0.45));
+      treble = avgBins(Math.floor(freqData.length * 0.55), freqData.length);
+    }
+
+    iosViz.setAudioData(bass, mid, treble, energy);
+  }
+
+  function startIOSVizLoop() {
+    if (!isIOS || !iosViz) return;
+    if (iosVizRaf) return;
+
+    const loop = () => {
+      iosVizRaf = requestAnimationFrame(loop);
+      updateIOSViz();
+    };
+    iosVizRaf = requestAnimationFrame(loop);
+  }
+
+  function stopIOSVizLoop() {
+    if (iosVizRaf) {
+      cancelAnimationFrame(iosVizRaf);
+      iosVizRaf = 0;
+    }
+  }
+
   function refreshThreeTheme() {
     if (!threeReady || !three) return;
     const accent = getCssVar("--wa-accent", vizPalette.accent);
@@ -2653,6 +2728,15 @@
       startVizLoop();
       void ensureThreeViz();
       await tryResumeAudioContext();
+    } else if (isIOS && iosViz) {
+      // iOS: set up audio-reactive visualization
+      console.log("Setting up iOS audio-reactive viz...");
+      ensureIOSAudioGraph();
+      startIOSVizLoop();
+      // Resume audio context (requires user gesture on iOS)
+      if (audioCtx && audioCtx.state !== "running") {
+        try { await audioCtx.resume(); } catch { /* ignore */ }
+      }
     } else {
       stopVizLoop();
     }
@@ -2671,6 +2755,7 @@
   function pause() {
     audio.pause();
     stopVizLoop();
+    stopIOSVizLoop();
     updatePlayPauseBtn();
     updateVizPauseState();
     updatePlaylistUi();
@@ -2680,6 +2765,7 @@
     audio.pause();
     audio.currentTime = 0;
     stopVizLoop();
+    stopIOSVizLoop();
     updatePlayPauseBtn();
     updateVizPauseState();
     updateTimeUi();
@@ -3480,6 +3566,7 @@
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible") {
       stopVizLoop();
+      stopIOSVizLoop();
       return;
     }
 
@@ -3488,6 +3575,12 @@
       startVizLoop();
       void ensureThreeViz();
       void tryResumeAudioContext();
+    } else if (isIOS && iosViz && !audio.paused) {
+      ensureIOSAudioGraph();
+      startIOSVizLoop();
+      if (audioCtx && audioCtx.state !== "running") {
+        audioCtx.resume().catch(() => {});
+      }
     }
   });
 
@@ -3621,14 +3714,16 @@
     if (threeReady) resizeThreeRenderer();
   });
 
-  // Initialize iOS simple visualization as fallback
+  // Initialize iOS audio-reactive visualization as fallback
   if (isIOS && bgVizCanvas && window.iOSVisualization) {
-    console.log("Initializing iOS particle visualization");
+    console.log("Initializing iOS audio-reactive particle visualization");
     iosViz = new window.iOSVisualization(bgVizCanvas);
     iosViz.start();
-    // Sync initial state
+    // Sync initial state if already playing
     if (!audio.paused) {
       iosViz.setPlaying(true);
+      ensureIOSAudioGraph();
+      startIOSVizLoop();
     }
   }
 })();
