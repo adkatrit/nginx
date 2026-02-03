@@ -1004,78 +1004,71 @@ window.TrackScenes = (function() {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // TRADE YOU MY HANDS - Intimate, warm, soft focus
+  // TRADE YOU MY HANDS - Intimate, warm, soft focus with snow
   // ═══════════════════════════════════════════════════════════════════════════
   function buildTradeHands(THREE, scene, audioData) {
-    const group = new THREE.Group();
+    const group = new THREE.Group();  // For orbs/lights that follow ship
+    scene.fog = new THREE.FogExp2(0x1a1010, 0.015);
 
-    // Warm intimate fog
-    scene.fog = new THREE.FogExp2(0x1a1010, 0.03);
-
-    // Floating warm particles (like fireflies or dust in light)
-    const particleCount = 800;
+    // Snow particles - WORLD SPACE (not in group)
+    const particleCount = 1200;
     const particleGeom = new THREE.BufferGeometry();
     const positions = new Float32Array(particleCount * 3);
     const colors = new Float32Array(particleCount * 3);
 
     for (let i = 0; i < particleCount; i++) {
-      positions[i * 3] = (Math.random() - 0.5) * 25;
-      positions[i * 3 + 1] = (Math.random() - 0.5) * 15;
-      positions[i * 3 + 2] = (Math.random() - 0.5) * 25;
-
-      // Warm colors: pink, peach, soft orange
-      const hue = 0.95 + Math.random() * 0.1; // wrap around red/pink
-      const color = new THREE.Color().setHSL(hue % 1, 0.5, 0.6 + Math.random() * 0.2);
+      positions[i * 3] = (Math.random() - 0.5) * 40;
+      positions[i * 3 + 1] = (Math.random() - 0.5) * 20;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * 100;
+      const hue = 0.95 + Math.random() * 0.1;
+      const color = new THREE.Color().setHSL(hue % 1, 0.4, 0.75);
       colors[i * 3] = color.r;
       colors[i * 3 + 1] = color.g;
       colors[i * 3 + 2] = color.b;
     }
-
     particleGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     particleGeom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
     const particleMat = new THREE.PointsMaterial({
-      size: 0.15,
+      size: 1.0,  // Larger for visibility
       vertexColors: true,
       transparent: true,
-      opacity: 0.5,
-      blending: THREE.AdditiveBlending
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+      sizeAttenuation: true,
+      depthWrite: false,  // Needed for transparent points
+      fog: false  // Disable fog - it was making particles invisible
     });
     const particles = new THREE.Points(particleGeom, particleMat);
-    group.add(particles);
+    scene.add(particles);  // Add to SCENE, not group
 
-    // Soft glowing orbs (bokeh-like)
+    // Orbs follow ship
     const orbs = [];
-    for (let i = 0; i < 15; i++) {
-      const radius = 0.5 + Math.random() * 1;
-      const geom = new THREE.SphereGeometry(radius, 16, 16);
+    for (let i = 0; i < 10; i++) {
+      const geom = new THREE.SphereGeometry(0.5 + Math.random(), 16, 16);
       const mat = new THREE.MeshBasicMaterial({
-        color: new THREE.Color().setHSL(0.95 + Math.random() * 0.1, 0.6, 0.6),
+        color: new THREE.Color().setHSL(0.95 + Math.random() * 0.1, 0.5, 0.6),
         transparent: true,
         opacity: 0.1,
         blending: THREE.AdditiveBlending
       });
       const orb = new THREE.Mesh(geom, mat);
-      orb.position.set(
-        (Math.random() - 0.5) * 20,
-        (Math.random() - 0.5) * 10,
-        (Math.random() - 0.5) * 15
-      );
+      orb.position.set((Math.random() - 0.5) * 20, (Math.random() - 0.5) * 10, (Math.random() - 0.5) * 15);
       orb.userData = { phase: Math.random() * Math.PI * 2 };
       group.add(orb);
       orbs.push(orb);
     }
 
-    // Warm lights
-    const warmLight = new THREE.PointLight(0xffaa88, 1.5, 25);
-    warmLight.position.set(0, 3, 5);
+    const warmLight = new THREE.PointLight(0xffaa88, 2, 35);
+    warmLight.position.set(0, 5, 0);
     group.add(warmLight);
 
-    const pinkLight = new THREE.PointLight(0xffbbcc, 1, 20);
-    pinkLight.position.set(-5, 0, 0);
+    const pinkLight = new THREE.PointLight(0xffbbcc, 1.5, 30);
+    pinkLight.position.set(-8, 0, -5);
     group.add(pinkLight);
 
     scene.add(group);
+    let initialized = false;
 
     return {
       group,
@@ -1083,31 +1076,64 @@ window.TrackScenes = (function() {
         const midEnergy = freq ? (freq[20] + freq[40] + freq[60]) / 3 / 255 : 0;
         const shipZ = shipPos ? shipPos.z : 0;
 
-        // Follow ship position
+        // Orbs/lights follow ship
         group.position.z = shipZ;
 
-        // Gentle particle drift
         const pos = particleGeom.attributes.position.array;
+
+        // On first update, spread particles around current ship position
+        // Camera is at shipZ - 12, so place particles from camera forward
+        if (!initialized && shipPos) {
+          for (let i = 0; i < particleCount; i++) {
+            pos[i * 3] = (Math.random() - 0.5) * 50;  // Wider spread
+            pos[i * 3 + 1] = Math.random() * 15 - 3;  // Mostly above, some below
+            pos[i * 3 + 2] = shipZ - 10 + Math.random() * 100; // Camera to ahead of ship
+          }
+          initialized = true;
+          particleGeom.attributes.position.needsUpdate = true;
+          return;
+        }
+
+        // Particles in world space - respawn relative to ship position
+        // Camera is at approximately shipZ - 12
         for (let i = 0; i < particleCount; i++) {
-          pos[i * 3] += Math.sin(time * 0.2 + i) * 0.002;
-          pos[i * 3 + 1] += Math.cos(time * 0.15 + i * 0.5) * 0.002;
+          const pz = pos[i * 3 + 2];
+          // If particle fell behind camera, respawn ahead of ship
+          if (pz < shipZ - 15) {
+            pos[i * 3] = (Math.random() - 0.5) * 50;
+            pos[i * 3 + 1] = Math.random() * 15 - 3;
+            pos[i * 3 + 2] = shipZ + 40 + Math.random() * 60;  // Spawn ahead
+          }
+          // If particle is too far ahead, respawn closer to ship
+          else if (pz > shipZ + 100) {
+            pos[i * 3] = (Math.random() - 0.5) * 50;
+            pos[i * 3 + 1] = Math.random() * 15 - 3;
+            pos[i * 3 + 2] = shipZ - 10 + Math.random() * 30;  // Near camera
+          }
+          // Gentle downward drift (like falling snow)
+          pos[i * 3 + 1] -= 0.03;
+          // Reset Y if it falls too low
+          if (pos[i * 3 + 1] < -10) {
+            pos[i * 3 + 1] = 12 + Math.random() * 3;
+          }
         }
         particleGeom.attributes.position.needsUpdate = true;
 
-        // Breathe orbs
         orbs.forEach(orb => {
-          const breathe = 1 + Math.sin(time * 0.5 + orb.userData.phase) * 0.2;
-          orb.scale.setScalar(breathe * (1 + midEnergy * 0.3));
-          orb.material.opacity = 0.08 + midEnergy * 0.1;
+          const breathe = 1 + Math.sin(time * 0.5 + orb.userData.phase) * 0.15;
+          orb.scale.setScalar(breathe);
+          orb.material.opacity = 0.1 + midEnergy * 0.08;
         });
-
-        // Pulse lights gently
-        warmLight.intensity = 1.2 + midEnergy * 0.8;
-        pinkLight.intensity = 0.8 + Math.sin(time * 0.3) * 0.3;
-
-        particleMat.opacity = 0.4 + midEnergy * 0.3;
+        warmLight.intensity = 1.5 + midEnergy;
+        pinkLight.intensity = 1 + Math.sin(time * 0.3) * 0.4;
+        particleMat.opacity = 0.6 + midEnergy * 0.2;
       },
       dispose() {
+        // Remove world-space particles
+        scene.remove(particles);
+        particleGeom.dispose();
+        particleMat.dispose();
+        // Remove group (orbs, lights)
         group.traverse(child => {
           if (child.geometry) child.geometry.dispose();
           if (child.material) child.material.dispose();

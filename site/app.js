@@ -56,6 +56,16 @@
   const comboValue = $("comboValue");
   const highScoreValue = $("highScoreValue");
   const hitFeedback = $("hitFeedback");
+  const flowValue = $("flowValue");
+  const flowBarFill = $("flowBarFill");
+  const gateStreakValue = $("gateStreakValue");
+
+  // Run summary overlay (Chill Ride)
+  const runSummary = $("runSummary");
+  const runRank = $("runRank");
+  const runFlowAvg = $("runFlowAvg");
+  const runGateAcc = $("runGateAcc");
+  const runGateStreakMax = $("runGateStreakMax");
 
   // High score modal elements
   const highScoreModal = $("highScoreModal");
@@ -82,6 +92,73 @@
   const modelAnimSpeedValue = null;
   const scalePulseCheckbox = null;
   const copySettingsBtn = null;
+
+  // Effects control elements
+  const lightningEnabled = /** @type {HTMLInputElement|null} */ ($("lightningEnabled"));
+  const lightningIntensity = /** @type {HTMLInputElement|null} */ ($("lightningIntensity"));
+  const lightningFrequency = /** @type {HTMLInputElement|null} */ ($("lightningFrequency"));
+  const lightningColor = /** @type {HTMLInputElement|null} */ ($("lightningColor"));
+  const auroraEnabled = /** @type {HTMLInputElement|null} */ ($("auroraEnabled"));
+  const auroraIntensity = /** @type {HTMLInputElement|null} */ ($("auroraIntensity"));
+  const auroraSpeed = /** @type {HTMLInputElement|null} */ ($("auroraSpeed"));
+  const auroraRibbons = /** @type {HTMLInputElement|null} */ ($("auroraRibbons"));
+  const gridEnabled = /** @type {HTMLInputElement|null} */ ($("gridEnabled"));
+  const gridIntensity = /** @type {HTMLInputElement|null} */ ($("gridIntensity"));
+  const gridSpacing = /** @type {HTMLInputElement|null} */ ($("gridSpacing"));
+  const gridFloor = /** @type {HTMLInputElement|null} */ ($("gridFloor"));
+  const gridPerspective = /** @type {HTMLInputElement|null} */ ($("gridPerspective"));
+  const gridColor = /** @type {HTMLInputElement|null} */ ($("gridColor"));
+  const lightsEnabled = /** @type {HTMLInputElement|null} */ ($("lightsEnabled"));
+  const godRaysEnabled = /** @type {HTMLInputElement|null} */ ($("godRaysEnabled"));
+  const pulseLights = /** @type {HTMLInputElement|null} */ ($("pulseLights"));
+  const godRayIntensity = /** @type {HTMLInputElement|null} */ ($("godRayIntensity"));
+  const particlesEnabled = /** @type {HTMLInputElement|null} */ ($("particlesEnabled"));
+  const particleType = /** @type {HTMLSelectElement|null} */ ($("particleType"));
+  const particleCount = /** @type {HTMLInputElement|null} */ ($("particleCount"));
+  const particleSize = /** @type {HTMLInputElement|null} */ ($("particleSize"));
+  const particleSpeed = /** @type {HTMLInputElement|null} */ ($("particleSpeed"));
+  const fogDensity = /** @type {HTMLInputElement|null} */ ($("fogDensity"));
+  const speedLinesIntensity = /** @type {HTMLInputElement|null} */ ($("speedLinesIntensity"));
+  const colorShiftEnabled = /** @type {HTMLInputElement|null} */ ($("colorShiftEnabled"));
+  const screenShakeEnabled = /** @type {HTMLInputElement|null} */ ($("screenShakeEnabled"));
+
+  // World / Chill Ride elements
+  const pathEnabled = /** @type {HTMLInputElement|null} */ ($("pathEnabled"));
+  const parallaxEnabled = /** @type {HTMLInputElement|null} */ ($("parallaxEnabled"));
+  const vistaEnabled = /** @type {HTMLInputElement|null} */ ($("vistaEnabled"));
+  const pathOpacity = /** @type {HTMLInputElement|null} */ ($("pathOpacity"));
+  const pathLaneOpacity = /** @type {HTMLInputElement|null} */ ($("pathLaneOpacity"));
+  const parallaxDepth = /** @type {HTMLInputElement|null} */ ($("parallaxDepth"));
+  const vistaThreshold = /** @type {HTMLInputElement|null} */ ($("vistaThreshold"));
+  const vistaDuration = /** @type {HTMLInputElement|null} */ ($("vistaDuration"));
+  const vistaCooldown = /** @type {HTMLInputElement|null} */ ($("vistaCooldown"));
+  const resetEffectsBtn = $("resetEffectsBtn");
+  const randomizeEffectsBtn = $("randomizeEffectsBtn");
+
+  // Value display elements
+  const lightningIntensityValue = $("lightningIntensityValue");
+  const lightningFrequencyValue = $("lightningFrequencyValue");
+  const auroraIntensityValue = $("auroraIntensityValue");
+  const auroraSpeedValue = $("auroraSpeedValue");
+  const auroraRibbonsValue = $("auroraRibbonsValue");
+  const gridIntensityValue = $("gridIntensityValue");
+  const gridSpacingValue = $("gridSpacingValue");
+  const godRayIntensityValue = $("godRayIntensityValue");
+  const particleCountValue = $("particleCountValue");
+  const particleSizeValue = $("particleSizeValue");
+  const particleSpeedValue = $("particleSpeedValue");
+  const fogDensityValue = $("fogDensityValue");
+  const speedLinesValue = $("speedLinesValue");
+
+  const pathOpacityValue = $("pathOpacityValue");
+  const pathLaneOpacityValue = $("pathLaneOpacityValue");
+  const parallaxDepthValue = $("parallaxDepthValue");
+  const vistaThresholdValue = $("vistaThresholdValue");
+  const vistaDurationValue = $("vistaDurationValue");
+  const vistaCooldownValue = $("vistaCooldownValue");
+
+  // Band select buttons
+  const bandButtons = document.querySelectorAll('.viz-settings__band-btn');
 
   if (
     !app ||
@@ -149,6 +226,254 @@
     audioReactivity: 1.0, // How much audio affects speed (0=static, 1=fully reactive)
   };
 
+  // Effects configuration - controls all visual effects
+  const effectsConfig = {
+    lightning: {
+      enabled: false,
+      intensity: 0.5,
+      frequency: 0.3,
+      color: '#00ffff',
+      band: 'bass'
+    },
+    aurora: {
+      enabled: false,
+      intensity: 0.5,
+      speed: 0.5,
+      ribbons: 5,
+      band: 'mid'
+    },
+    grid: {
+      enabled: false,
+      intensity: 0.4,
+      spacing: 5,
+      floor: true,
+      perspective: false,
+      color: '#00ffff',
+      band: 'energy'
+    },
+    lights: {
+      enabled: false,
+      godRays: false,
+      pulse: true,
+      godRayIntensity: 0.3,
+      band: 'bass'
+    },
+    particles: {
+      enabled: true,
+      type: 'dust',
+      count: 500,
+      size: 0.3,
+      speed: 1.0,
+      band: 'energy'
+    },
+    visual: {
+      fogDensity: 1.0,
+      speedLines: 1.0,
+      colorShift: false,
+      screenShake: true
+    },
+    world: {
+      pathEnabled: true,
+      pathOpacity: 0.18,
+      pathLaneOpacity: 0.28,
+      parallaxEnabled: true,
+      parallaxFactorZ: 0.28,
+      vistaEnabled: true,
+      vistaMinEnergy: 0.68,
+      vistaDuration: 2.6,
+      vistaCooldown: 5.0
+    }
+  };
+
+  const EFFECTS_STORAGE_KEY = "mysongs-effects-config";
+
+  // Load saved effects config
+  function loadEffectsConfig() {
+    try {
+      const saved = localStorage.getItem(EFFECTS_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        Object.assign(effectsConfig.lightning, parsed.lightning || {});
+        Object.assign(effectsConfig.aurora, parsed.aurora || {});
+        Object.assign(effectsConfig.grid, parsed.grid || {});
+        Object.assign(effectsConfig.lights, parsed.lights || {});
+        Object.assign(effectsConfig.particles, parsed.particles || {});
+        Object.assign(effectsConfig.visual, parsed.visual || {});
+        Object.assign(effectsConfig.world, parsed.world || {});
+      }
+    } catch (e) {
+      console.warn("Failed to load effects config:", e);
+    }
+  }
+
+  // Save effects config
+  function saveEffectsConfig() {
+    try {
+      localStorage.setItem(EFFECTS_STORAGE_KEY, JSON.stringify(effectsConfig));
+    } catch (e) {
+      console.warn("Failed to save effects config:", e);
+    }
+  }
+
+  // Update all effects UI displays
+  function updateEffectsUI() {
+    if (lightningEnabled) lightningEnabled.checked = effectsConfig.lightning.enabled;
+    if (lightningIntensity) lightningIntensity.value = String(effectsConfig.lightning.intensity * 100);
+    if (lightningFrequency) lightningFrequency.value = String(effectsConfig.lightning.frequency * 100);
+    if (lightningColor) lightningColor.value = effectsConfig.lightning.color;
+    if (lightningIntensityValue) lightningIntensityValue.textContent = Math.round(effectsConfig.lightning.intensity * 100) + '%';
+    if (lightningFrequencyValue) lightningFrequencyValue.textContent = Math.round(effectsConfig.lightning.frequency * 100) + '%';
+
+    if (auroraEnabled) auroraEnabled.checked = effectsConfig.aurora.enabled;
+    if (auroraIntensity) auroraIntensity.value = String(effectsConfig.aurora.intensity * 100);
+    if (auroraSpeed) auroraSpeed.value = String(effectsConfig.aurora.speed * 100);
+    if (auroraRibbons) auroraRibbons.value = String(effectsConfig.aurora.ribbons);
+    if (auroraIntensityValue) auroraIntensityValue.textContent = Math.round(effectsConfig.aurora.intensity * 100) + '%';
+    if (auroraSpeedValue) auroraSpeedValue.textContent = Math.round(effectsConfig.aurora.speed * 100) + '%';
+    if (auroraRibbonsValue) auroraRibbonsValue.textContent = String(effectsConfig.aurora.ribbons);
+
+    if (gridEnabled) gridEnabled.checked = effectsConfig.grid.enabled;
+    if (gridIntensity) gridIntensity.value = String(effectsConfig.grid.intensity * 100);
+    if (gridSpacing) gridSpacing.value = String(effectsConfig.grid.spacing);
+    if (gridFloor) gridFloor.checked = effectsConfig.grid.floor;
+    if (gridPerspective) gridPerspective.checked = effectsConfig.grid.perspective;
+    if (gridColor) gridColor.value = effectsConfig.grid.color;
+    if (gridIntensityValue) gridIntensityValue.textContent = Math.round(effectsConfig.grid.intensity * 100) + '%';
+    if (gridSpacingValue) gridSpacingValue.textContent = String(effectsConfig.grid.spacing);
+
+    if (lightsEnabled) lightsEnabled.checked = effectsConfig.lights.enabled;
+    if (godRaysEnabled) godRaysEnabled.checked = effectsConfig.lights.godRays;
+    if (pulseLights) pulseLights.checked = effectsConfig.lights.pulse;
+    if (godRayIntensity) godRayIntensity.value = String(effectsConfig.lights.godRayIntensity * 100);
+    if (godRayIntensityValue) godRayIntensityValue.textContent = Math.round(effectsConfig.lights.godRayIntensity * 100) + '%';
+
+    if (particlesEnabled) particlesEnabled.checked = effectsConfig.particles.enabled;
+    if (particleType) particleType.value = effectsConfig.particles.type;
+    if (particleCount) particleCount.value = String(effectsConfig.particles.count);
+    if (particleSize) particleSize.value = String(effectsConfig.particles.size * 100);
+    if (particleSpeed) particleSpeed.value = String(effectsConfig.particles.speed * 100);
+    if (particleCountValue) particleCountValue.textContent = String(effectsConfig.particles.count);
+    if (particleSizeValue) particleSizeValue.textContent = effectsConfig.particles.size.toFixed(1);
+    if (particleSpeedValue) particleSpeedValue.textContent = effectsConfig.particles.speed.toFixed(1);
+
+    if (fogDensity) fogDensity.value = String(effectsConfig.visual.fogDensity * 100);
+    if (speedLinesIntensity) speedLinesIntensity.value = String(effectsConfig.visual.speedLines * 100);
+    if (colorShiftEnabled) colorShiftEnabled.checked = effectsConfig.visual.colorShift;
+    if (screenShakeEnabled) screenShakeEnabled.checked = effectsConfig.visual.screenShake;
+    if (fogDensityValue) fogDensityValue.textContent = Math.round(effectsConfig.visual.fogDensity * 100) + '%';
+    if (speedLinesValue) speedLinesValue.textContent = Math.round(effectsConfig.visual.speedLines * 100) + '%';
+
+    // World / Chill Ride
+    if (pathEnabled) pathEnabled.checked = !!effectsConfig.world.pathEnabled;
+    if (parallaxEnabled) parallaxEnabled.checked = !!effectsConfig.world.parallaxEnabled;
+    if (vistaEnabled) vistaEnabled.checked = !!effectsConfig.world.vistaEnabled;
+
+    if (pathOpacity) pathOpacity.value = String(Math.round(clamp(effectsConfig.world.pathOpacity, 0, 1) * 100));
+    if (pathLaneOpacity) pathLaneOpacity.value = String(Math.round(clamp(effectsConfig.world.pathLaneOpacity, 0, 1) * 100));
+    if (parallaxDepth) parallaxDepth.value = String(Math.round(clamp(effectsConfig.world.parallaxFactorZ, 0, 1) * 100));
+    if (vistaThreshold) vistaThreshold.value = String(Math.round(clamp(effectsConfig.world.vistaMinEnergy, 0, 1) * 100));
+    if (vistaDuration) vistaDuration.value = String(Math.round(clamp(effectsConfig.world.vistaDuration, 0.5, 10) * 10));
+    if (vistaCooldown) vistaCooldown.value = String(Math.round(clamp(effectsConfig.world.vistaCooldown, 0.5, 20) * 10));
+
+    if (pathOpacityValue) pathOpacityValue.textContent = `${Math.round(clamp(effectsConfig.world.pathOpacity, 0, 1) * 100)}%`;
+    if (pathLaneOpacityValue) pathLaneOpacityValue.textContent = `${Math.round(clamp(effectsConfig.world.pathLaneOpacity, 0, 1) * 100)}%`;
+    if (parallaxDepthValue) parallaxDepthValue.textContent = `${Math.round(clamp(effectsConfig.world.parallaxFactorZ, 0, 1) * 100)}%`;
+    if (vistaThresholdValue) vistaThresholdValue.textContent = `${Math.round(clamp(effectsConfig.world.vistaMinEnergy, 0, 1) * 100)}%`;
+    if (vistaDurationValue) vistaDurationValue.textContent = `${(clamp(effectsConfig.world.vistaDuration, 0.5, 10)).toFixed(1)}s`;
+    if (vistaCooldownValue) vistaCooldownValue.textContent = `${(clamp(effectsConfig.world.vistaCooldown, 0.5, 20)).toFixed(1)}s`;
+
+    // Update band buttons
+    bandButtons.forEach(btn => {
+      const effect = btn.getAttribute('data-effect');
+      const band = btn.getAttribute('data-band');
+      const currentBand = effectsConfig[effect]?.band;
+      btn.classList.toggle('active', band === currentBand);
+    });
+  }
+
+  // Reset effects to defaults
+  function resetEffectsConfig() {
+    effectsConfig.lightning = { enabled: false, intensity: 0.5, frequency: 0.3, color: '#00ffff', band: 'bass' };
+    effectsConfig.aurora = { enabled: false, intensity: 0.5, speed: 0.5, ribbons: 5, band: 'mid' };
+    effectsConfig.grid = { enabled: false, intensity: 0.4, spacing: 5, floor: true, perspective: false, color: '#00ffff', band: 'energy' };
+    effectsConfig.lights = { enabled: false, godRays: false, pulse: true, godRayIntensity: 0.3, band: 'bass' };
+    effectsConfig.particles = { enabled: true, type: 'dust', count: 500, size: 0.3, speed: 1.0, band: 'energy' };
+    effectsConfig.visual = { fogDensity: 1.0, speedLines: 1.0, colorShift: false, screenShake: true };
+    effectsConfig.world = {
+      pathEnabled: true,
+      pathOpacity: 0.18,
+      pathLaneOpacity: 0.28,
+      parallaxEnabled: true,
+      parallaxFactorZ: 0.28,
+      vistaEnabled: true,
+      vistaMinEnergy: 0.68,
+      vistaDuration: 2.6,
+      vistaCooldown: 5.0
+    };
+    updateEffectsUI();
+    saveEffectsConfig();
+    applyEffectsToEnvironment();
+  }
+
+  // Randomize effects
+  function randomizeEffectsConfig() {
+    const types = ['dust', 'sparks', 'bubbles', 'embers', 'snow', 'stars'];
+    const bands = ['bass', 'mid', 'treble', 'energy'];
+    const randomColor = () => '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
+
+    effectsConfig.lightning.enabled = Math.random() > 0.5;
+    effectsConfig.lightning.intensity = 0.2 + Math.random() * 0.8;
+    effectsConfig.lightning.frequency = 0.1 + Math.random() * 0.7;
+    effectsConfig.lightning.color = randomColor();
+    effectsConfig.lightning.band = bands[Math.floor(Math.random() * bands.length)];
+
+    effectsConfig.aurora.enabled = Math.random() > 0.5;
+    effectsConfig.aurora.intensity = 0.2 + Math.random() * 0.8;
+    effectsConfig.aurora.speed = 0.2 + Math.random() * 0.8;
+    effectsConfig.aurora.ribbons = 2 + Math.floor(Math.random() * 8);
+    effectsConfig.aurora.band = bands[Math.floor(Math.random() * bands.length)];
+
+    effectsConfig.grid.enabled = Math.random() > 0.5;
+    effectsConfig.grid.intensity = 0.2 + Math.random() * 0.8;
+    effectsConfig.grid.spacing = 3 + Math.floor(Math.random() * 15);
+    effectsConfig.grid.floor = Math.random() > 0.3;
+    effectsConfig.grid.perspective = Math.random() > 0.5;
+    effectsConfig.grid.color = randomColor();
+    effectsConfig.grid.band = bands[Math.floor(Math.random() * bands.length)];
+
+    effectsConfig.lights.enabled = Math.random() > 0.4;
+    effectsConfig.lights.godRays = Math.random() > 0.5;
+    effectsConfig.lights.pulse = Math.random() > 0.3;
+    effectsConfig.lights.godRayIntensity = 0.1 + Math.random() * 0.7;
+    effectsConfig.lights.band = bands[Math.floor(Math.random() * bands.length)];
+
+    effectsConfig.particles.enabled = Math.random() > 0.2;
+    effectsConfig.particles.type = types[Math.floor(Math.random() * types.length)];
+    effectsConfig.particles.count = 200 + Math.floor(Math.random() * 1500);
+    effectsConfig.particles.size = 0.1 + Math.random() * 0.8;
+    effectsConfig.particles.speed = 0.3 + Math.random() * 2.0;
+    effectsConfig.particles.band = bands[Math.floor(Math.random() * bands.length)];
+
+    effectsConfig.visual.fogDensity = 0.3 + Math.random() * 1.4;
+    effectsConfig.visual.speedLines = Math.random();
+    effectsConfig.visual.colorShift = Math.random() > 0.6;
+    effectsConfig.visual.screenShake = Math.random() > 0.4;
+
+    updateEffectsUI();
+    saveEffectsConfig();
+    applyEffectsToEnvironment();
+  }
+
+  // Apply effects to the environment
+  function applyEffectsToEnvironment() {
+    if (typeof EffectsManager !== 'undefined' && EffectsManager.update) {
+      EffectsManager.update(effectsConfig);
+    }
+    if (typeof EnvironmentMode !== 'undefined' && EnvironmentMode.setEffectsConfig) {
+      EnvironmentMode.setEffectsConfig(effectsConfig);
+    }
+  }
+
   // Audio-reactive speed state
   let audioSpeedMultiplier = 1.0;
   let lastEnergyForSpeed = 0;
@@ -170,6 +495,10 @@
     const iPadOS = navigator.platform === "MacIntel" && (navigator.maxTouchPoints || 0) > 1;
     return iDevice || iPadOS;
   })();
+
+  // iOS simple visualization (fallback when Web Audio is unavailable)
+  /** @type {any} */
+  let iosViz = null;
 
   let rangeSupportChecked = false;
   let rangeSupported = true;
@@ -517,6 +846,10 @@
   function updateVizPauseState() {
     if (bgVizCanvas) {
       bgVizCanvas.classList.toggle("is-paused", audio.paused);
+    }
+    // Update iOS visualization
+    if (iosViz) {
+      iosViz.setPlaying(!audio.paused);
     }
   }
 
@@ -1196,6 +1529,35 @@
     }
   }
 
+  function updateFlowHUD(flow, gateStreak) {
+    const pct = Math.round(clamp(Number(flow) || 0, 0, 1) * 100);
+    if (flowValue) flowValue.textContent = `${pct}%`;
+    if (flowBarFill) flowBarFill.style.width = `${pct}%`;
+    if (gateStreakValue) gateStreakValue.textContent = String(Math.max(0, Number(gateStreak) || 0));
+  }
+
+  let runSummaryTimer = 0;
+  function hideRunSummary() {
+    if (!runSummary) return;
+    runSummary.hidden = true;
+    if (runSummaryTimer) {
+      clearTimeout(runSummaryTimer);
+      runSummaryTimer = 0;
+    }
+  }
+
+  function showRunSummary(summary) {
+    if (!runSummary || !summary) return;
+    if (runRank) runRank.textContent = String(summary.rank || 'B');
+    if (runFlowAvg) runFlowAvg.textContent = `${Math.round(clamp(Number(summary.flowAvg) || 0, 0, 1) * 100)}%`;
+    if (runGateAcc) runGateAcc.textContent = `${Math.round(clamp(Number(summary.gateAccuracy) || 0, 0, 1) * 100)}%`;
+    if (runGateStreakMax) runGateStreakMax.textContent = String(Math.max(0, Number(summary.gateStreakMax) || 0));
+
+    runSummary.hidden = false;
+    if (runSummaryTimer) clearTimeout(runSummaryTimer);
+    runSummaryTimer = setTimeout(hideRunSummary, 8000);
+  }
+
   function resetSessionHighScore() {
     sessionHighScore = 0;
     if (highScoreValue) highScoreValue.textContent = '0';
@@ -1298,6 +1660,12 @@
     });
   }
 
+  if (runSummary) {
+    runSummary.addEventListener('click', () => {
+      hideRunSummary();
+    });
+  }
+
   function syncThreeVizMode() {
     if (!threeReady || !threeModes || !bgVizCanvas) return;
 
@@ -1319,12 +1687,22 @@
       environmentInstance = EnvironmentMode.init(three, threeScene, threeCamera, threeRenderer, currentTrackTitle, gltfLoader);
       console.log("Environment mode initialized for track:", currentTrackTitle);
 
+      // Build track scene now that Three.js is ready (if not already built)
+      if (TrackScenes && !currentTrackScene && currentTrackTitle) {
+        currentTrackScene = TrackScenes.build(currentTrackTitle, three, threeScene, { freqData, timeData });
+        console.log("Track scene built after Three.js ready:", currentTrackTitle, currentTrackScene ? "success" : "not available");
+      }
+
       // Set up score callbacks
       EnvironmentMode.setScoreCallback((score, combo) => {
         updateScoreHUD(score, combo);
       });
       EnvironmentMode.setHitCallback((pointsLost) => {
         showHitFeedback(pointsLost);
+      });
+      EnvironmentMode.setFlowCallback((payload) => {
+        if (!payload) return;
+        updateFlowHUD(payload.flow, payload.gateStreak);
       });
 
       // Update high score display
@@ -1406,6 +1784,7 @@
 
     // ---- Audio-reactive speed calculation ----
     const reactivity = vizParams.audioReactivity;
+    let bassHit = false;
 
     if (reactivity > 0) {
       // Calculate spectral flux (rate of change in energy) for "busyness"
@@ -1414,7 +1793,7 @@
       lastEnergyForSpeed = energy;
 
       // Beat detection - detect bass hits for speed bursts
-      const bassHit = bass > 0.5 && bass > lastBassForSpeed + 0.1;
+      bassHit = bass > 0.5 && bass > lastBassForSpeed + 0.1;
       if (bassHit) {
         globalBeatPulse = Math.min(globalBeatPulse + 0.35, 1.0);
       }
@@ -1469,8 +1848,36 @@
         bass: bass,
         mid: mid,
         treble: treble,
-        energy: energy
+        energy: energy,
+        beatPulse: globalBeatPulse,
+        beatHit: bassHit
       });
+
+      // Update EffectsManager with audio data and ship position
+      if (typeof EffectsManager !== 'undefined') {
+        EffectsManager.setAudioData({ bass, mid, treble, energy });
+        const shipPos = EnvironmentMode.getShipPosition();
+        if (shipPos) {
+          EffectsManager.setShipPosition(shipPos);
+        }
+        EffectsManager.render(t, dt);
+
+        // Apply screen shake to camera
+        if (effectsConfig.visual.screenShake) {
+          const shake = EffectsManager.getShakeOffset();
+          if (threeCamera && shake) {
+            threeCamera.position.x += shake.x;
+            threeCamera.position.y += shake.y;
+          }
+        }
+      }
+    }
+
+    // Update custom track scene (snow, particles, etc.)
+    if (currentTrackScene && currentTrackScene.update) {
+      const shipPos = EnvironmentMode ? EnvironmentMode.getShipPosition() : null;
+      const shipSpeed = EnvironmentMode ? EnvironmentMode.getShipSpeed() : 0;
+      currentTrackScene.update(t, freqData, amplitude, shipPos, shipSpeed);
     }
 
     // Update OrbitControls for smooth damping
@@ -2067,6 +2474,15 @@
         applyVizZoom();
         syncThreeVizMode();
 
+        // Initialize EffectsManager
+        if (typeof EffectsManager !== 'undefined') {
+          // Three.js is loaded via dynamic `import(...)` (ES module), so there is no global `THREE`.
+          // Pass the imported module instead.
+          EffectsManager.init(mod, threeScene, threeCamera);
+          EffectsManager.update(effectsConfig);
+          console.log("EffectsManager initialized");
+        }
+
         // Load saved model if one was selected (dropdown already populated on page load)
         const savedModelId = localStorage.getItem(MODEL_STORAGE_KEY);
         if (savedModelId && availableModels.some((m) => m.id === savedModelId)) {
@@ -2599,6 +3015,11 @@
     // Load saved model selection
     const savedModel = localStorage.getItem('mysongs-racer-model') || 'white-eagle';
     racerModelSelect.value = savedModel;
+    // If the saved value isn't available in the (restricted) dropdown, fall back.
+    if (racerModelSelect.value !== savedModel) {
+      racerModelSelect.value = 'white-eagle';
+      localStorage.setItem('mysongs-racer-model', 'white-eagle');
+    }
 
     racerModelSelect.addEventListener("change", () => {
       const modelId = racerModelSelect.value;
@@ -2666,6 +3087,324 @@
     copySettingsBtn.addEventListener("click", copySettingsToClipboard);
   }
 
+  // ---- Effects Controls ----
+  // Load saved effects on startup
+  loadEffectsConfig();
+  updateEffectsUI();
+
+  // Lightning controls
+  if (lightningEnabled) {
+    lightningEnabled.addEventListener("change", () => {
+      effectsConfig.lightning.enabled = lightningEnabled.checked;
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+  if (lightningIntensity) {
+    lightningIntensity.addEventListener("input", () => {
+      effectsConfig.lightning.intensity = Number(lightningIntensity.value) / 100;
+      if (lightningIntensityValue) lightningIntensityValue.textContent = lightningIntensity.value + '%';
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+  if (lightningFrequency) {
+    lightningFrequency.addEventListener("input", () => {
+      effectsConfig.lightning.frequency = Number(lightningFrequency.value) / 100;
+      if (lightningFrequencyValue) lightningFrequencyValue.textContent = lightningFrequency.value + '%';
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+  if (lightningColor) {
+    lightningColor.addEventListener("input", () => {
+      effectsConfig.lightning.color = lightningColor.value;
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+
+  // Aurora controls
+  if (auroraEnabled) {
+    auroraEnabled.addEventListener("change", () => {
+      effectsConfig.aurora.enabled = auroraEnabled.checked;
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+  if (auroraIntensity) {
+    auroraIntensity.addEventListener("input", () => {
+      effectsConfig.aurora.intensity = Number(auroraIntensity.value) / 100;
+      if (auroraIntensityValue) auroraIntensityValue.textContent = auroraIntensity.value + '%';
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+  if (auroraSpeed) {
+    auroraSpeed.addEventListener("input", () => {
+      effectsConfig.aurora.speed = Number(auroraSpeed.value) / 100;
+      if (auroraSpeedValue) auroraSpeedValue.textContent = auroraSpeed.value + '%';
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+  if (auroraRibbons) {
+    auroraRibbons.addEventListener("input", () => {
+      effectsConfig.aurora.ribbons = Number(auroraRibbons.value);
+      if (auroraRibbonsValue) auroraRibbonsValue.textContent = auroraRibbons.value;
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+
+  // Grid controls
+  if (gridEnabled) {
+    gridEnabled.addEventListener("change", () => {
+      effectsConfig.grid.enabled = gridEnabled.checked;
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+  if (gridIntensity) {
+    gridIntensity.addEventListener("input", () => {
+      effectsConfig.grid.intensity = Number(gridIntensity.value) / 100;
+      if (gridIntensityValue) gridIntensityValue.textContent = gridIntensity.value + '%';
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+  if (gridSpacing) {
+    gridSpacing.addEventListener("input", () => {
+      effectsConfig.grid.spacing = Number(gridSpacing.value);
+      if (gridSpacingValue) gridSpacingValue.textContent = gridSpacing.value;
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+  if (gridFloor) {
+    gridFloor.addEventListener("change", () => {
+      effectsConfig.grid.floor = gridFloor.checked;
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+  if (gridPerspective) {
+    gridPerspective.addEventListener("change", () => {
+      effectsConfig.grid.perspective = gridPerspective.checked;
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+  if (gridColor) {
+    gridColor.addEventListener("input", () => {
+      effectsConfig.grid.color = gridColor.value;
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+
+  // Lights controls
+  if (lightsEnabled) {
+    lightsEnabled.addEventListener("change", () => {
+      effectsConfig.lights.enabled = lightsEnabled.checked;
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+  if (godRaysEnabled) {
+    godRaysEnabled.addEventListener("change", () => {
+      effectsConfig.lights.godRays = godRaysEnabled.checked;
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+  if (pulseLights) {
+    pulseLights.addEventListener("change", () => {
+      effectsConfig.lights.pulse = pulseLights.checked;
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+  if (godRayIntensity) {
+    godRayIntensity.addEventListener("input", () => {
+      effectsConfig.lights.godRayIntensity = Number(godRayIntensity.value) / 100;
+      if (godRayIntensityValue) godRayIntensityValue.textContent = godRayIntensity.value + '%';
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+
+  // Particles controls
+  if (particlesEnabled) {
+    particlesEnabled.addEventListener("change", () => {
+      effectsConfig.particles.enabled = particlesEnabled.checked;
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+  if (particleType) {
+    particleType.addEventListener("change", () => {
+      effectsConfig.particles.type = particleType.value;
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+  if (particleCount) {
+    particleCount.addEventListener("input", () => {
+      effectsConfig.particles.count = Number(particleCount.value);
+      if (particleCountValue) particleCountValue.textContent = particleCount.value;
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+  if (particleSize) {
+    particleSize.addEventListener("input", () => {
+      effectsConfig.particles.size = Number(particleSize.value) / 100;
+      if (particleSizeValue) particleSizeValue.textContent = (Number(particleSize.value) / 100).toFixed(1);
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+  if (particleSpeed) {
+    particleSpeed.addEventListener("input", () => {
+      effectsConfig.particles.speed = Number(particleSpeed.value) / 100;
+      if (particleSpeedValue) particleSpeedValue.textContent = (Number(particleSpeed.value) / 100).toFixed(1);
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+
+  // Visual style controls
+  if (fogDensity) {
+    fogDensity.addEventListener("input", () => {
+      effectsConfig.visual.fogDensity = Number(fogDensity.value) / 100;
+      if (fogDensityValue) fogDensityValue.textContent = fogDensity.value + '%';
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+  if (speedLinesIntensity) {
+    speedLinesIntensity.addEventListener("input", () => {
+      effectsConfig.visual.speedLines = Number(speedLinesIntensity.value) / 100;
+      if (speedLinesValue) speedLinesValue.textContent = speedLinesIntensity.value + '%';
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+  if (colorShiftEnabled) {
+    colorShiftEnabled.addEventListener("change", () => {
+      effectsConfig.visual.colorShift = colorShiftEnabled.checked;
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+  if (screenShakeEnabled) {
+    screenShakeEnabled.addEventListener("change", () => {
+      effectsConfig.visual.screenShake = screenShakeEnabled.checked;
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+
+  // World / Chill Ride controls
+  if (pathEnabled) {
+    pathEnabled.addEventListener("change", () => {
+      effectsConfig.world.pathEnabled = pathEnabled.checked;
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+  if (parallaxEnabled) {
+    parallaxEnabled.addEventListener("change", () => {
+      effectsConfig.world.parallaxEnabled = parallaxEnabled.checked;
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+  if (vistaEnabled) {
+    vistaEnabled.addEventListener("change", () => {
+      effectsConfig.world.vistaEnabled = vistaEnabled.checked;
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+
+  if (pathOpacity) {
+    pathOpacity.addEventListener("input", () => {
+      effectsConfig.world.pathOpacity = Number(pathOpacity.value) / 100;
+      if (pathOpacityValue) pathOpacityValue.textContent = `${pathOpacity.value}%`;
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+  if (pathLaneOpacity) {
+    pathLaneOpacity.addEventListener("input", () => {
+      effectsConfig.world.pathLaneOpacity = Number(pathLaneOpacity.value) / 100;
+      if (pathLaneOpacityValue) pathLaneOpacityValue.textContent = `${pathLaneOpacity.value}%`;
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+  if (parallaxDepth) {
+    parallaxDepth.addEventListener("input", () => {
+      effectsConfig.world.parallaxFactorZ = Number(parallaxDepth.value) / 100;
+      if (parallaxDepthValue) parallaxDepthValue.textContent = `${parallaxDepth.value}%`;
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+  if (vistaThreshold) {
+    vistaThreshold.addEventListener("input", () => {
+      effectsConfig.world.vistaMinEnergy = Number(vistaThreshold.value) / 100;
+      if (vistaThresholdValue) vistaThresholdValue.textContent = `${vistaThreshold.value}%`;
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+  if (vistaDuration) {
+    vistaDuration.addEventListener("input", () => {
+      effectsConfig.world.vistaDuration = Number(vistaDuration.value) / 10;
+      if (vistaDurationValue) vistaDurationValue.textContent = `${effectsConfig.world.vistaDuration.toFixed(1)}s`;
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+  if (vistaCooldown) {
+    vistaCooldown.addEventListener("input", () => {
+      effectsConfig.world.vistaCooldown = Number(vistaCooldown.value) / 10;
+      if (vistaCooldownValue) vistaCooldownValue.textContent = `${effectsConfig.world.vistaCooldown.toFixed(1)}s`;
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+    });
+  }
+
+  // Band select buttons
+  bandButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const effect = btn.getAttribute('data-effect');
+      const band = btn.getAttribute('data-band');
+      if (effect && band && effectsConfig[effect]) {
+        effectsConfig[effect].band = band;
+        // Update button states for this effect
+        bandButtons.forEach(b => {
+          if (b.getAttribute('data-effect') === effect) {
+            b.classList.toggle('active', b.getAttribute('data-band') === band);
+          }
+        });
+        saveEffectsConfig();
+        applyEffectsToEnvironment();
+      }
+    });
+  });
+
+  // Reset and Randomize buttons
+  if (resetEffectsBtn) {
+    resetEffectsBtn.addEventListener("click", resetEffectsConfig);
+  }
+  if (randomizeEffectsBtn) {
+    randomizeEffectsBtn.addEventListener("click", randomizeEffectsConfig);
+  }
+
   // Playlist item click
   playlistEl.addEventListener("click", (e) => {
     const target = /** @type {HTMLElement} */ (e.target);
@@ -2707,6 +3446,12 @@
   audio.addEventListener("ended", () => {
     // Check for high score when track ends
     if (EnvironmentMode && bgVizMode === "environment" && currentTrackTitle) {
+      // Show Chill Ride run summary (rank/flow/gates)
+      try {
+        const summary = EnvironmentMode.getRunSummary && EnvironmentMode.getRunSummary();
+        if (summary) showRunSummary(summary);
+      } catch { /* ignore */ }
+
       const finalScore = EnvironmentMode.getScore();
       if (finalScore > 0) {
         showHighScoreModal(finalScore, currentTrackTitle);
@@ -2875,4 +3620,15 @@
   window.addEventListener("resize", () => {
     if (threeReady) resizeThreeRenderer();
   });
+
+  // Initialize iOS simple visualization as fallback
+  if (isIOS && bgVizCanvas && window.iOSVisualization) {
+    console.log("Initializing iOS particle visualization");
+    iosViz = new window.iOSVisualization(bgVizCanvas);
+    iosViz.start();
+    // Sync initial state
+    if (!audio.paused) {
+      iosViz.setPlaying(true);
+    }
+  }
 })();

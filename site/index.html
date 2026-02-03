@@ -41,8 +41,19 @@
         <span class="score-value" id="scoreValue">0</span>
       </div>
       <div class="combo-display" id="comboDisplay">
-        <span class="combo-value" id="comboValue">1</span>
-        <span class="combo-label">x COMBO</span>
+        <div class="combo-line">
+          <span class="combo-value" id="comboValue">1</span>
+          <span class="combo-label">x COMBO</span>
+        </div>
+        <div class="flow-line">
+          <span class="flow-label">FLOW</span>
+          <span class="flow-value" id="flowValue">--%</span>
+          <div class="flow-bar" aria-hidden="true">
+            <div class="flow-bar__fill" id="flowBarFill"></div>
+          </div>
+          <span class="gate-label">GATES</span>
+          <span class="gate-value" id="gateStreakValue">0</span>
+        </div>
       </div>
       <div class="high-score-display">
         <span class="high-score-label">HIGH</span>
@@ -52,6 +63,28 @@
 
     <!-- Hit feedback overlay -->
     <div id="hitFeedback" class="hit-feedback" aria-hidden="true"></div>
+
+    <!-- End-of-run summary (Chill Ride) -->
+    <div id="runSummary" class="run-summary" hidden>
+      <div class="run-summary__card" role="status" aria-live="polite">
+        <div class="run-summary__rank" id="runRank">B</div>
+        <div class="run-summary__meta">
+          <div class="run-summary__row">
+            <span class="run-summary__label">FLOW AVG</span>
+            <span class="run-summary__value" id="runFlowAvg">--%</span>
+          </div>
+          <div class="run-summary__row">
+            <span class="run-summary__label">GATE ACC</span>
+            <span class="run-summary__value" id="runGateAcc">--%</span>
+          </div>
+          <div class="run-summary__row">
+            <span class="run-summary__label">MAX STREAK</span>
+            <span class="run-summary__value" id="runGateStreakMax">0</span>
+          </div>
+        </div>
+        <div class="run-summary__hint">Click to dismiss</div>
+      </div>
+    </div>
 
     <!-- High Score Entry Modal -->
     <div id="highScoreModal" class="high-score-modal" hidden>
@@ -395,15 +428,7 @@
                 <label class="viz-settings__label"><span>Model</span></label>
                 <select id="racerModelSelect" class="viz-settings__select">
                   <option value="white-eagle">White Eagle</option>
-                  <option value="icy_dragon">Icy Dragon</option>
-                  <option value="racer_spaceship">Spaceship</option>
-                  <option value="butterfly">Butterfly</option>
-                  <option value="blue-whale">Blue Whale</option>
                   <option value="jellyfish">Jellyfish</option>
-                  <option value="godzilla">Godzilla</option>
-                  <option value="gorilla">Gorilla</option>
-                  <option value="biped_robot">Robot</option>
-                  <option value="loggerhead">Sea Turtle</option>
                 </select>
               </div>
               <div class="viz-settings__group">
@@ -413,6 +438,76 @@
                 </label>
                 <input type="range" id="cruiseSpeed" min="25" max="200" value="100" step="5" class="viz-settings__slider" />
                 <span class="viz-settings__hint">Lower = more chill, Higher = intense</span>
+              </div>
+            </div>
+          </details>
+
+          <!-- World / Chill Ride -->
+          <details class="viz-settings__section" open>
+            <summary class="viz-settings__section-header">World (Chill Ride)</summary>
+            <div class="viz-settings__section-content">
+              <div class="viz-settings__group viz-settings__checkboxes">
+                <label class="viz-settings__checkbox-label">
+                  <input type="checkbox" id="pathEnabled" checked />
+                  <span>Ride Path</span>
+                </label>
+                <label class="viz-settings__checkbox-label">
+                  <input type="checkbox" id="parallaxEnabled" checked />
+                  <span>Parallax Backdrop</span>
+                </label>
+                <label class="viz-settings__checkbox-label">
+                  <input type="checkbox" id="vistaEnabled" checked />
+                  <span>Vista Moments</span>
+                </label>
+              </div>
+
+              <div class="viz-settings__group">
+                <label class="viz-settings__label">
+                  <span>Path Glow</span>
+                  <span class="viz-settings__value" id="pathOpacityValue">18%</span>
+                </label>
+                <input type="range" id="pathOpacity" min="0" max="60" value="18" step="2" class="viz-settings__slider" />
+              </div>
+
+              <div class="viz-settings__group">
+                <label class="viz-settings__label">
+                  <span>Lane Lines</span>
+                  <span class="viz-settings__value" id="pathLaneOpacityValue">28%</span>
+                </label>
+                <input type="range" id="pathLaneOpacity" min="0" max="80" value="28" step="2" class="viz-settings__slider" />
+              </div>
+
+              <div class="viz-settings__group">
+                <label class="viz-settings__label">
+                  <span>Parallax Depth</span>
+                  <span class="viz-settings__value" id="parallaxDepthValue">28%</span>
+                </label>
+                <input type="range" id="parallaxDepth" min="10" max="60" value="28" step="1" class="viz-settings__slider" />
+                <span class="viz-settings__hint">Lower = deeper, Higher = closer</span>
+              </div>
+
+              <div class="viz-settings__group">
+                <label class="viz-settings__label">
+                  <span>Vista Threshold</span>
+                  <span class="viz-settings__value" id="vistaThresholdValue">68%</span>
+                </label>
+                <input type="range" id="vistaThreshold" min="40" max="90" value="68" step="1" class="viz-settings__slider" />
+              </div>
+
+              <div class="viz-settings__group">
+                <label class="viz-settings__label">
+                  <span>Vista Duration</span>
+                  <span class="viz-settings__value" id="vistaDurationValue">2.6s</span>
+                </label>
+                <input type="range" id="vistaDuration" min="10" max="60" value="26" step="1" class="viz-settings__slider" />
+              </div>
+
+              <div class="viz-settings__group">
+                <label class="viz-settings__label">
+                  <span>Vista Cooldown</span>
+                  <span class="viz-settings__value" id="vistaCooldownValue">5.0s</span>
+                </label>
+                <input type="range" id="vistaCooldown" min="10" max="120" value="50" step="5" class="viz-settings__slider" />
               </div>
             </div>
           </details>
@@ -450,6 +545,7 @@
         </div>
 
         <div class="viz-settings__footer">
+          <button class="viz-settings__btn viz-settings__btn--randomize" id="randomizeEffectsBtn" type="button">Randomize</button>
           <button class="viz-settings__btn viz-settings__btn--reset" id="resetEffectsBtn" type="button">Reset All</button>
         </div>
       </div>
@@ -499,7 +595,9 @@
     <script src="./models.js"></script>
     <script src="./themes.js"></script>
     <script src="./track-scenes.js"></script>
+    <script src="./effects-manager.js"></script>
     <script src="./environments.js"></script>
+    <script src="./ios-viz.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>
