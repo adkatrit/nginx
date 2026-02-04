@@ -80,7 +80,9 @@
       boostPad: tc.boostPad,
       centerMarker: tc.centerMarker,
       ambientLight: tc.ambientLight,
-      ambientIntensity: tc.ambientIntensity
+      ambientIntensity: tc.ambientIntensity,
+      // Preserve visualStyle for terrain and other features
+      visualStyle: vs
     };
   }
 
@@ -224,7 +226,6 @@
 
     // Flow gates (soft "targets" on the ride)
     gateEnabled: true,
-    gateRadius: 7.0,
     gateTube: 0.5,
     gateInnerPad: 0.65,          // Shrinks inner radius for leniency
     gateSpawnAhead: 140,         // Distance in front of player
@@ -233,9 +234,15 @@
     gateMinDistance: 120,        // Minimum distance between any gates
     gateSpacingBase: 220,        // Distance between non-beat gates
     gateSpacingQuietBonus: 160,  // Extra spacing when energy is low
-    gateScore: 35,
     gateFlowBoost: 0.09,
-    gateMissFlowPenalty: 0.06
+    gateMissFlowPenalty: 0.06,
+    // Ring size tiers: [radius, score, flowBoost, color tint]
+    gateSizes: [
+      { name: 'large',  radius: 9.0,  score: 25,  flowBoost: 0.06, chance: 0.4 },
+      { name: 'medium', radius: 6.5,  score: 50,  flowBoost: 0.10, chance: 0.4 },
+      { name: 'small',  radius: 4.5,  score: 100, flowBoost: 0.15, chance: 0.2 }
+    ],
+    gateMinRadius: 3.5  // Never smaller than this (ensures player can fit)
   };
 
   // Available racer models
@@ -284,6 +291,7 @@
 
       this.sky = null;
       this.sun = null;
+      this.animatedBackground = null;
       this.particles = null;
       this.groundPlane = null;
       this.player = null;
@@ -372,6 +380,9 @@
 
       // Vista moments (sky/fog/lighting tint)
       this.vista = { timer: 0, duration: CONFIG.vistaDuration, cooldown: 0, intensity: 0 };
+
+      // Terrain system (Perlin noise terrain)
+      this.terrainManager = null;
       this._baseFogColor = null;
       this._baseSkyTop = null;
       this._baseSkyBottom = null;
@@ -521,6 +532,7 @@
 
       this.createSky();
       this.createGroundPlane();
+      this.createTerrain();
       this.createRidePath();
       this.createParallaxBackdrop();
       this.createPlayer();
@@ -623,10 +635,66 @@
       // Cache base colors for vista tinting
       this._baseSkyTop = skyMat.uniforms.topColor.value.clone();
       this._baseSkyBottom = skyMat.uniforms.bottomColor.value.clone();
+
+      // Create animated background from theme
+      this.createAnimatedBackground();
+    }
+
+    createAnimatedBackground() {
+      // Clean up existing background
+      if (this.animatedBackground) {
+        this.animatedBackground.dispose();
+        this.animatedBackground = null;
+      }
+
+      // Check if AnimatedBackground class is available
+      if (typeof window.AnimatedBackground === 'undefined') {
+        console.warn("AnimatedBackground class not available - backgrounds.js may not be loaded");
+        return;
+      }
+
+      // Get background effect config from theme
+      const bgEffect = this.theme.visualStyle?.backgroundEffect;
+      if (!bgEffect) {
+        console.log("No backgroundEffect in theme visualStyle:", this.theme.visualStyle);
+        return;
+      }
+
+      try {
+        // Create animated background with theme config
+        this.animatedBackground = new window.AnimatedBackground(this.THREE, this.scene, {
+          type: bgEffect.type || 'topo',
+          color1: bgEffect.color1,
+          color2: bgEffect.color2,
+          color3: bgEffect.color3,
+          accent: bgEffect.accent,
+          speed: bgEffect.speed || 1.0,
+          intensity: bgEffect.intensity || 0.5,
+          scale: bgEffect.scale || 1.0
+        });
+
+        // Hide the sky sphere so the animated background shows through
+        if (this.sky) {
+          this.sky.visible = false;
+          console.log("Sky sphere hidden for animated background");
+        }
+
+        console.log("Animated background created:", bgEffect.type, bgEffect);
+      } catch (err) {
+        console.error("Error creating animated background:", err);
+      }
     }
 
     createGroundPlane() {
       const THREE = this.THREE;
+
+      // Skip ground plane if terrain is enabled (terrain replaces it)
+      const terrainConfig = this.theme.visualStyle?.terrain;
+      if (terrainConfig && terrainConfig.enabled !== false) {
+        console.log('Ground plane skipped - terrain enabled');
+        return;
+      }
+
       const planeSize = CONFIG.viewDistance * 2;
       const floorPattern = this.theme.floorPattern || 'solid';
       const glowIntensity = this.theme.glowIntensity || 0.5;
@@ -751,6 +819,50 @@
     getPatternId(pattern) {
       const patterns = { solid: 0, grid: 1, stripes: 2, circuit: 3, waves: 4, hexagon: 5 };
       return patterns[pattern] || 0;
+    }
+
+    createTerrain() {
+      // Check if TerrainSystem is available and terrain is enabled
+      if (typeof TerrainSystem === 'undefined') {
+        console.log('Terrain: TerrainSystem not available');
+        return;
+      }
+
+      const terrainConfig = this.theme.visualStyle?.terrain || this.theme.terrain;
+      console.log('Terrain config:', terrainConfig);
+      if (!terrainConfig || terrainConfig.enabled === false) {
+        console.log('Terrain: disabled or no config');
+        return;
+      }
+
+      // Merge terrain config with fog colors from theme
+      const config = {
+        ...terrainConfig,
+        fogColor: this.theme.fogColor,
+        fogNear: this.theme.fogNear,
+        fogFar: this.theme.fogFar,
+        seed: this.trackTitle ? this.hashString(this.trackTitle) : 12345
+      };
+
+      this.terrainManager = new TerrainSystem.TerrainManager(
+        this.THREE,
+        this.scene,
+        config
+      );
+
+      // Initial chunk generation around starting position
+      this.terrainManager.updateChunks(this.lateralPos, this.distance);
+      console.log('Terrain created with', this.terrainManager.chunks.size, 'chunks');
+    }
+
+    hashString(str) {
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash;
+      }
+      return Math.abs(hash);
     }
 
     createRidePath() {
@@ -1300,11 +1412,15 @@
       for (let i = 0; i < sceneryCount; i++) {
         const obj = this.createSceneryObject();
         if (obj) {
-          obj.position.set(
-            (Math.random() - 0.5) * 100,
-            0,
-            chunkZ + Math.random() * CONFIG.chunkSize
-          );
+          const x = (Math.random() - 0.5) * 100;
+          const z = chunkZ + Math.random() * CONFIG.chunkSize;
+          // Place on terrain if available
+          let y = 0;
+          if (this.terrainManager) {
+            const terrainY = this.terrainManager.getTerrainHeightAt(x, z);
+            if (terrainY !== null) y = terrainY;
+          }
+          obj.position.set(x, y, z);
           // Chill Ride: scenery is decorative only (no collisions).
           // Keep objects for visuals, but do not flag them as obstacles.
           if (obj.userData) {
@@ -1938,12 +2054,19 @@
       this.chunks = [];
       this.nextChunkZ = 0;
 
+      // Clear terrain
+      if (this.terrainManager) {
+        this.terrainManager.dispose();
+        this.terrainManager = null;
+      }
+
       // Recreate theme-driven systems
       this.scene.fog = new THREE.Fog(this.theme.fogColor, this.theme.fogNear, this.theme.fogFar);
       this._baseFogColor = new THREE.Color(this.theme.fogColor);
 
       this.createSky();
       this.createGroundPlane();
+      this.createTerrain();
       if (this.world.pathEnabled) this.createRidePath();
       if (this.world.parallaxEnabled) this.createParallaxBackdrop();
       this.createParticles();
@@ -2002,14 +2125,39 @@
       if (!CONFIG.gateEnabled || !this.flowGateGroup) return;
       const THREE = this.THREE;
 
-      const accent = new THREE.Color(this.theme.particleColor || 0xffffff);
-      const radius = CONFIG.gateRadius;
+      // Pick a random size tier based on weighted chances
+      const roll = Math.random();
+      let cumulative = 0;
+      let sizeTier = CONFIG.gateSizes[0];
+      for (const tier of CONFIG.gateSizes) {
+        cumulative += tier.chance;
+        if (roll < cumulative) {
+          sizeTier = tier;
+          break;
+        }
+      }
+
+      // Ensure radius is never smaller than player model + buffer
+      const playerRadius = this.playerCollisionRadius || 1.5;
+      const minAllowedRadius = Math.max(CONFIG.gateMinRadius, playerRadius * 2.5);
+      const radius = Math.max(minAllowedRadius, sizeTier.radius);
       const tube = CONFIG.gateTube;
+
+      // Color-code by size: small=gold, medium=cyan, large=green
+      const baseAccent = new THREE.Color(this.theme.particleColor || 0xffffff);
+      let ringColor;
+      if (sizeTier.name === 'small') {
+        ringColor = new THREE.Color(0xffd700); // Gold for high value
+      } else if (sizeTier.name === 'medium') {
+        ringColor = baseAccent.clone().lerp(new THREE.Color(0xffffff), 0.3);
+      } else {
+        ringColor = new THREE.Color(0x00ff88); // Green for easy
+      }
 
       // Main ring - brighter and thicker
       const geom = new THREE.TorusGeometry(radius, tube, 12, 64);
       const mat = new THREE.MeshBasicMaterial({
-        color: accent.clone().lerp(new THREE.Color(0xffffff), 0.3), // Brighten
+        color: ringColor,
         transparent: true,
         opacity: 0.9,
         blending: THREE.AdditiveBlending,
@@ -2022,7 +2170,7 @@
       // Outer glow ring for visibility
       const glowGeom = new THREE.TorusGeometry(radius, tube * 2.5, 8, 48);
       const glowMat = new THREE.MeshBasicMaterial({
-        color: accent,
+        color: ringColor,
         transparent: true,
         opacity: 0.35,
         blending: THREE.AdditiveBlending,
@@ -2039,7 +2187,15 @@
       const z = this.distance + CONFIG.gateSpawnAhead + Math.random() * CONFIG.gateSpawnJitter;
 
       // Vertical lanes for flying (so you actually have to fly through them)
-      const yMin = CONFIG.flightMinY + 1.0;
+      // Account for terrain height if terrain exists
+      let terrainClearance = 0;
+      if (this.terrainManager) {
+        const terrainY = this.terrainManager.getTerrainHeightAt(x, z);
+        if (terrainY !== null) {
+          terrainClearance = Math.max(0, terrainY + 3.0);
+        }
+      }
+      const yMin = Math.max(CONFIG.flightMinY + 1.0, terrainClearance);
       const yMax = CONFIG.flightMaxY - 1.0;
       const yLanes = [
         yMin + (yMax - yMin) * 0.25,
@@ -2058,7 +2214,10 @@
       gate.userData.flowGate = {
         innerRadius,
         resolved: false,
-        spawnedAt: this.time
+        spawnedAt: this.time,
+        sizeTier: sizeTier.name,
+        score: sizeTier.score,
+        flowBoost: sizeTier.flowBoost
       };
 
       this.flowGateGroup.add(gate);
@@ -2110,7 +2269,9 @@
             this.gateStreak += 1;
             this.maxGateStreak = Math.max(this.maxGateStreak, this.gateStreak);
 
-            this.flow = this._clamp01(this.flow + CONFIG.gateFlowBoost + (this.audioData.beatPulse || 0) * 0.03);
+            // Use gate-specific flowBoost (smaller rings give more flow)
+            const flowBoost = data.flowBoost || CONFIG.gateFlowBoost;
+            this.flow = this._clamp01(this.flow + flowBoost + (this.audioData.beatPulse || 0) * 0.03);
 
             // Combo increases based on consecutive gate hits
             // Every 2 gates in a row increases combo by 1 (up to max)
@@ -2121,12 +2282,13 @@
               this.comboTimer = 0; // Reset decay timer on combo increase
             }
 
-            // Gate reward: score based on current combo multiplier
-            this.score += CONFIG.gateScore * this.combo;
+            // Gate reward: use gate-specific score (smaller rings worth more)
+            const gateScore = data.score || 35;
+            this.score += gateScore * this.combo;
 
             // Trigger gate hit callback for visual feedback
             if (this.onGateHit) {
-              this.onGateHit(this.combo, this.gateStreak, this.combo > oldCombo);
+              this.onGateHit(this.combo, this.gateStreak, this.combo > oldCombo, data.sizeTier);
             }
 
             // Visual burst: brighten and scale gate briefly
@@ -2294,6 +2456,8 @@
       }
 
       this.updateChunks();
+      this.updateTerrain();
+      this.updateTerrainCollision();
       this.updateScenery(bass, mid, energy);
       this.updateParticles(dt, energy, bass);
       this.updateSpeedLines(dt, energy);
@@ -2310,7 +2474,37 @@
         this.scene.fog.far = this.theme.fogFar - energy * 50 * fogMult;
       }
 
+      // Update animated background
+      if (this.animatedBackground) {
+        this.animatedBackground.update(dt, {
+          energy: energy,
+          bass: bass
+        });
+      }
+
       this.updateCamera();
+    }
+
+    updateTerrain() {
+      if (!this.terrainManager) return;
+      this.terrainManager.updateChunks(this.lateralPos, this.distance);
+    }
+
+    updateTerrainCollision() {
+      if (!this.terrainManager) return;
+
+      const terrainHeight = this.terrainManager.getTerrainHeightAt(this.lateralPos, this.distance);
+      if (terrainHeight === null) return;
+
+      const clearance = terrainHeight + (this.theme.visualStyle?.terrain?.collisionMargin || 1.5);
+
+      // Soft push: gently push player above terrain
+      if (this.altitude < clearance) {
+        const pushStrength = 0.3;
+        this.altitude += (clearance - this.altitude) * pushStrength;
+        // Ensure we don't go below terrain
+        this.altitude = Math.max(this.altitude, clearance);
+      }
     }
 
     updateCollisions(dt) {
@@ -2570,6 +2764,15 @@
       this.camera.lookAt(this.lateralPos, this.altitude + 1.8, this.distance + CONFIG.cameraLookAhead);
     }
 
+    renderBackground() {
+      if (this.animatedBackground && this.renderer) {
+        this.animatedBackground.render(this.renderer);
+      } else if (!this.animatedBackground) {
+        // Debug: why no animated background?
+        console.log("renderBackground called but no animatedBackground");
+      }
+    }
+
     dispose() {
       window.removeEventListener('keydown', this._onKeyDown);
       window.removeEventListener('keyup', this._onKeyUp);
@@ -2586,6 +2789,12 @@
       });
       this.chunks = [];
 
+      // Terrain cleanup
+      if (this.terrainManager) {
+        this.terrainManager.dispose();
+        this.terrainManager = null;
+      }
+
       [this.sky, this.groundPlane, this.player, this.particles, this.speedLines].forEach(obj => {
         if (obj) {
           this.scene.remove(obj);
@@ -2595,6 +2804,12 @@
           });
         }
       });
+
+      // Dispose animated background
+      if (this.animatedBackground) {
+        this.animatedBackground.dispose();
+        this.animatedBackground = null;
+      }
 
       // Ride path cleanup
       if (this.pathGroup) {
@@ -2737,6 +2952,12 @@
       if (this.instance) {
         this.instance.dispose();
         this.instance = null;
+      }
+    },
+
+    renderBackground() {
+      if (this.instance) {
+        this.instance.renderBackground();
       }
     },
 

@@ -2818,6 +2818,12 @@ input[type="range"]:active::-moz-range-thumb {
   text-shadow: 0 0 30px #ff5555, 0 0 60px rgba(255, 80, 80, 0.8);
 }
 
+.hit-feedback.gate-hit.gold-ring {
+  font-size: 42px;
+  color: #ffd700;
+  text-shadow: 0 0 25px #ffd700, 0 0 50px rgba(255, 215, 0, 0.8), 0 0 80px rgba(255, 180, 0, 0.5);
+}
+
 @keyframes gate-hit-pop {
   0% {
     opacity: 1;

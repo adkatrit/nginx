@@ -1615,13 +1615,26 @@
     }
   }
 
-  function showGateHitFeedback(combo, streak, comboIncreased) {
+  function showGateHitFeedback(combo, streak, comboIncreased, sizeTier) {
+    // Score values by size tier
+    const scoreBySize = { small: 100, medium: 50, large: 25 };
+    const baseScore = scoreBySize[sizeTier] || 35;
+    const totalScore = baseScore * combo;
+
     // Flash the hit feedback element
     if (hitFeedback) {
-      hitFeedback.textContent = comboIncreased ? `${combo}x COMBO!` : `+${35 * combo}`;
+      if (comboIncreased) {
+        hitFeedback.textContent = `${combo}x COMBO!`;
+      } else if (sizeTier === 'small') {
+        hitFeedback.textContent = `+${totalScore} GOLD!`;
+      } else {
+        hitFeedback.textContent = `+${totalScore}`;
+      }
+
       hitFeedback.className = 'hit-feedback gate-hit';
       if (comboIncreased) hitFeedback.classList.add('combo-up');
       if (combo >= 5) hitFeedback.classList.add('high-combo');
+      if (sizeTier === 'small') hitFeedback.classList.add('gold-ring');
 
       // Force reflow to restart animation
       void hitFeedback.offsetWidth;
@@ -1814,8 +1827,8 @@
         if (!payload) return;
         updateFlowHUD(payload.flow, payload.gateStreak);
       });
-      EnvironmentMode.setGateHitCallback((combo, streak, comboIncreased) => {
-        showGateHitFeedback(combo, streak, comboIncreased);
+      EnvironmentMode.setGateHitCallback((combo, streak, comboIncreased, sizeTier) => {
+        showGateHitFeedback(combo, streak, comboIncreased, sizeTier);
       });
 
       // Update high score display
@@ -2015,7 +2028,16 @@
       }
     }
 
-    threeRenderer.render(threeScene, threeCamera);
+    // Render animated background first (if environment mode is active)
+    if (bgVizMode === "environment" && EnvironmentMode) {
+      EnvironmentMode.renderBackground();
+      // Don't clear color buffer so background shows through
+      threeRenderer.autoClearColor = false;
+      threeRenderer.render(threeScene, threeCamera);
+      threeRenderer.autoClearColor = true;
+    } else {
+      threeRenderer.render(threeScene, threeCamera);
+    }
   }
 
   async function ensureThreeViz() {
