@@ -225,7 +225,7 @@
     // Flow gates (soft "targets" on the ride)
     gateEnabled: true,
     gateRadius: 7.0,
-    gateTube: 0.32,
+    gateTube: 0.5,
     gateInnerPad: 0.65,          // Shrinks inner radius for leniency
     gateSpawnAhead: 140,         // Distance in front of player
     gateSpawnJitter: 30,
@@ -351,6 +351,13 @@
       this.pulsePhase = 0;
       this.ambientLight = null;
       this.directionalLight = null;
+      this.hemiLight = null;
+      this.visual = {
+        fogDensity: 1.0,
+        speedLines: 1.0,
+        colorShift: CONFIG.colorShiftEnabled,
+        screenShake: CONFIG.screenShakeOnHit
+      };
 
       // Ride path overlay (ribbon + lane lines)
       this.pathGroup = null;
@@ -448,6 +455,13 @@
       }
 
       // Vista values are used dynamically; no rebuild needed.
+      const visual = this.effectsConfig?.visual;
+      if (visual) {
+        if (Number.isFinite(visual.fogDensity)) this.visual.fogDensity = Math.max(0, Math.min(2, visual.fogDensity));
+        if (Number.isFinite(visual.speedLines)) this.visual.speedLines = Math.max(0, Math.min(2, visual.speedLines));
+        if (typeof visual.colorShift === 'boolean') this.visual.colorShift = visual.colorShift;
+        if (typeof visual.screenShake === 'boolean') this.visual.screenShake = visual.screenShake;
+      }
     }
 
     init(trackTitle) {
@@ -966,7 +980,7 @@
       this.pathGroup.position.y = Math.max(0.02, this.altitude - 2.6);
 
       // Subtle audio/flow pulse
-      const beat = this.audioData.beatPulse || 0;
+      const beat = this.theme.pulseWithBeat === false ? 0 : (this.audioData.beatPulse || 0);
       if (this.pathRibbonMat?.uniforms) {
         this.pathRibbonMat.uniforms.uTime.value = this.time;
         this.pathRibbonMat.uniforms.uBeat.value = beat;
@@ -1226,8 +1240,8 @@
       this.scene.add(this.ambientLight);
 
       // Hemisphere
-      const hemi = new THREE.HemisphereLight(this.theme.skyTop, this.theme.groundColor, 0.5);
-      this.scene.add(hemi);
+      this.hemiLight = new THREE.HemisphereLight(this.theme.skyTop, this.theme.groundColor, 0.5);
+      this.scene.add(this.hemiLight);
     }
 
     createSpeedLines() {
@@ -1808,6 +1822,147 @@
       return Math.max(0, Math.min(1, v));
     }
 
+    updateFloorPattern(dt, energy, bass) {
+      if (!this.groundPlane || !this.groundPlane.material || !this.groundPlane.material.uniforms) return;
+      const mat = this.groundPlane.material;
+      const pulseEnabled = this.theme.pulseWithBeat !== false;
+      const reactiveEnergy = pulseEnabled ? energy : 0;
+      const reactiveBass = pulseEnabled ? bass : 0;
+      mat.uniforms.time.value = this.time;
+      mat.uniforms.energy.value = Math.min(1, Math.max(0, reactiveEnergy + reactiveBass * 0.4));
+    }
+
+    resetForTrack(trackTitle) {
+      const THREE = this.THREE;
+      this.setTheme(trackTitle);
+      this.trackTitle = trackTitle;
+
+      // Reset movement + run state
+      this.distance = 0;
+      this.lateralPos = 0;
+      this.altitude = CONFIG.flightStartY;
+      this.speed = CONFIG.baseSpeed;
+      this.steerInput = 0;
+      this.verticalInput = 0;
+      this._leftDown = false;
+      this._rightDown = false;
+      this._upDown = false;
+      this._downDown = false;
+      this._shiftDown = false;
+      this.boosting = false;
+      this.boostTimer = 0;
+      this.time = 0;
+
+      this.score = 0;
+      this.combo = 1;
+      this.comboTimer = 0;
+      this.lastHitTime = 0;
+      this.hitCooldown = 0;
+
+      this.flow = CONFIG.flowStart;
+      this.flowMax = this.flow;
+      this.flowSum = 0;
+      this.flowTime = 0;
+      this._lastLateralPos = this.lateralPos;
+      this._lastLateralVel = 0;
+      this._lastAltitude = this.altitude;
+      this._lastAltitudeVel = 0;
+      this._flowHudTimer = 0;
+
+      this.gateStreak = 0;
+      this.maxGateStreak = 0;
+      this.gatesHit = 0;
+      this.gatesMissed = 0;
+      this._lastGateTime = -999;
+      this._nextGateZ = CONFIG.gateSpawnAhead;
+
+      // Clear flow gates
+      if (this.flowGateGroup) {
+        this.scene.remove(this.flowGateGroup);
+        this.flowGateGroup.traverse(child => {
+          if (child.geometry) child.geometry.dispose();
+          if (child.material) child.material.dispose();
+        });
+        this.flowGateGroup = null;
+      }
+      this.flowGates = [];
+      this.flowGateGroup = new THREE.Group();
+      this.flowGateGroup.name = 'flow-gates';
+      this.scene.add(this.flowGateGroup);
+
+      // Clear themed geometry
+      const disposeObject = (obj) => {
+        if (!obj) return;
+        this.scene.remove(obj);
+        obj.traverse(child => {
+          if (child.geometry) child.geometry.dispose();
+          if (child.material) child.material.dispose();
+        });
+      };
+
+      disposeObject(this.sky);
+      this.sky = null;
+      disposeObject(this.groundPlane);
+      this.groundPlane = null;
+      disposeObject(this.particles);
+      this.particles = null;
+      disposeObject(this.pathGroup);
+      this.pathGroup = null;
+      this.pathRibbon = null;
+      this.pathRibbonMat = null;
+      this.pathLaneLines = null;
+      this.pathLaneMat = null;
+      disposeObject(this.parallaxGroup);
+      this.parallaxGroup = null;
+      this.parallaxObjects = [];
+      disposeObject(this.speedLines);
+      this.speedLines = null;
+
+      if (this.ambientLight) this.scene.remove(this.ambientLight);
+      if (this.directionalLight) this.scene.remove(this.directionalLight);
+      if (this.hemiLight) this.scene.remove(this.hemiLight);
+      this.ambientLight = null;
+      this.directionalLight = null;
+      this.hemiLight = null;
+
+      // Clear chunks/scenery
+      this.chunks.forEach(chunk => {
+        chunk.objects.forEach(obj => {
+          this.scene.remove(obj);
+          obj.traverse(child => {
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) child.material.dispose();
+          });
+        });
+      });
+      this.chunks = [];
+      this.nextChunkZ = 0;
+
+      // Recreate theme-driven systems
+      this.scene.fog = new THREE.Fog(this.theme.fogColor, this.theme.fogNear, this.theme.fogFar);
+      this._baseFogColor = new THREE.Color(this.theme.fogColor);
+
+      this.createSky();
+      this.createGroundPlane();
+      if (this.world.pathEnabled) this.createRidePath();
+      if (this.world.parallaxEnabled) this.createParallaxBackdrop();
+      this.createParticles();
+      this.createLighting();
+      this.createSpeedLines();
+      this.createTrail();
+
+      for (let i = 0; i < CONFIG.chunksAhead + CONFIG.chunksBehind; i++) {
+        this.generateChunk();
+      }
+
+      if (this.player) {
+        this.player.position.set(0, this.altitude, 0);
+        this.player.rotation.set(0, 0, 0);
+      }
+
+      this.updateCamera();
+    }
+
     updateFlow(dt) {
       // Approximate smooth flight by measuring lateral + vertical acceleration.
       const safeDt = Math.max(1e-6, dt);
@@ -1847,20 +2002,35 @@
       if (!CONFIG.gateEnabled || !this.flowGateGroup) return;
       const THREE = this.THREE;
 
-      const accent = this.theme.particleColor || 0xffffff;
+      const accent = new THREE.Color(this.theme.particleColor || 0xffffff);
       const radius = CONFIG.gateRadius;
       const tube = CONFIG.gateTube;
-      const geom = new THREE.TorusGeometry(radius, tube, 10, 48);
+
+      // Main ring - brighter and thicker
+      const geom = new THREE.TorusGeometry(radius, tube, 12, 64);
       const mat = new THREE.MeshBasicMaterial({
-        color: accent,
+        color: accent.clone().lerp(new THREE.Color(0xffffff), 0.3), // Brighten
         transparent: true,
-        opacity: 0.72,
+        opacity: 0.9,
         blending: THREE.AdditiveBlending,
         depthWrite: false
       });
 
       const gate = new THREE.Mesh(geom, mat);
       gate.name = 'flow-gate';
+
+      // Outer glow ring for visibility
+      const glowGeom = new THREE.TorusGeometry(radius, tube * 2.5, 8, 48);
+      const glowMat = new THREE.MeshBasicMaterial({
+        color: accent,
+        transparent: true,
+        opacity: 0.35,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      const glowRing = new THREE.Mesh(glowGeom, glowMat);
+      glowRing.name = 'flow-gate-glow';
+      gate.add(glowRing);
 
       // Favor a few soft "lanes" plus a little randomness
       const lanes = [-14, 0, 14];
@@ -1912,6 +2082,17 @@
         }
 
         const dz = gate.position.z - playerZ;
+
+        // Pulse animation for visibility (before resolution)
+        if (!data.resolved && gate.material) {
+          const pulse = 1 + Math.sin(this.time * 4 + data.spawnedAt) * 0.15;
+          gate.scale.setScalar(pulse);
+          // Also pulse the glow ring if present
+          const glow = gate.children.find(c => c.name === 'flow-gate-glow');
+          if (glow && glow.material) {
+            glow.material.opacity = 0.25 + Math.sin(this.time * 4 + data.spawnedAt) * 0.15;
+          }
+        }
 
         // Resolve once we pass the gate plane
         if (!data.resolved && dz < 0) {
@@ -2124,8 +2305,9 @@
       this.emitFlowUpdate(dt);
 
       if (this.scene.fog) {
-        this.scene.fog.near = this.theme.fogNear - energy * 10;
-        this.scene.fog.far = this.theme.fogFar - energy * 50;
+        const fogMult = this.visual?.fogDensity ?? 1.0;
+        this.scene.fog.near = this.theme.fogNear - energy * 10 * fogMult;
+        this.scene.fog.far = this.theme.fogFar - energy * 50 * fogMult;
       }
 
       this.updateCamera();
@@ -2244,6 +2426,10 @@
     }
 
     updateScenery(bass, mid, energy) {
+      if (this.theme.pulseWithBeat === false) {
+        bass = 0;
+        mid = 0;
+      }
       this.chunks.forEach(chunk => {
         chunk.objects.forEach(obj => {
           if (obj.userData.swayPhase !== undefined) {
@@ -2285,10 +2471,11 @@
 
       const positions = this.speedLines.geometry.attributes.position.array;
       const velocities = this.speedLines.userData.velocities;
+      const intensity = this.visual?.speedLines ?? 1.0;
 
       // Only show speed lines at high speed
       const speedRatio = (this.speed - CONFIG.speedLinesMinSpeed) / (CONFIG.maxSpeed - CONFIG.speedLinesMinSpeed);
-      const opacity = Math.max(0, Math.min(0.8, speedRatio * (0.3 + energy * 0.5)));
+      const opacity = Math.max(0, Math.min(0.8, speedRatio * (0.3 + energy * 0.5) * intensity));
       this.speedLines.material.opacity = opacity;
 
       if (opacity <= 0) return;
@@ -2325,6 +2512,20 @@
     updateLighting(dt, bass, energy) {
       if (!CONFIG.pulseEnabled) return;
 
+      const glowIntensity = this.theme.glowIntensity || 0.5;
+      const ambientIntensity = this.theme.ambientIntensity || 0.4;
+      const baseDirectionalIntensity = 1.0 + glowIntensity * 0.4;
+
+      if (this.theme.pulseWithBeat === false) {
+        if (this.ambientLight) {
+          this.ambientLight.intensity = ambientIntensity;
+        }
+        if (this.directionalLight) {
+          this.directionalLight.intensity = baseDirectionalIntensity;
+        }
+        return;
+      }
+
       this.pulsePhase += dt * 2;
       const pulse = 1 + Math.sin(this.pulsePhase) * CONFIG.pulseIntensity * bass;
 
@@ -2336,14 +2537,14 @@
       }
 
       // Color shift based on speed/combo
-      if (CONFIG.colorShiftEnabled && this.combo > 1) {
+      if (this.visual?.colorShift && this.combo > 1) {
         this.colorShiftHue += dt * CONFIG.colorShiftSpeed * (this.combo / CONFIG.maxCombo);
         if (this.colorShiftHue > 1) this.colorShiftHue -= 1;
       }
     }
 
     triggerScreenShake() {
-      if (!CONFIG.screenShakeOnHit) return;
+      if (!this.visual?.screenShake) return;
       this.cameraShake.timer = CONFIG.cameraShakeDuration;
     }
 
@@ -2490,8 +2691,7 @@
     changeTrack(trackTitle) {
       if (this.currentTrack !== trackTitle && this.instance) {
         console.log("Environment: changing track to", trackTitle);
-        // For now just update theme - could do full rebuild if needed
-        this.instance.setTheme(trackTitle);
+        this.instance.resetForTrack(trackTitle);
       }
       this.currentTrack = trackTitle;
     },
