@@ -1864,13 +1864,28 @@
 
             this.flow = this._clamp01(this.flow + CONFIG.gateFlowBoost + (this.audioData.beatPulse || 0) * 0.03);
 
-            // Gate reward: small score bump + gently helps combo progression.
-            this.score += CONFIG.gateScore * Math.max(1, this.combo);
-            this.comboTimer = Math.max(0, this.comboTimer - 0.35);
+            // Combo increases based on consecutive gate hits
+            // Every 2 gates in a row increases combo by 1 (up to max)
+            const comboFromStreak = Math.min(CONFIG.maxCombo, 1 + Math.floor(this.gateStreak / 2));
+            if (comboFromStreak > this.combo) {
+              this.combo = comboFromStreak;
+              this.comboTimer = 0; // Reset decay timer on combo increase
+            }
+
+            // Gate reward: score based on current combo multiplier
+            this.score += CONFIG.gateScore * this.combo;
           } else {
             this.gatesMissed += 1;
             this.gateStreak = 0;
+            // Missing a gate resets combo
+            this.combo = 1;
+            this.comboTimer = 0;
             this.flow = this._clamp01(this.flow - CONFIG.gateMissFlowPenalty);
+          }
+
+          // Update score display immediately on gate hit/miss
+          if (this.onScoreChange) {
+            this.onScoreChange(Math.floor(this.score), this.combo);
           }
 
           // Visual: fade quickly after resolve
@@ -2100,14 +2115,6 @@
       // Accumulate score based on speed and combo
       const pointsPerSecond = 10 * this.combo * (this.speed / CONFIG.baseSpeed);
       this.score += pointsPerSecond * dt;
-
-      // Build combo over time without hitting
-      const flowBoost = 0.35 + this.flow * 1.15; // 0.35..1.5
-      this.comboTimer += dt * flowBoost;
-      if (this.comboTimer >= CONFIG.comboBuildTime) {  // Every N seconds (flow-weighted) without hit
-        this.combo = Math.min(this.combo + 1, 10);  // Max 10x combo
-        this.comboTimer = 0;
-      }
 
       // Trigger callback
       if (this.onScoreChange) {

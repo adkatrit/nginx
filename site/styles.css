@@ -1644,8 +1644,8 @@ input[type="range"]:active::-moz-range-thumb {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 90px;
-  padding: 0 24px;
+  height: 72px;
+  padding: 0 20px;
   padding-bottom: env(safe-area-inset-bottom, 0);
 
   display: flex;
@@ -1681,8 +1681,8 @@ input[type="range"]:active::-moz-range-thumb {
 }
 
 .control-bar__cover {
-  width: 56px;
-  height: 56px;
+  width: 48px;
+  height: 48px;
   border-radius: 6px;
   background: linear-gradient(135deg,
     rgba(var(--wa-accent-rgb), 0.2),
@@ -1877,11 +1877,9 @@ input[type="range"]:active::-moz-range-thumb {
   background: #f7f7f7;
 }
 
-/* Playlist button */
+/* Playlist button - hidden */
 .ctrl-btn--playlist {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
+  display: none;
 }
 
 /* ============================================
@@ -2143,9 +2141,9 @@ input[type="range"]:active::-moz-range-thumb {
   .control-bar {
     height: auto;
     flex-direction: column;
-    padding: 16px 16px;
-    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0));
-    gap: 12px;
+    padding: 12px 16px;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0));
+    gap: 8px;
   }
 
   .control-bar__track {
@@ -2154,9 +2152,19 @@ input[type="range"]:active::-moz-range-thumb {
     justify-content: center;
   }
 
+  /* Hide settings button on mobile */
+  #vizSettingsBtn {
+    display: none;
+  }
+
   .control-bar__main {
     width: 100%;
     max-width: none;
+    gap: 6px;
+  }
+
+  .control-bar__buttons {
+    gap: 4px;
   }
 
   .control-bar__seek {
@@ -2201,18 +2209,18 @@ input[type="range"]:active::-moz-range-thumb {
 
 @media (max-width: 480px) {
   .control-bar {
-    padding: 12px 12px;
-    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0));
-    gap: 10px;
+    padding: 10px 12px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0));
+    gap: 6px;
   }
 
   .control-bar__track {
-    gap: 10px;
+    gap: 8px;
   }
 
   .control-bar__cover {
-    width: 44px;
-    height: 44px;
+    width: 40px;
+    height: 40px;
   }
 
   .control-bar__title {
@@ -2224,18 +2232,20 @@ input[type="range"]:active::-moz-range-thumb {
   }
 
   .ctrl-btn {
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
   }
 
   .ctrl-btn--play {
-    width: 44px;
-    height: 44px;
+    width: 40px;
+    height: 40px;
+    font-size: 16px;
   }
 
   .ctrl-btn--sm {
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
     font-size: 10px;
   }
 
@@ -2244,8 +2254,9 @@ input[type="range"]:active::-moz-range-thumb {
     gap: 8px;
   }
 
-  /* Hide viz/theme selectors on small mobile */
-  .control-bar .select-mini {
+  /* Hide viz/theme selectors and settings on mobile */
+  .control-bar .select-mini,
+  #vizSettingsBtn {
     display: none;
   }
 
