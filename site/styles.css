@@ -1641,7 +1641,7 @@ input[type="range"]:active::-moz-range-thumb {
 
 .control-bar {
   position: fixed;
-  bottom: 0;
+  bottom: 10px;
   left: 0;
   right: 0;
   height: 72px;
@@ -1742,29 +1742,29 @@ input[type="range"]:active::-moz-range-thumb {
   gap: 8px;
 }
 
-/* Control buttons */
+/* Control buttons - icon only style */
 .ctrl-btn {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border: none;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: 18px;
   transition: all 0.15s ease-out;
 }
 
 .ctrl-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
-  transform: scale(1.05);
+  color: #fff;
+  transform: scale(1.15);
 }
 
 .ctrl-btn:active {
-  transform: scale(0.95);
+  transform: scale(0.9);
 }
 
 .ctrl-btn:focus-visible {
@@ -1773,24 +1773,30 @@ input[type="range"]:active::-moz-range-thumb {
 }
 
 .ctrl-btn--sm {
-  width: 32px;
-  height: 32px;
-  font-size: 12px;
+  width: 28px;
+  height: 28px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.5);
 }
 
+.ctrl-btn--sm:hover {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* Play button - keeps circular background */
 .ctrl-btn--play {
-  width: 48px;
-  height: 48px;
+  width: 52px;
+  height: 52px;
   background: linear-gradient(135deg, var(--wa-accent), var(--wa-accent-dim));
   color: #000;
-  font-size: 18px;
+  font-size: 20px;
   box-shadow: 0 4px 20px rgba(var(--wa-accent-rgb), 0.35);
 }
 
 .ctrl-btn--play:hover {
   background: linear-gradient(135deg, var(--wa-accent-hi), var(--wa-accent));
   box-shadow: 0 6px 28px rgba(var(--wa-accent-rgb), 0.5);
-  transform: scale(1.08);
+  transform: scale(1.1);
 }
 
 .ctrl-btn--play.is-playing {
@@ -1799,7 +1805,6 @@ input[type="range"]:active::-moz-range-thumb {
 
 .ctrl-btn[aria-pressed="true"] {
   color: var(--wa-accent);
-  background: rgba(var(--wa-accent-rgb), 0.15);
 }
 
 /* Seek slider row */
@@ -2142,7 +2147,7 @@ input[type="range"]:active::-moz-range-thumb {
     height: auto;
     flex-direction: column;
     padding: 12px 16px;
-    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0));
+    padding-bottom: calc(24px + env(safe-area-inset-bottom, 0));
     gap: 8px;
   }
 
@@ -2155,6 +2160,11 @@ input[type="range"]:active::-moz-range-thumb {
   /* Hide settings button on mobile */
   #vizSettingsBtn {
     display: none;
+  }
+
+  /* Hide score HUD on mobile */
+  .score-hud {
+    display: none !important;
   }
 
   .control-bar__main {
@@ -2210,7 +2220,7 @@ input[type="range"]:active::-moz-range-thumb {
 @media (max-width: 480px) {
   .control-bar {
     padding: 10px 12px;
-    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0));
+    padding-bottom: calc(20px + env(safe-area-inset-bottom, 0));
     gap: 6px;
   }
 
@@ -2234,19 +2244,19 @@ input[type="range"]:active::-moz-range-thumb {
   .ctrl-btn {
     width: 32px;
     height: 32px;
-    font-size: 14px;
+    font-size: 16px;
   }
 
   .ctrl-btn--play {
-    width: 40px;
-    height: 40px;
-    font-size: 16px;
+    width: 44px;
+    height: 44px;
+    font-size: 18px;
   }
 
   .ctrl-btn--sm {
     width: 26px;
     height: 26px;
-    font-size: 10px;
+    font-size: 12px;
   }
 
   .control-bar__right {
@@ -2514,6 +2524,31 @@ input[type="range"]:active::-moz-range-thumb {
   color: rgba(255, 255, 255, 0.85);
 }
 
+.viz-settings__trigger-btn {
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, rgba(60, 255, 107, 0.15), rgba(0, 200, 255, 0.15));
+  border: 1px solid rgba(60, 255, 107, 0.3);
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.viz-settings__trigger-btn:hover {
+  background: linear-gradient(135deg, rgba(60, 255, 107, 0.25), rgba(0, 200, 255, 0.25));
+  border-color: rgba(60, 255, 107, 0.5);
+  transform: translateY(-1px);
+}
+
+.viz-settings__trigger-btn:active {
+  transform: translateY(0);
+  background: linear-gradient(135deg, rgba(60, 255, 107, 0.35), rgba(0, 200, 255, 0.35));
+}
+
 .viz-settings__btn--randomize {
   color: #fff;
   background: linear-gradient(135deg, rgba(138, 43, 226, 0.4), rgba(255, 105, 180, 0.4));
@@ -2657,7 +2692,7 @@ input[type="range"]:active::-moz-range-thumb {
 }
 
 .combo-display.pulse {
-  transform: scale(1.2);
+  transform: scale(1.25);
 }
 
 .combo-value {
@@ -2665,6 +2700,137 @@ input[type="range"]:active::-moz-range-thumb {
   font-weight: bold;
   color: #ffcc00;
   text-shadow: 0 0 10px #ffcc00;
+  transition: all 0.15s ease;
+}
+
+/* Combo intensity levels - progressively more exciting */
+.combo-display.combo-low {
+  border-color: rgba(255, 200, 0, 0.4);
+  box-shadow: 0 0 15px rgba(255, 200, 0, 0.2);
+}
+
+.combo-display.combo-low .combo-value {
+  font-size: 32px;
+  color: #ffdd00;
+  text-shadow: 0 0 15px #ffdd00;
+}
+
+.combo-display.combo-mid {
+  border-color: rgba(255, 150, 0, 0.6);
+  box-shadow: 0 0 20px rgba(255, 150, 0, 0.35);
+  animation: combo-pulse-mid 0.8s ease-in-out infinite;
+}
+
+.combo-display.combo-mid .combo-value {
+  font-size: 36px;
+  color: #ff9900;
+  text-shadow: 0 0 20px #ff9900, 0 0 40px rgba(255, 150, 0, 0.5);
+}
+
+.combo-display.combo-high {
+  border-color: rgba(255, 80, 80, 0.8);
+  box-shadow: 0 0 30px rgba(255, 80, 80, 0.5), 0 0 60px rgba(255, 80, 80, 0.25);
+  animation: combo-pulse-high 0.5s ease-in-out infinite;
+}
+
+.combo-display.combo-high .combo-value {
+  font-size: 42px;
+  color: #ff5555;
+  text-shadow: 0 0 25px #ff5555, 0 0 50px rgba(255, 80, 80, 0.7);
+}
+
+.combo-display.combo-max {
+  border-color: rgba(255, 50, 255, 1);
+  box-shadow: 0 0 40px rgba(255, 50, 255, 0.7), 0 0 80px rgba(255, 50, 255, 0.4), inset 0 0 20px rgba(255, 50, 255, 0.2);
+  animation: combo-pulse-max 0.35s ease-in-out infinite, combo-rainbow 2s linear infinite;
+  background: rgba(255, 50, 255, 0.15);
+}
+
+.combo-display.combo-max .combo-value {
+  font-size: 48px;
+  color: #ff00ff;
+  text-shadow: 0 0 30px #ff00ff, 0 0 60px #ff00ff, 0 0 90px rgba(255, 0, 255, 0.8);
+  animation: combo-text-glow 0.25s ease-in-out infinite alternate;
+}
+
+@keyframes combo-pulse-mid {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+}
+
+@keyframes combo-pulse-high {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+
+@keyframes combo-pulse-max {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+@keyframes combo-text-glow {
+  0% { text-shadow: 0 0 30px #ff00ff, 0 0 60px #ff00ff; }
+  100% { text-shadow: 0 0 40px #ff00ff, 0 0 80px #ff00ff, 0 0 120px rgba(255, 0, 255, 0.9); }
+}
+
+@keyframes combo-rainbow {
+  0% { border-color: rgba(255, 50, 255, 1); }
+  33% { border-color: rgba(50, 255, 255, 1); }
+  66% { border-color: rgba(255, 255, 50, 1); }
+  100% { border-color: rgba(255, 50, 255, 1); }
+}
+
+/* Gate hit feedback */
+.hit-feedback.gate-hit {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  right: auto;
+  bottom: auto;
+  width: auto;
+  height: auto;
+  transform: translate(-50%, -50%) scale(0.5);
+  font-size: 32px;
+  font-weight: bold;
+  font-family: var(--wa-mono);
+  color: #00ff88;
+  text-shadow: 0 0 20px #00ff88, 0 0 40px rgba(0, 255, 136, 0.5);
+  background: transparent;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 150;
+  transition: none;
+}
+
+.hit-feedback.gate-hit.show {
+  animation: gate-hit-pop 0.4s ease-out forwards;
+}
+
+.hit-feedback.gate-hit.combo-up {
+  font-size: 48px;
+  color: #ffcc00;
+  text-shadow: 0 0 25px #ffcc00, 0 0 50px rgba(255, 200, 0, 0.7);
+}
+
+.hit-feedback.gate-hit.high-combo {
+  font-size: 56px;
+  color: #ff5555;
+  text-shadow: 0 0 30px #ff5555, 0 0 60px rgba(255, 80, 80, 0.8);
+}
+
+@keyframes gate-hit-pop {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0.5);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -60%) scale(1.2);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -80%) scale(1);
+  }
 }
 
 .combo-label {

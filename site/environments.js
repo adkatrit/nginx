@@ -1,136 +1,107 @@
 /**
  * Themed Environments - Different visual worlds for each track
- * Automatically selects environment based on track theme
+ * Uses TRACK_THEMES from themes.js as the single source of truth
  */
 
 (function() {
   'use strict';
 
-  // Environment configurations for each track
-  const ENVIRONMENT_THEMES = {
-    "Data Tide": {
-      type: "ocean",
-      groundColor: 0x001a2c,
-      skyTop: 0x000510,
-      skyBottom: 0x001830,
-      fogColor: 0x000810,
-      fogNear: 50,
-      fogFar: 600,
-      scenery: ["coral", "seaweed", "fish"],
-      particleColor: 0x00bfff,
-      particleType: "bubbles"
-    },
-    "Soft Systems": {
-      type: "meadow",
-      groundColor: 0x1a3020,
-      skyTop: 0x87ceeb,
-      skyBottom: 0xc8e6c9,
-      fogColor: 0xc8e6c9,
-      fogNear: 80,
-      fogFar: 700,
-      scenery: ["flowers", "grass", "butterflies"],
-      particleColor: 0x98fb98,
-      particleType: "petals"
-    },
-    "Beast Mode": {
-      type: "volcanic",
-      groundColor: 0x1a0808,
-      skyTop: 0x0a0000,
-      skyBottom: 0x1a0505,
-      fogColor: 0x0a0000,
-      fogNear: 40,
-      fogFar: 500,
-      scenery: ["rocks", "lava", "flames"],
-      particleColor: 0xff4400,
-      particleType: "embers"
-    },
-    "Dreams Bleed Into Dashboards": {
-      type: "cyber",
-      groundColor: 0x0a0015,
-      skyTop: 0x05000a,
-      skyBottom: 0x150020,
-      fogColor: 0x08000f,
-      fogNear: 60,
-      fogFar: 550,
-      scenery: ["towers", "holograms", "grids"],
-      particleColor: 0xff00ff,
-      particleType: "data"
-    },
-    "Signal Integrity": {
-      type: "ice",
-      groundColor: 0x1a2a3a,
-      skyTop: 0x87ceeb,
-      skyBottom: 0xe0f7fa,
-      fogColor: 0xe0f7fa,
-      fogNear: 70,
-      fogFar: 800,
-      scenery: ["crystals", "icebergs", "snowdrifts"],
-      particleColor: 0x88ffff,
-      particleType: "snow"
-    },
-    "Gi Mi Di Reins": {
-      type: "savanna",
-      groundColor: 0x8b7355,
-      skyTop: 0xff8c00,
-      skyBottom: 0xffd700,
-      fogColor: 0xffecd2,
-      fogNear: 80,
-      fogFar: 800,
-      scenery: ["acacias", "grass", "rocks"],
-      particleColor: 0xffd700,
-      particleType: "dust"
-    },
-    "Trade You My Hands": {
-      type: "blossom",
-      groundColor: 0x2d1f1f,
-      skyTop: 0xffb6c1,
-      skyBottom: 0xffc0cb,
-      fogColor: 0xffc0cb,
-      fogNear: 70,
-      fogFar: 650,
-      scenery: ["cherrytrees", "petals", "lanterns"],
-      particleColor: 0xffb6c1,
-      particleType: "petals"
-    },
-    "Push Harder": {
-      type: "industrial",
-      groundColor: 0x1c1c1c,
-      skyTop: 0x2a2020,
-      skyBottom: 0x100808,
-      fogColor: 0x100808,
-      fogNear: 50,
-      fogFar: 500,
-      scenery: ["pipes", "girders", "sparks"],
-      particleColor: 0xff4500,
-      particleType: "sparks"
-    },
-    "The Last Dragon": {
-      type: "ancient",
-      groundColor: 0x1a1025,
-      skyTop: 0x030208,
-      skyBottom: 0x100818,
-      fogColor: 0x050310,
-      fogNear: 60,
-      fogFar: 600,
-      scenery: ["ruins", "pillars", "torches"],
-      particleColor: 0xff6600,
-      particleType: "embers"
-    },
-    "Who's Learning Who": {
-      type: "matrix",
-      groundColor: 0x000800,
-      skyTop: 0x000400,
-      skyBottom: 0x001000,
-      fogColor: 0x001000,
-      fogNear: 50,
-      fogFar: 550,
-      scenery: ["nodes", "datastreams", "grids"],
-      particleColor: 0x00ff00,
-      particleType: "code"
-    }
+  // Environment type mapping based on visualStyle patterns
+  const TYPE_MAP = {
+    "ocean": { scenery: ["coral", "seaweed", "fish"] },
+    "meadow": { scenery: ["flowers", "grass", "butterflies"] },
+    "volcanic": { scenery: ["rocks", "lava", "flames"] },
+    "cyber": { scenery: ["towers", "holograms", "grids"] },
+    "ice": { scenery: ["crystals", "icebergs", "snowdrifts"] },
+    "savanna": { scenery: ["acacias", "grass", "rocks"] },
+    "blossom": { scenery: ["cherrytrees", "petals", "lanterns"] },
+    "industrial": { scenery: ["pipes", "girders", "sparks"] },
+    "ancient": { scenery: ["ruins", "pillars", "torches"] },
+    "matrix": { scenery: ["nodes", "datastreams", "grids"] },
+    "desert": { scenery: ["rocks", "cacti"] }
   };
 
-  // Default desert config
+  // Infer environment type from theme name or visualStyle
+  function inferEnvironmentType(themeName, theme) {
+    const nameMap = {
+      "Data Tide": "ocean",
+      "Soft Systems": "meadow",
+      "Beast Mode": "volcanic",
+      "Dreams Bleed Into Dashboards": "cyber",
+      "Signal Integrity": "ice",
+      "Gi Mi Di Reins": "savanna",
+      "Trade You My Hands": "blossom",
+      "Push Harder": "industrial",
+      "The Last Dragon": "ancient",
+      "Who's Learning Who": "matrix"
+    };
+    return nameMap[themeName] || "desert";
+  }
+
+  /**
+   * Convert a TRACK_THEMES entry to environment format
+   * This allows themes.js to be the single source of truth
+   */
+  function convertThemeToEnv(themeName, theme) {
+    if (!theme) return null;
+
+    const tc = theme.trackColors || {};
+    const vs = theme.visualStyle || {};
+    const type = inferEnvironmentType(themeName, theme);
+
+    return {
+      type: type,
+      // Ground/floor color from trackColors
+      groundColor: tc.floorPrimary || 0x1a1a2a,
+      // Sky gradient from visualStyle or trackColors
+      skyTop: vs.skyGradient ? vs.skyGradient[0] : 0x000510,
+      skyBottom: vs.skyGradient ? vs.skyGradient[1] : 0x001830,
+      // Fog settings from trackColors
+      fogColor: tc.fogColor || 0x000810,
+      fogNear: tc.fogNear || 50,
+      fogFar: tc.fogFar || 600,
+      // Scenery based on type
+      scenery: TYPE_MAP[type]?.scenery || ["rocks"],
+      // Particle color from spotlight or track accent
+      particleColor: theme.spotlightColor || tc.wallAccent || 0xffffff,
+      // Particle type from visualStyle
+      particleType: vs.particleType || "dust",
+      // Additional properties from themes.js
+      wallStyle: vs.wallStyle || "solid",
+      floorPattern: vs.floorPattern || "solid",
+      glowIntensity: vs.glowIntensity || 0.5,
+      particleDensity: vs.particleDensity || 0.4,
+      pulseWithBeat: vs.pulseWithBeat !== false,
+      // Track colors for potential future use
+      floorSecondary: tc.floorSecondary,
+      wallBase: tc.wallBase,
+      wallAccent: tc.wallAccent,
+      obstacle: tc.obstacle,
+      boostPad: tc.boostPad,
+      centerMarker: tc.centerMarker,
+      ambientLight: tc.ambientLight,
+      ambientIntensity: tc.ambientIntensity
+    };
+  }
+
+  /**
+   * Get environment config for a track title
+   * First checks TRACK_THEMES (from themes.js), then falls back to default
+   */
+  function getEnvironmentTheme(trackTitle) {
+    const TRACK_THEMES = window.TRACK_THEMES || {};
+    const theme = TRACK_THEMES[trackTitle];
+
+    if (theme) {
+      const envTheme = convertThemeToEnv(trackTitle, theme);
+      console.log("Environment theme converted from themes.js:", trackTitle, envTheme.type);
+      return envTheme;
+    }
+
+    return { ...DEFAULT_ENV };
+  }
+
+  // Default config when no theme matches
   const DEFAULT_ENV = {
     type: "desert",
     groundColor: 0xd4a574,
@@ -141,7 +112,12 @@
     fogFar: 800,
     scenery: ["rocks", "cacti"],
     particleColor: 0xd4a574,
-    particleType: "dust"
+    particleType: "dust",
+    wallStyle: "solid",
+    floorPattern: "solid",
+    glowIntensity: 0.5,
+    particleDensity: 0.4,
+    pulseWithBeat: true
   };
 
   const CONFIG = {
@@ -246,14 +222,15 @@
     flowFallRate: 0.55,
     flowCollisionPenalty: 0.18,
 
-    // Flow gates (soft “targets” on the ride)
+    // Flow gates (soft "targets" on the ride)
     gateEnabled: true,
     gateRadius: 7.0,
     gateTube: 0.32,
     gateInnerPad: 0.65,          // Shrinks inner radius for leniency
     gateSpawnAhead: 140,         // Distance in front of player
     gateSpawnJitter: 30,
-    gateBeatCooldown: 0.28,      // Minimum seconds between beat gates
+    gateBeatCooldown: 0.4,       // Minimum seconds between beat gates
+    gateMinDistance: 120,        // Minimum distance between any gates
     gateSpacingBase: 220,        // Distance between non-beat gates
     gateSpacingQuietBonus: 160,  // Extra spacing when energy is low
     gateScore: 35,
@@ -342,6 +319,7 @@
       this.trackTitle = null;
       this.onScoreChange = null;  // Callback for score updates
       this.onHit = null;  // Callback for collision
+      this.onGateHit = null;  // Callback for gate hit (combo, streak, comboIncreased)
 
       // Chill Ride "Flow" system
       this.flow = CONFIG.flowStart;
@@ -551,7 +529,7 @@
     }
 
     setTheme(trackTitle) {
-      this.theme = ENVIRONMENT_THEMES[trackTitle] || { ...DEFAULT_ENV };
+      this.theme = getEnvironmentTheme(trackTitle);
       console.log("Environment theme set:", this.theme.type, "for", trackTitle);
     }
 
@@ -563,26 +541,63 @@
         uniforms: {
           topColor: { value: new THREE.Color(this.theme.skyTop) },
           bottomColor: { value: new THREE.Color(this.theme.skyBottom) },
+          horizonColor: { value: new THREE.Color(0xff6030) },  // Warm sunset orange
+          sunGlowColor: { value: new THREE.Color(0xffcc66) },  // Golden sun glow
           offset: { value: 10 },
-          exponent: { value: 0.4 }
+          exponent: { value: 0.4 },
+          sunsetIntensity: { value: 0.7 },
+          sunPosition: { value: new THREE.Vector3(0, 0.05, -1).normalize() }
         },
         vertexShader: `
           varying vec3 vWorldPosition;
+          varying vec3 vDirection;
           void main() {
             vec4 worldPosition = modelMatrix * vec4(position, 1.0);
             vWorldPosition = worldPosition.xyz;
+            vDirection = normalize(position);
             gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
           }
         `,
         fragmentShader: `
           uniform vec3 topColor;
           uniform vec3 bottomColor;
+          uniform vec3 horizonColor;
+          uniform vec3 sunGlowColor;
           uniform float offset;
           uniform float exponent;
+          uniform float sunsetIntensity;
+          uniform vec3 sunPosition;
           varying vec3 vWorldPosition;
+          varying vec3 vDirection;
+
           void main() {
             float h = normalize(vWorldPosition + offset).y;
-            gl_FragColor = vec4(mix(bottomColor, topColor, max(pow(max(h, 0.0), exponent), 0.0)), 1.0);
+
+            // Base sky gradient
+            vec3 skyColor = mix(bottomColor, topColor, max(pow(max(h, 0.0), exponent), 0.0));
+
+            // Sunset band at horizon - strongest near y=0
+            float horizonFactor = 1.0 - smoothstep(0.0, 0.35, abs(h));
+            horizonFactor = pow(horizonFactor, 1.5);
+
+            // Add warm horizon glow
+            vec3 sunsetColor = mix(horizonColor, sunGlowColor, smoothstep(-0.1, 0.15, h));
+            skyColor = mix(skyColor, sunsetColor, horizonFactor * sunsetIntensity);
+
+            // Sun glow - brighten area around sun position
+            float sunDot = max(0.0, dot(vDirection, sunPosition));
+            float sunGlow = pow(sunDot, 8.0) * 0.6;
+            float sunCore = pow(sunDot, 64.0) * 1.5;
+
+            // Add sun glow and core
+            skyColor += sunGlowColor * sunGlow * sunsetIntensity;
+            skyColor += vec3(1.0, 0.95, 0.8) * sunCore * sunsetIntensity;
+
+            // Slight purple tint at the top during sunset
+            float purpleTint = smoothstep(0.3, 0.8, h) * sunsetIntensity * 0.2;
+            skyColor = mix(skyColor, vec3(0.4, 0.2, 0.5), purpleTint);
+
+            gl_FragColor = vec4(skyColor, 1.0);
           }
         `,
         side: THREE.BackSide
@@ -598,18 +613,130 @@
 
     createGroundPlane() {
       const THREE = this.THREE;
-
       const planeSize = CONFIG.viewDistance * 2;
-      const planeGeom = new THREE.PlaneGeometry(planeSize, planeSize, 32, 32);
-      const planeMat = new THREE.MeshStandardMaterial({
-        color: this.theme.groundColor,
-        roughness: 0.95,
-        metalness: 0
-      });
+      const floorPattern = this.theme.floorPattern || 'solid';
+      const glowIntensity = this.theme.glowIntensity || 0.5;
+      const baseColor = new THREE.Color(this.theme.groundColor);
+      const accentColor = new THREE.Color(this.theme.particleColor || 0xffffff);
+
+      // Create geometry with more subdivisions for patterns
+      const segments = floorPattern === 'solid' ? 32 : 128;
+      const planeGeom = new THREE.PlaneGeometry(planeSize, planeSize, segments, segments);
+
+      // Choose material based on floor pattern
+      let planeMat;
+      if (floorPattern === 'solid') {
+        planeMat = new THREE.MeshStandardMaterial({
+          color: this.theme.groundColor,
+          roughness: 0.95,
+          metalness: 0
+        });
+      } else {
+        // Shader-based patterns for grid, stripes, circuit, waves, hexagon
+        planeMat = new THREE.ShaderMaterial({
+          uniforms: {
+            baseColor: { value: baseColor },
+            accentColor: { value: accentColor },
+            glowIntensity: { value: glowIntensity },
+            time: { value: 0 },
+            pattern: { value: this.getPatternId(floorPattern) },
+            energy: { value: 0 }
+          },
+          vertexShader: `
+            varying vec2 vUv;
+            varying vec3 vWorldPos;
+            void main() {
+              vUv = uv;
+              vec4 worldPos = modelMatrix * vec4(position, 1.0);
+              vWorldPos = worldPos.xyz;
+              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+          `,
+          fragmentShader: `
+            uniform vec3 baseColor;
+            uniform vec3 accentColor;
+            uniform float glowIntensity;
+            uniform float time;
+            uniform int pattern;
+            uniform float energy;
+            varying vec2 vUv;
+            varying vec3 vWorldPos;
+
+            float grid(vec2 p, float spacing) {
+              vec2 g = abs(fract(p / spacing - 0.5) - 0.5) / fwidth(p / spacing);
+              return 1.0 - min(min(g.x, g.y), 1.0);
+            }
+
+            float stripes(vec2 p, float spacing) {
+              return step(0.5, fract(p.x / spacing));
+            }
+
+            float circuit(vec2 p, float spacing) {
+              vec2 g = abs(fract(p / spacing - 0.5) - 0.5) / fwidth(p / spacing);
+              float lines = 1.0 - min(min(g.x, g.y), 1.0);
+              vec2 cell = floor(p / spacing);
+              float dots = step(0.8, fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453));
+              return max(lines * 0.6, dots);
+            }
+
+            float waves(vec2 p, float t) {
+              return sin(p.x * 0.1 + t) * 0.5 + sin(p.y * 0.15 + t * 0.7) * 0.3 + 0.5;
+            }
+
+            float hexagon(vec2 p) {
+              vec2 q = vec2(p.x * 2.0 * 0.5773503, p.y + p.x * 0.5773503);
+              vec2 pi = floor(q);
+              vec2 pf = fract(q);
+              float v = mod(pi.x + pi.y, 3.0);
+              float ca = step(1.0, v);
+              float cb = step(2.0, v);
+              vec2 ma = step(pf.xy, pf.yx);
+              float e = dot(ma, 1.0 - pf.yx + ca * (pf.x + pf.y - 1.0) + cb * (pf.yx - 2.0 * pf.xy));
+              return smoothstep(0.0, 0.1, e);
+            }
+
+            void main() {
+              vec2 worldUV = vWorldPos.xz;
+              float patternValue = 0.0;
+
+              if (pattern == 1) { // grid
+                patternValue = grid(worldUV, 10.0);
+              } else if (pattern == 2) { // stripes
+                patternValue = stripes(worldUV, 5.0);
+              } else if (pattern == 3) { // circuit
+                patternValue = circuit(worldUV, 8.0);
+              } else if (pattern == 4) { // waves
+                patternValue = waves(worldUV, time);
+              } else if (pattern == 5) { // hexagon
+                patternValue = hexagon(worldUV * 0.1);
+              }
+
+              // Apply energy pulse
+              float pulse = 1.0 + energy * glowIntensity * 0.5;
+              patternValue *= pulse;
+
+              // Mix base and accent colors
+              vec3 color = mix(baseColor, accentColor, patternValue * glowIntensity);
+
+              // Add subtle glow
+              color += accentColor * patternValue * glowIntensity * 0.3;
+
+              gl_FragColor = vec4(color, 1.0);
+            }
+          `,
+          side: THREE.FrontSide
+        });
+        this.groundPlaneMat = planeMat; // Store reference for updates
+      }
 
       this.groundPlane = new THREE.Mesh(planeGeom, planeMat);
       this.groundPlane.rotation.x = -Math.PI / 2;
       this.scene.add(this.groundPlane);
+    }
+
+    getPatternId(pattern) {
+      const patterns = { solid: 0, grid: 1, stripes: 2, circuit: 3, waves: 4, hexagon: 5 };
+      return patterns[pattern] || 0;
     }
 
     createRidePath() {
@@ -780,15 +907,18 @@
       }
     }
 
-    triggerVista(energy) {
-      if (!this.world.vistaEnabled) return;
-      if (this.vista.cooldown > 0) return;
-      if (energy < this.world.vistaMinEnergy) return;
+    triggerVista(energy, force = false) {
+      if (!this.world.vistaEnabled && !force) return;
+      if (this.vista.cooldown > 0 && !force) return;
+      if (!force && energy < this.world.vistaMinEnergy) return;
+
+      // Use provided energy or default to max for forced triggers
+      const effectiveEnergy = force ? 1.0 : energy;
 
       this.vista.duration = this.world.vistaDuration;
       this.vista.timer = this.world.vistaDuration;
       this.vista.cooldown = this.world.vistaCooldown;
-      this.vista.intensity = Math.min(1, 0.35 + energy * 0.85);
+      this.vista.intensity = Math.min(1, 0.35 + effectiveEnergy * 0.85);
     }
 
     updateVista(dt) {
@@ -887,76 +1017,10 @@
     }
 
     createFallbackPlayer() {
-      const THREE = this.THREE;
-      const accentColor = this.theme.particleColor;
-
-      // Simple fallback ship
-      this.fallbackShip = new THREE.Group();
-
-      const bodyGeom = new THREE.BoxGeometry(1.2, 0.4, 3);
-      const bodyMat = new THREE.MeshStandardMaterial({
-        color: 0x444444,
-        metalness: 0.7,
-        roughness: 0.3
-      });
-      const body = new THREE.Mesh(bodyGeom, bodyMat);
-      body.position.y = 0.5;
-      this.fallbackShip.add(body);
-
-      // Accent stripe
-      const stripeGeom = new THREE.BoxGeometry(1.25, 0.1, 3.05);
-      const stripeMat = new THREE.MeshBasicMaterial({ color: accentColor });
-      const stripe = new THREE.Mesh(stripeGeom, stripeMat);
-      stripe.position.y = 0.55;
-      this.fallbackShip.add(stripe);
-
-      // Cockpit
-      const cockpitGeom = new THREE.SphereGeometry(0.5, 16, 16);
-      cockpitGeom.scale(0.8, 0.6, 1.2);
-      const cockpitMat = new THREE.MeshStandardMaterial({
-        color: 0x222222,
-        metalness: 0.9,
-        roughness: 0.1
-      });
-      const cockpit = new THREE.Mesh(cockpitGeom, cockpitMat);
-      cockpit.position.set(0, 0.7, 0.3);
-      this.fallbackShip.add(cockpit);
-
-      // Engine pods
-      const podGeom = new THREE.CylinderGeometry(0.2, 0.3, 1.5, 8);
-      const podMat = new THREE.MeshStandardMaterial({
-        color: 0x333333,
-        metalness: 0.6,
-        roughness: 0.4
-      });
-
-      const leftPod = new THREE.Mesh(podGeom, podMat);
-      leftPod.rotation.x = Math.PI / 2;
-      leftPod.position.set(-0.8, 0.4, -0.8);
-      this.fallbackShip.add(leftPod);
-
-      const rightPod = new THREE.Mesh(podGeom, podMat);
-      rightPod.rotation.x = Math.PI / 2;
-      rightPod.position.set(0.8, 0.4, -0.8);
-      this.fallbackShip.add(rightPod);
-
-      // Engine glow with theme color
-      const glowGeom = new THREE.SphereGeometry(0.25, 8, 8);
-      const glowMat = new THREE.MeshBasicMaterial({
-        color: accentColor,
-        transparent: true,
-        opacity: 0.8
-      });
-
-      this.leftGlow = new THREE.Mesh(glowGeom, glowMat.clone());
-      this.leftGlow.position.set(-0.8, 0.4, -1.6);
-      this.fallbackShip.add(this.leftGlow);
-
-      this.rightGlow = new THREE.Mesh(glowGeom, glowMat.clone());
-      this.rightGlow.position.set(0.8, 0.4, -1.6);
-      this.fallbackShip.add(this.rightGlow);
-
-      this.player.add(this.fallbackShip);
+      // No visible fallback - just wait for the actual model to load
+      this.fallbackShip = null;
+      this.leftGlow = null;
+      this.rightGlow = null;
     }
 
     loadRacerModel(modelId) {
@@ -1067,29 +1131,9 @@
     }
 
     addModelGlow(model) {
-      const THREE = this.THREE;
-      const accentColor = this.theme.particleColor;
-
-      // Add subtle glow lights to the model
-      const glowLight = new THREE.PointLight(accentColor, 1, 5);
-      glowLight.position.set(0, 0, -1);
-      model.add(glowLight);
-
-      // Create engine trail glow spheres attached to model
-      const glowGeom = new THREE.SphereGeometry(0.3, 8, 8);
-      const glowMat = new THREE.MeshBasicMaterial({
-        color: accentColor,
-        transparent: true,
-        opacity: 0.6
-      });
-
-      this.leftGlow = new THREE.Mesh(glowGeom, glowMat.clone());
-      this.leftGlow.position.set(-0.5, 0, -1.5);
-      model.add(this.leftGlow);
-
-      this.rightGlow = new THREE.Mesh(glowGeom, glowMat.clone());
-      this.rightGlow.position.set(0.5, 0, -1.5);
-      model.add(this.rightGlow);
+      // No engine glows for animal/creature models - they look out of place
+      this.leftGlow = null;
+      this.rightGlow = null;
     }
 
     setRacerModel(modelId) {
@@ -1115,47 +1159,70 @@
 
     createParticles() {
       const THREE = this.THREE;
-      const particleCount = 800;
+      // Use particleDensity from theme (0-1) to scale particle count
+      const density = this.theme.particleDensity || 0.4;
+      const baseCount = 800;
+      const particleCount = Math.floor(baseCount * (0.3 + density * 1.4)); // 240-1400 particles
       const geometry = new THREE.BufferGeometry();
       const positions = new Float32Array(particleCount * 3);
       const velocities = [];
+
+      // Particle behavior based on type
+      const pType = this.theme.particleType || 'dust';
+      const isRising = pType === 'bubbles' || pType === 'embers';
+      const isFalling = pType === 'snow' || pType === 'rain';
 
       for (let i = 0; i < particleCount; i++) {
         positions[i * 3] = this.lateralPos + (Math.random() - 0.5) * 100;
         positions[i * 3 + 1] = this.altitude + (Math.random() - 0.5) * 22;
         positions[i * 3 + 2] = this.distance + Math.random() * 200;
+
+        let vy = (Math.random() - 0.5) * 0.1;
+        if (isRising) vy = Math.abs(vy) + 0.05;
+        if (isFalling) vy = -Math.abs(vy) - 0.1;
+
         velocities.push({
           x: (Math.random() - 0.5) * 0.2,
-          y: (Math.random() - 0.5) * 0.1,
+          y: vy,
           z: -0.5 - Math.random() * 0.5
         });
       }
 
       geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
+      // Size based on particle type and glowIntensity
+      const glowIntensity = this.theme.glowIntensity || 0.5;
+      const sizeMap = { dust: 0.3, sparks: 0.5, bubbles: 0.6, embers: 0.4, snow: 0.5, rain: 0.15, petals: 0.7, code: 0.3, data: 0.4 };
+      const baseSize = sizeMap[pType] || 0.4;
+
       const material = new THREE.PointsMaterial({
         color: this.theme.particleColor,
-        size: 0.4,
+        size: baseSize * (0.8 + glowIntensity * 0.4),
         transparent: true,
-        opacity: 0.6,
+        opacity: 0.5 + glowIntensity * 0.3,
         blending: THREE.AdditiveBlending
       });
 
       this.particles = new THREE.Points(geometry, material);
       this.particles.userData.velocities = velocities;
+      this.particles.userData.particleCount = particleCount;
       this.scene.add(this.particles);
     }
 
     createLighting() {
       const THREE = this.THREE;
+      const glowIntensity = this.theme.glowIntensity || 0.5;
+      const ambientIntensity = this.theme.ambientIntensity || 0.4;
 
-      // Main light colored by sky
-      this.directionalLight = new THREE.DirectionalLight(this.theme.skyBottom, 1.2);
+      // Main light colored by sky, intensity affected by glow
+      const mainLightIntensity = 1.0 + glowIntensity * 0.4;
+      this.directionalLight = new THREE.DirectionalLight(this.theme.skyBottom, mainLightIntensity);
       this.directionalLight.position.set(100, 80, 100);
       this.scene.add(this.directionalLight);
 
-      // Ambient from ground color
-      this.ambientLight = new THREE.AmbientLight(this.theme.groundColor, 0.4);
+      // Ambient from theme or ground color
+      const ambientColor = this.theme.ambientLight || this.theme.groundColor;
+      this.ambientLight = new THREE.AmbientLight(ambientColor, ambientIntensity);
       this.scene.add(this.ambientLight);
 
       // Hemisphere
@@ -1866,6 +1933,7 @@
 
             // Combo increases based on consecutive gate hits
             // Every 2 gates in a row increases combo by 1 (up to max)
+            const oldCombo = this.combo;
             const comboFromStreak = Math.min(CONFIG.maxCombo, 1 + Math.floor(this.gateStreak / 2));
             if (comboFromStreak > this.combo) {
               this.combo = comboFromStreak;
@@ -1874,6 +1942,17 @@
 
             // Gate reward: score based on current combo multiplier
             this.score += CONFIG.gateScore * this.combo;
+
+            // Trigger gate hit callback for visual feedback
+            if (this.onGateHit) {
+              this.onGateHit(this.combo, this.gateStreak, this.combo > oldCombo);
+            }
+
+            // Visual burst: brighten and scale gate briefly
+            if (gate.material) {
+              gate.material.opacity = 1.0;
+              gate.scale.setScalar(1.3);
+            }
           } else {
             this.gatesMissed += 1;
             this.gateStreak = 0;
@@ -1889,8 +1968,8 @@
           }
 
           // Visual: fade quickly after resolve
-          if (gate.material) {
-            gate.material.opacity = passed ? 0.45 : 0.18;
+          if (gate.material && !passed) {
+            gate.material.opacity = 0.18;
           }
         }
 
@@ -1976,14 +2055,19 @@
       this.updateFlow(dt);
       if (CONFIG.gateEnabled) {
         // Spawn gates on beats (throttled), plus gentle distance-based spacing.
-        if (beatHit && (this.time - this._lastGateTime) > CONFIG.gateBeatCooldown) {
+        // Always enforce minimum distance between gates for achievability
+        const canSpawnBeatGate = beatHit &&
+          (this.time - this._lastGateTime) > CONFIG.gateBeatCooldown &&
+          (this._nextGateZ - this.distance) < CONFIG.gateMinDistance;
+
+        if (canSpawnBeatGate) {
           this.spawnFlowGate();
           this._lastGateTime = this.time;
-          this._nextGateZ = Math.max(this._nextGateZ, this.distance + CONFIG.gateSpacingBase * 0.6);
+          this._nextGateZ = this.distance + CONFIG.gateMinDistance;
         }
         if (this.distance >= this._nextGateZ) {
           this.spawnFlowGate();
-          const spacing = CONFIG.gateSpacingBase + (1 - energy) * CONFIG.gateSpacingQuietBonus;
+          const spacing = Math.max(CONFIG.gateMinDistance, CONFIG.gateSpacingBase + (1 - energy) * CONFIG.gateSpacingQuietBonus);
           this._nextGateZ = this.distance + spacing;
           this._lastGateTime = this.time;
         }
@@ -2021,19 +2105,6 @@
         this.player.rotation.z += (targetRoll - this.player.rotation.z) * 0.12;
         this.player.rotation.x += (targetPitch - this.player.rotation.x) * 0.12;
 
-        const boostGlow = this.boosting ? 0.5 : 0;
-        const glowIntensity = 0.5 + energy * 0.5 + boostGlow;
-        const glowScale = this.boosting ? 1.5 + bass * 0.5 : 0.8 + bass * 0.5;
-        if (this.leftGlow) {
-          this.leftGlow.scale.setScalar(glowScale);
-          this.leftGlow.material.opacity = glowIntensity;
-          this.leftGlow.material.color.setHex(this.boosting ? 0x00ffff : 0xff6600);
-        }
-        if (this.rightGlow) {
-          this.rightGlow.scale.setScalar(glowScale);
-          this.rightGlow.material.opacity = glowIntensity;
-          this.rightGlow.material.color.setHex(this.boosting ? 0x00ffff : 0xff6600);
-        }
       }
 
       // Update model animations
@@ -2046,6 +2117,7 @@
       this.updateParticles(dt, energy, bass);
       this.updateSpeedLines(dt, energy);
       this.updateLighting(dt, bass, energy);
+      this.updateFloorPattern(dt, energy, bass); // Update floor pattern shader
       this.updateVista(dt); // after lighting so vista can tint lighting too
       this.updateCollisions(dt);
       this.updateScore(dt);
@@ -2369,7 +2441,9 @@
 
   // Export
   window.ThemedEnvironment = ThemedEnvironment;
-  window.ENVIRONMENT_THEMES = ENVIRONMENT_THEMES;
+  // Export environment theme getter (themes are now derived from TRACK_THEMES)
+  window.getEnvironmentTheme = getEnvironmentTheme;
+  window.DEFAULT_ENV = DEFAULT_ENV;
 
   // Export racer models list
   window.RACER_MODELS = RACER_MODELS;
@@ -2484,6 +2558,12 @@
     setHitCallback(callback) {
       if (this.instance) {
         this.instance.onHit = callback;
+      }
+    },
+
+    setGateHitCallback(callback) {
+      if (this.instance) {
+        this.instance.onGateHit = callback;
       }
     },
 

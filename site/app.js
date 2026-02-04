@@ -1597,10 +1597,45 @@
       if (highScoreValue) highScoreValue.textContent = String(sessionHighScore);
     }
 
-    // Pulse combo display when combo increases
-    if (comboDisplay && combo > 1) {
+    // Update combo display intensity based on combo level
+    if (comboDisplay) {
+      // Remove all combo level classes
+      comboDisplay.classList.remove('combo-low', 'combo-mid', 'combo-high', 'combo-max');
+
+      // Add appropriate class based on combo level
+      if (combo >= 8) {
+        comboDisplay.classList.add('combo-max');
+      } else if (combo >= 5) {
+        comboDisplay.classList.add('combo-high');
+      } else if (combo >= 3) {
+        comboDisplay.classList.add('combo-mid');
+      } else if (combo >= 2) {
+        comboDisplay.classList.add('combo-low');
+      }
+    }
+  }
+
+  function showGateHitFeedback(combo, streak, comboIncreased) {
+    // Flash the hit feedback element
+    if (hitFeedback) {
+      hitFeedback.textContent = comboIncreased ? `${combo}x COMBO!` : `+${35 * combo}`;
+      hitFeedback.className = 'hit-feedback gate-hit';
+      if (comboIncreased) hitFeedback.classList.add('combo-up');
+      if (combo >= 5) hitFeedback.classList.add('high-combo');
+
+      // Force reflow to restart animation
+      void hitFeedback.offsetWidth;
+      hitFeedback.classList.add('show');
+
+      setTimeout(() => {
+        hitFeedback.classList.remove('show');
+      }, 400);
+    }
+
+    // Pulse the combo display
+    if (comboDisplay) {
       comboDisplay.classList.add('pulse');
-      setTimeout(() => comboDisplay.classList.remove('pulse'), 100);
+      setTimeout(() => comboDisplay.classList.remove('pulse'), 150);
     }
   }
 
@@ -1778,6 +1813,9 @@
       EnvironmentMode.setFlowCallback((payload) => {
         if (!payload) return;
         updateFlowHUD(payload.flow, payload.gateStreak);
+      });
+      EnvironmentMode.setGateHitCallback((combo, streak, comboIncreased) => {
+        showGateHitFeedback(combo, streak, comboIncreased);
       });
 
       // Update high score display
@@ -3489,6 +3527,80 @@
   }
   if (randomizeEffectsBtn) {
     randomizeEffectsBtn.addEventListener("click", randomizeEffectsConfig);
+  }
+
+  // Manual effect trigger buttons - enable effect if not enabled, then trigger
+  const triggerLightningBtn = $("triggerLightning");
+  const triggerAuroraBtn = $("triggerAurora");
+  const triggerGridBtn = $("triggerGrid");
+  const triggerLightsBtn = $("triggerLights");
+  const triggerParticlesBtn = $("triggerParticles");
+  const triggerShakeBtn = $("triggerShake");
+  const triggerVistaBtn = $("triggerVista");
+
+  /** Helper to enable an effect before triggering */
+  function enableEffectAndTrigger(checkbox, configKey, triggerFn) {
+    if (checkbox && !checkbox.checked) {
+      checkbox.checked = true;
+      effectsConfig[configKey].enabled = true;
+      saveEffectsConfig();
+      applyEffectsToEnvironment();
+      // Wait for rebuild, then trigger
+      setTimeout(() => {
+        if (typeof EffectsManager !== "undefined") triggerFn();
+      }, 100);
+    } else {
+      if (typeof EffectsManager !== "undefined") triggerFn();
+    }
+  }
+
+  if (triggerLightningBtn) {
+    triggerLightningBtn.addEventListener("click", () => {
+      enableEffectAndTrigger(lightningEnabled, 'lightning', () => EffectsManager.triggerLightning());
+    });
+  }
+  if (triggerAuroraBtn) {
+    triggerAuroraBtn.addEventListener("click", () => {
+      enableEffectAndTrigger(auroraEnabled, 'aurora', () => EffectsManager.triggerAurora());
+    });
+  }
+  if (triggerGridBtn) {
+    triggerGridBtn.addEventListener("click", () => {
+      enableEffectAndTrigger(gridEnabled, 'grid', () => EffectsManager.triggerGrid());
+    });
+  }
+  if (triggerLightsBtn) {
+    triggerLightsBtn.addEventListener("click", () => {
+      enableEffectAndTrigger(lightsEnabled, 'lights', () => EffectsManager.triggerLights());
+    });
+  }
+  if (triggerParticlesBtn) {
+    triggerParticlesBtn.addEventListener("click", () => {
+      enableEffectAndTrigger(particlesEnabled, 'particles', () => EffectsManager.triggerParticles());
+    });
+  }
+  if (triggerShakeBtn) {
+    triggerShakeBtn.addEventListener("click", () => {
+      // Enable screen shake if not enabled
+      if (screenShakeEnabled && !screenShakeEnabled.checked) {
+        screenShakeEnabled.checked = true;
+        effectsConfig.visual.screenShake = true;
+        saveEffectsConfig();
+        applyEffectsToEnvironment();
+      }
+      if (typeof EffectsManager !== "undefined") EffectsManager.triggerShake();
+    });
+  }
+  if (triggerVistaBtn) {
+    triggerVistaBtn.addEventListener("click", () => {
+      // Enable vista if not enabled
+      const vistaCheckbox = $("vistaEnabled");
+      if (vistaCheckbox && !vistaCheckbox.checked) {
+        vistaCheckbox.checked = true;
+        if (env && env.world) env.world.vistaEnabled = true;
+      }
+      if (env) env.triggerVista(1.0, true);
+    });
   }
 
   // Playlist item click

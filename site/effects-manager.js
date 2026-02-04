@@ -625,6 +625,141 @@ const EffectsManager = (function() {
     return config?.visual?.speedLines || 1.0;
   }
 
+  // ============================================================================
+  // MANUAL TRIGGERS
+  // ============================================================================
+
+  /**
+   * Manually trigger a lightning strike
+   */
+  function triggerLightning() {
+    if (!initialized || !THREE || !effects.lightning.group) {
+      console.log("Lightning trigger: not initialized");
+      return;
+    }
+
+    // If no bolts exist, create a temporary one
+    if (effects.lightning.bolts.length === 0) {
+      const bolt = createLightningBolt();
+      effects.lightning.group.add(bolt);
+      effects.lightning.bolts.push(bolt);
+    }
+
+    const bolt = effects.lightning.bolts[Math.floor(Math.random() * effects.lightning.bolts.length)];
+    if (bolt) {
+      const points = [];
+      const segments = 15;
+      for (let i = 0; i <= segments; i++) {
+        const t = i / segments;
+        const y = 30 - t * 35;
+        const x = (Math.random() - 0.5) * 10 * Math.sin(t * Math.PI);
+        const z = (Math.random() - 0.5) * 6;
+        points.push(new THREE.Vector3(x, y, z));
+      }
+      bolt.geometry.setFromPoints(points);
+      bolt.position.set(
+        shipPosition.x + (Math.random() - 0.5) * 40,
+        0,
+        shipPosition.z + 20 + Math.random() * 30
+      );
+      bolt.material.opacity = config?.lightning?.intensity || 0.9;
+      bolt.material.color.set(config?.lightning?.color || '#00ffff');
+      bolt.visible = true;
+      bolt.userData.fadeTime = performance.now() / 1000;
+      effects.lightning.lastStrike = performance.now() / 1000;
+      console.log("Lightning triggered!");
+    }
+  }
+
+  /**
+   * Manually pulse the aurora
+   */
+  function triggerAurora() {
+    if (!initialized) {
+      console.log("Aurora trigger: not initialized");
+      return;
+    }
+    console.log("Aurora pulse triggered!");
+    // Temporarily boost audio data to max
+    const savedEnergy = audioData.energy;
+    const savedMid = audioData.mid;
+    audioData.energy = 1.0;
+    audioData.mid = 1.0;
+    setTimeout(() => {
+      audioData.energy = savedEnergy;
+      audioData.mid = savedMid;
+    }, 500);
+  }
+
+  /**
+   * Manually pulse the grid
+   */
+  function triggerGrid() {
+    if (!initialized) {
+      console.log("Grid trigger: not initialized");
+      return;
+    }
+    console.log("Grid pulse triggered!");
+    const savedEnergy = audioData.energy;
+    audioData.energy = 1.0;
+    setTimeout(() => {
+      audioData.energy = savedEnergy;
+    }, 300);
+  }
+
+  /**
+   * Manually flash lights
+   */
+  function triggerLights() {
+    if (!initialized) {
+      console.log("Lights trigger: not initialized");
+      return;
+    }
+    console.log("Lights flash triggered!", effects.lights.pulsingLights.length, "lights");
+    effects.lights.pulsingLights.forEach(light => {
+      if (light.isPointLight) {
+        const originalIntensity = light.intensity;
+        light.intensity = 3.0;
+        setTimeout(() => {
+          light.intensity = originalIntensity;
+        }, 200);
+      } else {
+        // God ray
+        const originalOpacity = light.material.opacity;
+        light.material.opacity = 0.8;
+        setTimeout(() => {
+          light.material.opacity = originalOpacity;
+        }, 300);
+      }
+    });
+  }
+
+  /**
+   * Manually burst particles
+   */
+  function triggerParticles() {
+    if (!initialized) {
+      console.log("Particles trigger: not initialized");
+      return;
+    }
+    console.log("Particles burst triggered!");
+    // Temporarily boost all particles' speed
+    const savedEnergy = audioData.energy;
+    audioData.energy = 1.0;
+    setTimeout(() => {
+      audioData.energy = savedEnergy;
+    }, 500);
+  }
+
+  /**
+   * Manually trigger screen shake
+   */
+  function triggerShake() {
+    console.log("Shake triggered!");
+    effects.visual.shakeOffset.x = (Math.random() - 0.5) * 2;
+    effects.visual.shakeOffset.y = (Math.random() - 0.5) * 1.5;
+  }
+
   /**
    * Dispose all effects
    */
@@ -660,7 +795,14 @@ const EffectsManager = (function() {
     getShakeOffset,
     getFogDensityMultiplier,
     getSpeedLinesIntensity,
-    dispose
+    dispose,
+    // Manual triggers
+    triggerLightning,
+    triggerAurora,
+    triggerGrid,
+    triggerLights,
+    triggerParticles,
+    triggerShake
   };
 })();
 
