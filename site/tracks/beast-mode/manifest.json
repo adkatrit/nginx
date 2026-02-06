@@ -1,0 +1,17 @@
+{
+  "title": "Beast Mode",
+  "artist": "DeytaDreams",
+  "bpm": 140,
+  "duration": null,
+  "lyrics": "lyrics.json",
+  "stems": {
+    "mix": {
+      "audio": "mix.mp3",
+      "visualization": {
+        "target": "terrain",
+        "effect": "pulse",
+        "color": "#ff4444"
+      }
+    }
+  }
+}

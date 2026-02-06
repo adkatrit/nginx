@@ -1,0 +1,17 @@
+{
+  "title": "The Last Dragon",
+  "artist": "DeytaDreams",
+  "bpm": 90,
+  "duration": null,
+  "lyrics": "lyrics.json",
+  "stems": {
+    "mix": {
+      "audio": "mix.mp3",
+      "visualization": {
+        "target": "terrain",
+        "effect": "deformation",
+        "color": "#ff8844"
+      }
+    }
+  }
+}

@@ -1641,10 +1641,10 @@ input[type="range"]:active::-moz-range-thumb {
 
 .control-bar {
   position: fixed;
-  bottom: 10px;
+  bottom: 0;
   left: 0;
   right: 0;
-  height: 72px;
+  height: 90px;
   padding: 0 20px;
   padding-bottom: env(safe-area-inset-bottom, 0);
 
@@ -1675,8 +1675,7 @@ input[type="range"]:active::-moz-range-thumb {
   display: flex;
   align-items: center;
   gap: 14px;
-  min-width: 200px;
-  max-width: 280px;
+  width: 280px;
   flex-shrink: 0;
 }
 
@@ -1882,9 +1881,9 @@ input[type="range"]:active::-moz-range-thumb {
   background: #f7f7f7;
 }
 
-/* Playlist button - hidden */
+/* Playlist button */
 .ctrl-btn--playlist {
-  display: none;
+  display: flex;
 }
 
 /* ============================================
@@ -2128,8 +2127,7 @@ input[type="range"]:active::-moz-range-thumb {
 
 @media (max-width: 900px) {
   .control-bar__track {
-    min-width: 160px;
-    max-width: 200px;
+    width: 200px;
   }
 
   .control-bar__cover {
@@ -3120,4 +3118,82 @@ input[type="range"]:active::-moz-range-thumb {
   margin: 0 -12px;
   padding: 8px 12px;
   border-radius: 4px;
+}
+
+/* ========================================
+   LYRICS OVERLAY
+   ======================================== */
+
+.lyrics-overlay {
+  position: fixed;
+  bottom: 120px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  max-width: 90vw;
+  width: 800px;
+}
+
+.lyrics-overlay.is-visible {
+  opacity: 1;
+}
+
+.lyrics-overlay__section {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--wa-accent);
+  margin-bottom: 8px;
+  text-shadow: 0 0 10px rgba(var(--wa-accent-rgb), 0.5);
+}
+
+.lyrics-overlay__current {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #fff;
+  text-shadow:
+    0 0 20px rgba(0, 0, 0, 0.8),
+    0 0 40px rgba(0, 0, 0, 0.6),
+    0 2px 4px rgba(0, 0, 0, 0.9);
+  line-height: 1.4;
+  margin-bottom: 8px;
+  animation: lyricPulse 0.3s ease-out;
+}
+
+.lyrics-overlay__next {
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.5);
+  text-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
+}
+
+@keyframes lyricPulse {
+  0% {
+    transform: scale(1.05);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+  .lyrics-overlay {
+    bottom: 100px;
+    width: 95vw;
+  }
+
+  .lyrics-overlay__current {
+    font-size: 1.25rem;
+  }
+
+  .lyrics-overlay__next {
+    font-size: 0.85rem;
+  }
 }

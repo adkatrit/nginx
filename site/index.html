@@ -109,6 +109,13 @@
 
     <main id="app" class="immersive-app" aria-label="Audio Player">
 
+      <!-- Lyrics Overlay -->
+      <div id="lyricsOverlay" class="lyrics-overlay" aria-live="polite" aria-atomic="true">
+        <div class="lyrics-overlay__section" id="lyricsSection"></div>
+        <div class="lyrics-overlay__current" id="lyricsCurrent"></div>
+        <div class="lyrics-overlay__next" id="lyricsNext"></div>
+      </div>
+
       <!-- Floating Control Bar -->
       <div class="control-bar" id="controlBar" role="region" aria-label="Playback controls">
 
@@ -518,6 +525,65 @@
             </div>
           </details>
 
+          <!-- Flight Controls -->
+          <details class="viz-settings__section" open>
+            <summary class="viz-settings__section-header">Flight Controls</summary>
+            <div class="viz-settings__section-content">
+              <div class="viz-settings__group">
+                <label class="viz-settings__label">
+                  <span>Lateral Limit</span>
+                  <span class="viz-settings__value" id="lateralLimitValue">100</span>
+                </label>
+                <input type="range" id="lateralLimit" min="10" max="100" value="100" step="5" class="viz-settings__slider" />
+                <span class="viz-settings__hint">How far left/right you can fly</span>
+              </div>
+
+              <div class="viz-settings__group">
+                <label class="viz-settings__label">
+                  <span>Min Altitude</span>
+                  <span class="viz-settings__value" id="minAltitudeValue">0.5</span>
+                </label>
+                <input type="range" id="minAltitude" min="1" max="50" value="5" step="1" class="viz-settings__slider" />
+                <span class="viz-settings__hint">Lowest flight height (x0.1)</span>
+              </div>
+
+              <div class="viz-settings__group">
+                <label class="viz-settings__label">
+                  <span>Max Altitude</span>
+                  <span class="viz-settings__value" id="maxAltitudeValue">18</span>
+                </label>
+                <input type="range" id="maxAltitude" min="10" max="50" value="18" step="1" class="viz-settings__slider" />
+              </div>
+
+              <div class="viz-settings__group">
+                <label class="viz-settings__label">
+                  <span>Steer Response</span>
+                  <span class="viz-settings__value" id="steerResponseValue">23</span>
+                </label>
+                <input type="range" id="steerResponse" min="5" max="40" value="23" step="1" class="viz-settings__slider" />
+                <span class="viz-settings__hint">Higher = snappier left/right</span>
+              </div>
+
+              <div class="viz-settings__group">
+                <label class="viz-settings__label">
+                  <span>Vertical Response</span>
+                  <span class="viz-settings__value" id="verticalResponseValue">17</span>
+                </label>
+                <input type="range" id="verticalResponse" min="5" max="40" value="17" step="1" class="viz-settings__slider" />
+                <span class="viz-settings__hint">Higher = snappier up/down</span>
+              </div>
+
+              <div class="viz-settings__group">
+                <label class="viz-settings__label">
+                  <span>Bank Angle</span>
+                  <span class="viz-settings__value" id="bankAngleValue">45%</span>
+                </label>
+                <input type="range" id="bankAngle" min="0" max="100" value="45" step="5" class="viz-settings__slider" />
+                <span class="viz-settings__hint">Roll when turning</span>
+              </div>
+            </div>
+          </details>
+
           <!-- Visual Style -->
           <details class="viz-settings__section">
             <summary class="viz-settings__section-header">Visual Style</summary>
@@ -607,6 +673,7 @@
     <script src="./noise.js"></script>
     <script src="./terrain.js"></script>
     <script src="./environments.js"></script>
+    <script src="./stem-player.js"></script>
     <script src="./ios-viz.js"></script>
     <script src="./app.js"></script>
   </body>

@@ -65,13 +65,40 @@ window.TerrainSystem = (function() {
       // Create material with height-based coloring
       const material = this.createMaterial();
 
-      this.mesh = new THREE.Mesh(geometry, material);
-      this.mesh.position.set(
-        this.chunkX + CHUNK_SIZE / 2,
-        0,
-        this.chunkZ + CHUNK_SIZE / 2
-      );
-      this.mesh.receiveShadow = true;
+      // For wireframe terrain, create a group with solid base + wireframe on top
+      if (this.config.wireframe) {
+        this.mesh = new THREE.Group();
+
+        // Solid base plane at baseHeight to block the background
+        const baseGeometry = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, 1, 1);
+        baseGeometry.rotateX(-Math.PI / 2);
+        const baseMaterial = new THREE.MeshBasicMaterial({
+          color: this.config.lowColor || 0x000000,
+          side: THREE.FrontSide
+        });
+        const baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
+        baseMesh.position.y = this.config.baseHeight || -2;
+        this.mesh.add(baseMesh);
+
+        // Wireframe terrain on top
+        const wireframeMesh = new THREE.Mesh(geometry, material);
+        wireframeMesh.receiveShadow = true;
+        this.mesh.add(wireframeMesh);
+
+        this.mesh.position.set(
+          this.chunkX + CHUNK_SIZE / 2,
+          0,
+          this.chunkZ + CHUNK_SIZE / 2
+        );
+      } else {
+        this.mesh = new THREE.Mesh(geometry, material);
+        this.mesh.position.set(
+          this.chunkX + CHUNK_SIZE / 2,
+          0,
+          this.chunkZ + CHUNK_SIZE / 2
+        );
+        this.mesh.receiveShadow = true;
+      }
     }
 
     createMaterial() {
@@ -83,7 +110,7 @@ window.TerrainSystem = (function() {
           color: config.color || 0x00ff88,
           wireframe: true,
           transparent: true,
-          opacity: 0.6
+          opacity: 0.9
         });
       }
 
@@ -209,8 +236,17 @@ window.TerrainSystem = (function() {
 
     dispose() {
       if (this.mesh) {
-        this.mesh.geometry.dispose();
-        this.mesh.material.dispose();
+        if (this.mesh.isGroup) {
+          // Handle Group structure (wireframe terrain with base plane)
+          this.mesh.traverse(child => {
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) child.material.dispose();
+          });
+        } else {
+          // Handle single Mesh
+          if (this.mesh.geometry) this.mesh.geometry.dispose();
+          if (this.mesh.material) this.mesh.material.dispose();
+        }
         this.mesh = null;
       }
     }

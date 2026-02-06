@@ -1,0 +1,17 @@
+{
+  "title": "Signal Integrity",
+  "artist": "DeytaDreams",
+  "bpm": 100,
+  "duration": null,
+  "lyrics": "lyrics.json",
+  "stems": {
+    "mix": {
+      "audio": "mix.mp3",
+      "visualization": {
+        "target": "background",
+        "effect": "pulse",
+        "color": "#44ffaa"
+      }
+    }
+  }
+}

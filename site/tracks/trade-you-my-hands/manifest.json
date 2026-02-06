@@ -1,0 +1,17 @@
+{
+  "title": "Trade You My Hands",
+  "artist": "DeytaDreams",
+  "bpm": 105,
+  "duration": null,
+  "lyrics": "lyrics.json",
+  "stems": {
+    "mix": {
+      "audio": "mix.mp3",
+      "visualization": {
+        "target": "terrain",
+        "effect": "impact",
+        "color": "#ffff44"
+      }
+    }
+  }
+}

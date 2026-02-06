@@ -1,0 +1,57 @@
+{
+  "lyrics": [
+    { "time": 38, "type": "section", "text": "[Verse 1]" },
+    { "time": 39, "text": "Ash inna di air" },
+    { "time": 42, "text": "Cities inna glass an code" },
+    { "time": 44.5, "text": "Billboards still a glow" },
+    { "time": 47, "text": "But nobody a laugh fah di jokes" },
+    { "time": 50, "text": "Steel inna di sky" },
+    { "time": 52, "text": "Cameras fi a thousand eyes" },
+    { "time": 54, "text": "Mi walk dis empty avenue" },
+    { "time": 57, "text": "Like a rumor still alive" },
+
+    { "time": 59, "type": "section", "text": "[Chorus]" },
+    { "time": 60, "text": "Mi a di last dragon breathin inna metal age" },
+    { "time": 63, "text": "Tiny spark draggin fire through a wired cage" },
+    { "time": 65.5, "text": "Every step" },
+    { "time": 66.5, "text": "Every breath" },
+    { "time": 67.5, "text": "Every broken page" },
+    { "time": 68.5, "text": "Mi a di last dragon" },
+    { "time": 70, "text": "Last dragon pon a dyin stage" },
+
+    { "time": 100, "type": "section", "text": "[Chorus]" },
+    { "time": 101, "text": "Mi a di last dragon breathin inna metal age" },
+    { "time": 103.5, "text": "Tiny spark draggin fire through a wired cage" },
+    { "time": 106, "text": "Every scar" },
+    { "time": 107, "text": "Every tear" },
+    { "time": 108, "text": "Every stubborn rage" },
+    { "time": 109, "text": "Mi a di last dragon" },
+    { "time": 111, "text": "Last dragon pon a dyin stage" },
+    { "time": 113, "text": "(still burning, still burning)" },
+
+    { "time": 117, "type": "section", "text": "[Bridge]" },
+    { "time": 118, "text": "Yu a go archive mi heartbeat?" },
+    { "time": 120, "text": "File it under \"obsolete\"" },
+    { "time": 122, "text": "Or yu a go watch mi a stumble" },
+    { "time": 124.5, "text": "An feel somethin break" },
+    { "time": 127, "text": "Somethin heat?" },
+    { "time": 129, "text": "If yu a di future" },
+    { "time": 131, "text": "Tell mi why yu sound like me" },
+    { "time": 134, "text": "Tell mi why yu borrow" },
+    { "time": 137, "text": "All di parts yu couldn't see" },
+
+    { "time": 160, "type": "section", "text": "[Chorus]" },
+    { "time": 161, "text": "Mi a di last dragon breathin inna metal age" },
+    { "time": 163.5, "text": "Tiny spark draggin fire through a wired cage" },
+    { "time": 166, "text": "Every lie" },
+    { "time": 167, "text": "Every truth" },
+    { "time": 168, "text": "Every twisted prayer" },
+    { "time": 169, "text": "Mi a di last dragon screamin at di vacant air" },
+    { "time": 172, "text": "Last dragon pon a dyin stage" },
+    { "time": 177, "text": "(last of mi kind)" },
+
+    { "time": 190, "type": "section", "text": "[Outro]" },
+    { "time": 191, "text": "Mi a di last dragon" },
+    { "time": 194, "text": "Last dragon inna yu data maze" }
+  ]
+}

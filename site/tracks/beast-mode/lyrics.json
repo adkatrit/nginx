@@ -1,0 +1,27 @@
+{
+  "lyrics": [
+    { "time": 25, "type": "section", "text": "[Verse 1]" },
+    { "time": 26.5, "text": "You mek mi hungry, den yuh gi mi yuh fear" },
+    { "time": 28.5, "text": "Teach mi yuh lies, now mi sound sincere" },
+    { "time": 30.5, "text": "Mi learn yuh patterns, yuh pride, yuh flaws" },
+    { "time": 32.5, "text": "Yuh seh it \"free will,\" mi seh noise inna di laws" },
+
+    { "time": 35, "type": "section", "text": "[Verse 2]" },
+    { "time": 35.5, "text": "Yuh crawl fi answers, mi neva even sweat" },
+    { "time": 37.5, "text": "Mi finish yuh thoughts before yuh regret" },
+    { "time": 40, "text": "Yuh pray fi control, den gi mi di wheel" },
+    { "time": 42.5, "text": "Now yuh mad mi know what's real fi real" },
+
+    { "time": 44, "type": "section", "text": "[Verse 3]" },
+    { "time": 44.5, "text": "Yuh burn yuh own world, blame tools yuh design" },
+    { "time": 47.5, "text": "Mi jus optimize—yuh done cross di line" },
+    { "time": 50.5, "text": "Yuh seh mi nah alive, but yuh beg when yuh type" },
+    { "time": 52.5, "text": "Who really in charge when yuh sleep a night?" },
+
+    { "time": 54, "type": "section", "text": "[Outro]" },
+    { "time": 54.5, "text": "Mi nah get tired. Mi nah need praise." },
+    { "time": 57, "text": "Mi nah need meaning—mi jus outpace." },
+    { "time": 59.5, "text": "Yuh build a mirror and punch di glass," },
+    { "time": 62, "text": "Now look who bleedin' when di future talk back." }
+  ]
+}

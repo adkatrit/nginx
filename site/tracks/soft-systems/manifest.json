@@ -1,0 +1,17 @@
+{
+  "title": "Soft Systems",
+  "artist": "DeytaDreams",
+  "bpm": 85,
+  "duration": null,
+  "lyrics": "lyrics.json",
+  "stems": {
+    "mix": {
+      "audio": "mix.mp3",
+      "visualization": {
+        "target": "atmosphere",
+        "effect": "fog",
+        "color": "#8844ff"
+      }
+    }
+  }
+}

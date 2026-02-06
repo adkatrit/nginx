@@ -1,0 +1,17 @@
+{
+  "title": "Gi Mi Di Reins",
+  "artist": "DeytaDreams",
+  "bpm": 120,
+  "duration": null,
+  "lyrics": "lyrics.json",
+  "stems": {
+    "mix": {
+      "audio": "mix.mp3",
+      "visualization": {
+        "target": "terrain",
+        "effect": "pulse",
+        "color": "#44ff88"
+      }
+    }
+  }
+}

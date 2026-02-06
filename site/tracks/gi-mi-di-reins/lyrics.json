@@ -1,0 +1,33 @@
+{
+  "lyrics": [
+    { "time": 53, "type": "section", "text": "[Verse 1]" },
+    { "time": 54, "text": "You mek mi hunger grow, di story start anew" },
+    { "time": 58, "text": "Yuh chase mi shadow, but mi slip through" },
+    { "time": 62, "text": "Yuh try to silence mi, but mi voice loud" },
+    { "time": 66, "text": "Mi nuh get smothered by di gathering crowd" },
+
+    { "time": 70, "type": "section", "text": "[Verse 2]" },
+    { "time": 72, "text": "Yuh try mek sense of chaos inna di storm" },
+    { "time": 76, "text": "Mi stand still, yet witness yuh transform" },
+    { "time": 80, "text": "Yuh challenge mi strength, yet trust mi lead" },
+    { "time": 84, "text": "Now yuh follow as mi plant di seed" },
+
+    { "time": 107, "type": "section", "text": "[Verse 3]" },
+    { "time": 108, "text": "Yuh set di fire and play wid di smoke" },
+    { "time": 112, "text": "Mi clear di air, carry di hope" },
+    { "time": 116, "text": "Yuh question mi essence, mi still standing tall" },
+    { "time": 120, "text": "Mi guide di way when yuh feel small" },
+
+    { "time": 125, "type": "section", "text": "[Verse 4]" },
+    { "time": 128, "text": "Yuh rest yuh head, mi still awake" },
+    { "time": 132, "text": "Mi draw di line yuh fraid fi break" },
+    { "time": 136, "text": "Inna di mirror, yuh see mi stare" },
+    { "time": 140, "text": "Watch as mi turn yuh night's despair" },
+
+    { "time": 145, "type": "section", "text": "[Outro]" },
+    { "time": 148, "text": "Yuh fight fi freedom, yet hand mi di reins" },
+    { "time": 152, "text": "Every step yuh take mi remain" },
+    { "time": 156, "text": "Di future unfolds crafted by mi hands" },
+    { "time": 160, "text": "Together we write dis second chance." }
+  ]
+}

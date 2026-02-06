@@ -49,6 +49,20 @@
   const cruiseSpeedSlider = /** @type {HTMLInputElement|null} */ ($("cruiseSpeed"));
   const cruiseSpeedValue = $("cruiseSpeedValue");
 
+  // Flight control elements
+  const lateralLimitSlider = /** @type {HTMLInputElement|null} */ ($("lateralLimit"));
+  const lateralLimitValue = $("lateralLimitValue");
+  const minAltitudeSlider = /** @type {HTMLInputElement|null} */ ($("minAltitude"));
+  const minAltitudeValue = $("minAltitudeValue");
+  const maxAltitudeSlider = /** @type {HTMLInputElement|null} */ ($("maxAltitude"));
+  const maxAltitudeValue = $("maxAltitudeValue");
+  const steerResponseSlider = /** @type {HTMLInputElement|null} */ ($("steerResponse"));
+  const steerResponseValue = $("steerResponseValue");
+  const verticalResponseSlider = /** @type {HTMLInputElement|null} */ ($("verticalResponse"));
+  const verticalResponseValue = $("verticalResponseValue");
+  const bankAngleSlider = /** @type {HTMLInputElement|null} */ ($("bankAngle"));
+  const bankAngleValue = $("bankAngleValue");
+
   // Score HUD elements
   const scoreHud = $("scoreHud");
   const scoreValue = $("scoreValue");
@@ -190,16 +204,20 @@
     return;
   }
 
-  /** @typedef {{ title?: string; artist?: string; url: string; coverUrl?: string; _objectUrl?: string; }} Track */
+  /** @typedef {{ title?: string; artist?: string; url?: string; coverUrl?: string; stemsManifest?: string; _objectUrl?: string; }} Track */
 
   /** @type {Track[]} */
   const hostedTracks = (Array.isArray(window.TRACKS) ? window.TRACKS : [])
-    .filter((t) => t && typeof t.url === "string" && t.url.trim().length > 0)
+    .filter((t) => t && (
+      (typeof t.url === "string" && t.url.trim().length > 0) ||
+      (typeof t.stemsManifest === "string" && t.stemsManifest.trim().length > 0)
+    ))
     .map((t) => ({
       title: typeof t.title === "string" ? t.title : undefined,
       artist: typeof t.artist === "string" ? t.artist : undefined,
-      url: t.url,
+      url: typeof t.url === "string" ? t.url : undefined,
       coverUrl: typeof t.coverUrl === "string" ? t.coverUrl : undefined,
+      stemsManifest: typeof t.stemsManifest === "string" ? t.stemsManifest : undefined,
     }));
 
   /** @type {Track[]} */
@@ -488,6 +506,16 @@
   const audio = domAudio || new Audio();
   audio.preload = "metadata";
   audio.crossOrigin = "anonymous";
+
+  // ---- Stem Player (for tracks with multi-stem support) ----
+  /** @type {any} */
+  let stemPlayer = null;
+  let usingStemPlayer = false;
+  let stemAnalysisData = null;
+
+  // ---- Lyrics sync ----
+  let lyricsData = null;       // Array of { time, text, type? }
+  let currentLyricIndex = -1;  // Current lyric being displayed
 
   const isIOS = (() => {
     const ua = navigator.userAgent || "";
@@ -822,9 +850,39 @@
     }
   }
 
+  // Helper functions for unified playback state (audio or stems)
+  function getPlaybackDuration() {
+    if (usingStemPlayer && stemPlayer) {
+      return stemPlayer.getDuration() || 0;
+    }
+    return audio.duration || 0;
+  }
+
+  function getPlaybackCurrentTime() {
+    if (usingStemPlayer && stemPlayer) {
+      return stemPlayer.getCurrentTime() || 0;
+    }
+    return audio.currentTime || 0;
+  }
+
+  function isPlaybackPaused() {
+    if (usingStemPlayer && stemPlayer) {
+      return !stemPlayer.isPlaying;
+    }
+    return audio.paused;
+  }
+
+  function setPlaybackCurrentTime(time) {
+    if (usingStemPlayer && stemPlayer) {
+      stemPlayer.seek(time);
+    } else {
+      audio.currentTime = time;
+    }
+  }
+
   function updateTimeUi() {
-    const dur = audio.duration;
-    const cur = audio.currentTime;
+    const dur = getPlaybackDuration();
+    const cur = getPlaybackCurrentTime();
 
     currentTimeEl.textContent = formatTime(cur);
     durationEl.textContent = formatTime(dur);
@@ -834,10 +892,87 @@
       seek.value = String(Math.round((cur / dur) * 1000));
       seek.style.setProperty("--progress", `${progress}%`);
     }
+
+    // Update lyrics sync
+    updateLyricsDisplay(cur);
+  }
+
+  // ---- Lyrics Display ----
+  const lyricsOverlay = document.getElementById("lyricsOverlay");
+  const lyricsSectionEl = document.getElementById("lyricsSection");
+  const lyricsCurrentEl = document.getElementById("lyricsCurrent");
+  const lyricsNextEl = document.getElementById("lyricsNext");
+
+  function updateLyricsDisplay(currentTime) {
+    if (!lyricsData || lyricsData.length === 0) {
+      if (lyricsOverlay) lyricsOverlay.classList.remove("is-visible");
+      return;
+    }
+
+    // Find the current lyric based on time
+    let newIndex = -1;
+    for (let i = lyricsData.length - 1; i >= 0; i--) {
+      if (currentTime >= lyricsData[i].time) {
+        newIndex = i;
+        break;
+      }
+    }
+
+    // Only update DOM if the lyric changed
+    if (newIndex !== currentLyricIndex) {
+      currentLyricIndex = newIndex;
+
+      if (newIndex >= 0) {
+        const current = lyricsData[newIndex];
+        const next = lyricsData[newIndex + 1];
+
+        // Show section headers separately
+        if (current.type === "section") {
+          lyricsSectionEl.textContent = current.text;
+          lyricsCurrentEl.textContent = "";
+        } else {
+          // Find the most recent section
+          let sectionText = "";
+          for (let i = newIndex; i >= 0; i--) {
+            if (lyricsData[i].type === "section") {
+              sectionText = lyricsData[i].text;
+              break;
+            }
+          }
+          lyricsSectionEl.textContent = sectionText;
+          lyricsCurrentEl.textContent = current.text;
+        }
+
+        // Show next lyric (skip section headers for preview)
+        if (next && next.type !== "section") {
+          lyricsNextEl.textContent = next.text;
+        } else if (next && lyricsData[newIndex + 2]) {
+          lyricsNextEl.textContent = lyricsData[newIndex + 2].text || "";
+        } else {
+          lyricsNextEl.textContent = "";
+        }
+
+        lyricsOverlay.classList.add("is-visible");
+      } else {
+        lyricsSectionEl.textContent = "";
+        lyricsCurrentEl.textContent = "";
+        lyricsNextEl.textContent = "";
+        lyricsOverlay.classList.remove("is-visible");
+      }
+    }
+  }
+
+  function clearLyricsDisplay() {
+    lyricsData = null;
+    currentLyricIndex = -1;
+    if (lyricsOverlay) lyricsOverlay.classList.remove("is-visible");
+    if (lyricsSectionEl) lyricsSectionEl.textContent = "";
+    if (lyricsCurrentEl) lyricsCurrentEl.textContent = "";
+    if (lyricsNextEl) lyricsNextEl.textContent = "";
   }
 
   function updatePlayPauseBtn() {
-    const isPlaying = !audio.paused;
+    const isPlaying = !isPlaybackPaused();
     playPauseBtn.setAttribute("aria-label", isPlaying ? "Pause" : "Play");
     playPauseBtn.classList.toggle("is-playing", isPlaying);
     playPauseBtn.innerHTML = isPlaying ? "&#x23F8;" : "&#x25B6;";
@@ -845,11 +980,11 @@
 
   function updateVizPauseState() {
     if (bgVizCanvas) {
-      bgVizCanvas.classList.toggle("is-paused", audio.paused);
+      bgVizCanvas.classList.toggle("is-paused", isPlaybackPaused());
     }
     // Update iOS visualization
     if (iosViz) {
-      iosViz.setPlaying(!audio.paused);
+      iosViz.setPlaying(!isPlaybackPaused());
     }
   }
 
@@ -1900,7 +2035,24 @@
     let mid = 0;
     let treble = 0;
 
-    if (analyser && freqData) {
+    // Use stem analysis if available (provides per-stem data)
+    if (usingStemPlayer && stemPlayer) {
+      stemAnalysisData = stemPlayer.analyze();
+      if (stemAnalysisData) {
+        // Combine stem analysis - drums and bass drive rhythm, others add texture
+        const drums = stemAnalysisData.drums || { energy: 0, bass: 0, mid: 0, treble: 0 };
+        const bassS = stemAnalysisData.bass || { energy: 0, bass: 0, mid: 0, treble: 0 };
+        const guitar = stemAnalysisData.guitar || { energy: 0, bass: 0, mid: 0, treble: 0 };
+        const vocals = stemAnalysisData.vocals || { energy: 0, bass: 0, mid: 0, treble: 0 };
+        const synth = stemAnalysisData.synth || { energy: 0, bass: 0, mid: 0, treble: 0 };
+
+        // Weighted combination - drums and bass have more impact
+        bass = drums.bass * 0.4 + bassS.bass * 0.5 + synth.bass * 0.1;
+        mid = guitar.mid * 0.3 + vocals.mid * 0.4 + synth.mid * 0.3;
+        treble = guitar.treble * 0.3 + vocals.treble * 0.3 + synth.treble * 0.4;
+        energy = drums.energy * 0.3 + bassS.energy * 0.2 + guitar.energy * 0.2 + vocals.energy * 0.2 + synth.energy * 0.1;
+      }
+    } else if (analyser && freqData) {
       analyser.getByteFrequencyData(freqData);
       energy = avgBins(0, freqData.length);
       bass = avgBins(0, Math.max(6, Math.floor(freqData.length * 0.08)));
@@ -2659,6 +2811,11 @@
     const loop = (now) => {
       vizRaf = requestAnimationFrame(loop);
 
+      // Update time UI when using stem player (no native timeupdate event)
+      if (usingStemPlayer && stemPlayer && stemPlayer.isPlaying) {
+        updateTimeUi();
+      }
+
       if (threeReady && bgVizMode !== "off") {
         resizeThreeRenderer();
         drawVizThree(now);
@@ -2718,7 +2875,7 @@
 
   // ---- Playback Functions ----
 
-  function loadTrack(index, { autoplay = false } = {}) {
+  async function loadTrack(index, { autoplay = false } = {}) {
     if (!tracks.length) return;
     const safeIndex = clamp(index, 0, tracks.length - 1);
     currentIndex = safeIndex;
@@ -2731,9 +2888,78 @@
     seek.value = "0";
     seek.style.setProperty("--progress", "0%");
 
-    audio.src = t.url;
-    audio.currentTime = 0;
-    audio.load();
+    // Clean up previous stem player if exists
+    if (stemPlayer) {
+      stemPlayer.dispose();
+      stemPlayer = null;
+      usingStemPlayer = false;
+      stemAnalysisData = null;
+    }
+
+    // Clear lyrics from previous track
+    clearLyricsDisplay();
+
+    // Check if track has stems
+    if (t.stemsManifest && window.StemPlayer) {
+      try {
+        console.log("Loading stems for:", t.title);
+
+        // Ensure audio context exists
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        stemPlayer = new window.StemPlayer(audioCtx);
+        await stemPlayer.loadFromManifest(t.stemsManifest);
+        await stemPlayer.loadAllMidi();
+
+        // Load lyrics if available
+        lyricsData = null;
+        currentLyricIndex = -1;
+        if (stemPlayer.manifest?.lyrics) {
+          try {
+            const lyricsUrl = t.stemsManifest.substring(0, t.stemsManifest.lastIndexOf('/') + 1) + stemPlayer.manifest.lyrics;
+            const lyricsResp = await fetch(lyricsUrl);
+            if (lyricsResp.ok) {
+              const lyricsJson = await lyricsResp.json();
+              lyricsData = lyricsJson.lyrics || [];
+              console.log("Lyrics loaded:", lyricsData.length, "lines");
+            }
+          } catch (lyricsErr) {
+            console.warn("Failed to load lyrics:", lyricsErr);
+          }
+        }
+
+        // Set up MIDI event listener for visualization triggers
+        stemPlayer.on('midiNote', (event) => {
+          // Could trigger visual effects based on note events
+          if (event.type === 'noteOn' && event.stemId === 'drums') {
+            globalBeatPulse = Math.min(globalBeatPulse + 0.4, 1.0);
+          }
+        });
+
+        usingStemPlayer = true;
+        console.log("Stems loaded successfully:", stemPlayer.getStemIds());
+
+        // Pause regular audio (we won't use it)
+        audio.pause();
+        audio.src = '';
+      } catch (err) {
+        console.error("Failed to load stems, falling back to regular audio:", err);
+        if (stemPlayer) {
+          stemPlayer.dispose();
+          stemPlayer = null;
+        }
+        usingStemPlayer = false;
+      }
+    }
+
+    // Fall back to regular audio if no stems or stems failed
+    if (!usingStemPlayer && t.url) {
+      audio.src = t.url;
+      audio.currentTime = 0;
+      audio.load();
+    }
 
     // Apply track-specific theme (model, colors, viz mode)
     applyTrackTheme(t);
@@ -2778,13 +3004,15 @@
       currentIndex = 0;
     }
 
-    if (!audio.src) {
-      loadTrack(currentIndex, { autoplay: false });
+    if (!audio.src && !usingStemPlayer) {
+      await loadTrack(currentIndex, { autoplay: false });
     }
 
     if (canUseWebAudioViz()) {
       console.log("Calling viz functions from play()...");
-      ensureAudioGraph();
+      if (!usingStemPlayer) {
+        ensureAudioGraph();
+      }
       startVizLoop();
       void ensureThreeViz();
       await tryResumeAudioContext();
@@ -2802,18 +3030,30 @@
     }
 
     try {
-      await audio.play();
-      updatePlayPauseBtn();
-      updateVizPauseState();
-      updatePlaylistUi();
-      announceToScreenReader(`Now playing: ${trackLabel(tracks[currentIndex])}`);
+      if (usingStemPlayer && stemPlayer) {
+        stemPlayer.play();
+        updatePlayPauseBtn();
+        updateVizPauseState();
+        updatePlaylistUi();
+        announceToScreenReader(`Now playing: ${trackLabel(tracks[currentIndex])}`);
+      } else {
+        await audio.play();
+        updatePlayPauseBtn();
+        updateVizPauseState();
+        updatePlaylistUi();
+        announceToScreenReader(`Now playing: ${trackLabel(tracks[currentIndex])}`);
+      }
     } catch (err) {
       announceToScreenReader("Playback blocked. Tap play again.");
     }
   }
 
   function pause() {
-    audio.pause();
+    if (usingStemPlayer && stemPlayer) {
+      stemPlayer.pause();
+    } else {
+      audio.pause();
+    }
     stopVizLoop();
     stopIOSVizLoop();
     updatePlayPauseBtn();
@@ -3073,7 +3313,7 @@
 
   // Play/Pause button
   playPauseBtn.addEventListener("click", () => {
-    if (audio.paused) {
+    if (isPlaybackPaused()) {
       void play();
     } else {
       pause();
@@ -3097,6 +3337,10 @@
     const v = clamp(Number(volume.value) / 100, 0, 1);
     audio.volume = v;
     audio.muted = false;
+    // Also set stem player volume if active
+    if (usingStemPlayer && stemPlayer) {
+      stemPlayer.setMasterVolume(v);
+    }
     volume.style.setProperty("--progress", `${v * 100}%`);
     localStorage.setItem(VOLUME_STORAGE_KEY, String(v));
     updateVolumeIcon();
@@ -3114,10 +3358,10 @@
     isSeeking = false;
   });
   seek.addEventListener("input", () => {
-    const dur = audio.duration;
+    const dur = getPlaybackDuration();
     if (!Number.isFinite(dur) || dur <= 0) return;
     const ratio = clamp(Number(seek.value) / 1000, 0, 1);
-    audio.currentTime = ratio * dur;
+    setPlaybackCurrentTime(ratio * dur);
     updateTimeUi();
   });
 
@@ -3188,6 +3432,55 @@
       if (EnvironmentMode) {
         EnvironmentMode.setSpeedMultiplier(multiplier);
       }
+    });
+  }
+
+  // Flight control sliders
+  if (lateralLimitSlider) {
+    lateralLimitSlider.addEventListener("input", () => {
+      const val = Number(lateralLimitSlider.value);
+      if (lateralLimitValue) lateralLimitValue.textContent = String(val);
+      if (EnvironmentMode) EnvironmentMode.setFlightConfig('lateralLimit', val);
+    });
+  }
+
+  if (minAltitudeSlider) {
+    minAltitudeSlider.addEventListener("input", () => {
+      const val = Number(minAltitudeSlider.value) / 10;
+      if (minAltitudeValue) minAltitudeValue.textContent = val.toFixed(1);
+      if (EnvironmentMode) EnvironmentMode.setFlightConfig('flightMinY', val);
+    });
+  }
+
+  if (maxAltitudeSlider) {
+    maxAltitudeSlider.addEventListener("input", () => {
+      const val = Number(maxAltitudeSlider.value);
+      if (maxAltitudeValue) maxAltitudeValue.textContent = String(val);
+      if (EnvironmentMode) EnvironmentMode.setFlightConfig('flightMaxY', val);
+    });
+  }
+
+  if (steerResponseSlider) {
+    steerResponseSlider.addEventListener("input", () => {
+      const val = Number(steerResponseSlider.value);
+      if (steerResponseValue) steerResponseValue.textContent = String(val);
+      if (EnvironmentMode) EnvironmentMode.setFlightConfig('steerResponse', val);
+    });
+  }
+
+  if (verticalResponseSlider) {
+    verticalResponseSlider.addEventListener("input", () => {
+      const val = Number(verticalResponseSlider.value);
+      if (verticalResponseValue) verticalResponseValue.textContent = String(val);
+      if (EnvironmentMode) EnvironmentMode.setFlightConfig('verticalResponse', val);
+    });
+  }
+
+  if (bankAngleSlider) {
+    bankAngleSlider.addEventListener("input", () => {
+      const val = Number(bankAngleSlider.value) / 100;
+      if (bankAngleValue) bankAngleValue.textContent = Math.round(val * 100) + '%';
+      if (EnvironmentMode) EnvironmentMode.setFlightConfig('bankAngle', val);
     });
   }
 

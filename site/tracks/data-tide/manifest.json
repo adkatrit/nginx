@@ -1,0 +1,17 @@
+{
+  "title": "Data Tide",
+  "artist": "DeytaDreams",
+  "bpm": 110,
+  "duration": null,
+  "lyrics": "lyrics.json",
+  "stems": {
+    "mix": {
+      "audio": "mix.mp3",
+      "visualization": {
+        "target": "particles",
+        "effect": "trails",
+        "color": "#00ffff"
+      }
+    }
+  }
+}

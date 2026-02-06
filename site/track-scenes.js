@@ -1452,7 +1452,8 @@ window.TrackScenes = (function() {
   function buildWhosLearning(THREE, scene, audioData) {
     const group = new THREE.Group();
 
-    scene.fog = new THREE.Fog(0x001000, 5, 50);
+    // Use theme's fog settings instead of overriding here
+    // (Theme has fogNear: 30, fogFar: 200 which works better with animated backgrounds)
 
     // Neural network nodes
     const nodes = [];
@@ -1464,7 +1465,8 @@ window.TrackScenes = (function() {
       const mat = new THREE.MeshBasicMaterial({
         color: 0x00ff00,
         transparent: true,
-        opacity: 0.8
+        opacity: 0.8,
+        depthWrite: false
       });
       const node = new THREE.Mesh(geom, mat);
       node.position.set(
@@ -1483,7 +1485,8 @@ window.TrackScenes = (function() {
     const connectionMat = new THREE.LineBasicMaterial({
       color: 0x00ff00,
       transparent: true,
-      opacity: 0.2
+      opacity: 0.2,
+      depthWrite: false
     });
 
     for (let i = 0; i < nodeCount; i++) {
@@ -1521,7 +1524,8 @@ window.TrackScenes = (function() {
       size: 0.08,
       transparent: true,
       opacity: 0.4,
-      blending: THREE.AdditiveBlending
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
     });
     const codeRain = new THREE.Points(codeGeom, codeMat);
     group.add(codeRain);
@@ -1533,7 +1537,8 @@ window.TrackScenes = (function() {
       transparent: true,
       opacity: 0.3,
       side: THREE.DoubleSide,
-      blending: THREE.AdditiveBlending
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
     });
     const scanBeam = new THREE.Mesh(scanGeom, scanMat);
     scanBeam.rotation.x = Math.PI / 2;
@@ -1592,7 +1597,7 @@ window.TrackScenes = (function() {
           if (child.material) child.material.dispose();
         });
         scene.remove(group);
-        scene.fog = null;
+        // Don't clear fog - let the environment theme manage it
       }
     };
   }

@@ -1,0 +1,57 @@
+{
+  "lyrics": [
+    { "time": 42, "type": "section", "text": "[Verse 1]" },
+    { "time": 43, "text": "Blue light morning" },
+    { "time": 45, "text": "Scroll before me breathe" },
+    { "time": 48, "text": "Every likkle window" },
+    { "time": 50.5, "text": "Tellin' me who fi be" },
+    { "time": 53, "text": "Savin' all mi memories" },
+    { "time": 55.5, "text": "To a place mi never see" },
+    { "time": 58, "text": "If it all went dark" },
+    { "time": 60, "text": "Would dem still remember me?" },
+
+    { "time": 65, "type": "section", "text": "[Chorus]" },
+    { "time": 66, "text": "Mi a sign dem terms an' conditions" },
+    { "time": 69, "text": "Pon di life weh mi a live pon screens" },
+    { "time": 72, "text": "Tryin' fi love a world made of mirrors" },
+    { "time": 75, "text": "Till mi cyaan tell di code from di dream" },
+    { "time": 78, "text": "Gettin' to terms wid di weight a dis circuitry" },
+    { "time": 82, "text": "Still a try fi feel somethin' real beneath" },
+
+    { "time": 87, "type": "section", "text": "[Verse 2]" },
+    { "time": 89, "text": "Maps know weh mi a go" },
+    { "time": 92, "text": "Long 'fore mi choose" },
+    { "time": 95, "text": "Voices in mi headphone" },
+    { "time": 98, "text": "A finish mi views" },
+    { "time": 101, "text": "Mi seh mi always \"connected\"" },
+    { "time": 104, "text": "But mi a talk to di air" },
+    { "time": 106, "text": "Typin' out confessions" },
+    { "time": 112, "text": "Hope someone deh near" },
+
+    { "time": 116, "type": "section", "text": "[Chorus]" },
+    { "time": 118, "text": "Mi a sign dem terms an' conditions" },
+    { "time": 121, "text": "Pon di life weh mi a live pon screens" },
+    { "time": 123, "text": "Tryin' fi love a world made of mirrors" },
+    { "time": 126, "text": "Till mi cyaan tell di code from di dream" },
+    { "time": 129, "text": "Gettin' to terms wid di weight a dis circuitry" },
+    { "time": 133, "text": "Still a try fi feel somethin' real beneath" },
+
+    { "time": 140, "type": "section", "text": "[Bridge]" },
+    { "time": 142, "text": "Mi nuh hate it" },
+    { "time": 143.5, "text": "Mi nuh worship it" },
+    { "time": 145, "text": "Mi just want a likkle room inside a dis" },
+    { "time": 149, "text": "Touch a hand" },
+    { "time": 150.5, "text": "Not an icon" },
+    { "time": 152, "text": "Hear a laugh" },
+    { "time": 154, "text": "When di power gone" },
+
+    { "time": 197, "type": "section", "text": "[Chorus]" },
+    { "time": 199, "text": "Mi a sign dem terms an' conditions" },
+    { "time": 202, "text": "Pon di life weh mi a live pon screens" },
+    { "time": 204, "text": "Tryin' fi love a world made of mirrors" },
+    { "time": 207, "text": "Till mi cyaan tell di code from di dream" },
+    { "time": 210, "text": "Gettin' to terms wid di weight a dis circuitry" },
+    { "time": 214, "text": "Still a try fi feel somethin' real beneath" },
+    { "time": 219, "text": "Still a try fi feel somethin' real beneath" }
+  ]
+}

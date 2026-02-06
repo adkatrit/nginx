@@ -1,0 +1,17 @@
+{
+  "title": "Dreams Bleed Into Dashboards",
+  "artist": "DeytaDreams",
+  "bpm": 95,
+  "duration": null,
+  "lyrics": "lyrics.json",
+  "stems": {
+    "mix": {
+      "audio": "mix.mp3",
+      "visualization": {
+        "target": "atmosphere",
+        "effect": "glow",
+        "color": "#ff44ff"
+      }
+    }
+  }
+}

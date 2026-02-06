@@ -144,9 +144,17 @@
     cameraShakeIntensity: 0.5,
     cameraShakeDuration: 0.3,
 
+    // Dynamic camera following
+    cameraLagX: 18.0,          // How quickly camera follows laterally (higher = faster)
+    cameraLagY: 14.0,          // How quickly camera follows vertically
+    cameraVelocityOffsetX: 0.05, // Camera offset based on lateral velocity
+    cameraVelocityOffsetY: 0.04, // Camera offset based on vertical velocity
+    cameraPullBack: 0.03,      // Pull camera back when moving fast
+    cameraLookAheadVel: 0.15,  // Look ahead based on velocity
+
     // Controls (smoother steering)
     // Higher = steering reacts faster to key changes
-    steerResponse: 16,
+    steerResponse: 23,
     steerResponseShiftMult: 2.1,
     steerSpeedShiftMult: 1.6,
 
@@ -157,13 +165,37 @@
     // Flight (this is now a flying game)
     flightEnabled: true,
     flightStartY: 6.0,
-    flightMinY: 1.2,
+    flightMinY: 0.5,
     flightMaxY: 18.0,
-    verticalResponse: 14,
+    verticalResponse: 17,
     verticalResponseShiftMult: 2.0,
     verticalSpeedMult: 1.0,
     verticalSpeedShiftMult: 1.55,
     pitchFromClimb: 0.22,
+
+    // Realistic flight physics
+    physicsEnabled: false,          // Disable for direct responsive control
+    lateralDrag: 3.5,               // How quickly lateral velocity decays (higher = more drag)
+    verticalDrag: 2.8,              // How quickly vertical velocity decays
+    lateralAccel: 28.0,             // Lateral acceleration force
+    verticalAccel: 22.0,            // Vertical acceleration force
+    maxLateralVel: 25.0,            // Maximum lateral velocity
+    maxVerticalVel: 18.0,           // Maximum vertical velocity
+
+    // Speed affects turning (realistic: faster = wider turns)
+    turnRadiusFactor: 0.6,          // How much speed reduces turn rate (0=none, 1=strong)
+    minTurnRateAtSpeed: 0.35,       // Minimum turn rate multiplier at max speed
+
+    // Banking and roll
+    bankAngle: 0.45,                // Max roll angle when turning (radians)
+    bankResponse: 4.0,              // How fast ship banks into turns
+    bankFromVelocity: 0.4,          // Additional bank from lateral momentum
+    pitchFromVertVel: 0.15,         // Pitch from vertical velocity
+    pitchResponse: 5.0,             // How fast pitch responds
+
+    // Momentum feel
+    driftFactor: 0.15,              // How much lateral momentum persists (0=none, 1=ice)
+    verticalDriftFactor: 0.1,       // Vertical momentum persistence
 
     // Ride path (visual readability)
     pathEnabled: true,
@@ -274,6 +306,7 @@
       this.theme = { ...DEFAULT_ENV };
       this.distance = 0;
       this.lateralPos = 0;
+      this.lateralLimit = 100;  // Tunable via Flight Controls panel
       this.altitude = CONFIG.flightStartY;
       this.speed = CONFIG.baseSpeed;
       this.steerInput = 0;
@@ -285,6 +318,14 @@
       this._shiftDown = false;
       this.boosting = false;
       this.boostTimer = 0;
+
+      // Realistic physics - velocity-based movement
+      this.lateralVelocity = 0;      // Current lateral (sideways) velocity
+      this.verticalVelocity = 0;     // Current vertical velocity
+      this.currentBank = 0;          // Current roll/bank angle
+      this.currentPitch = 0;         // Current pitch angle
+      this.visualRoll = 0;           // Smoothed visual roll for rendering
+      this.visualPitch = 0;          // Smoothed visual pitch for rendering
 
       this.chunks = [];
       this.nextChunkZ = 0;
@@ -355,6 +396,12 @@
       this.speedLines = null;
       this.trail = [];
       this.cameraShake = { x: 0, y: 0, timer: 0 };
+
+      // Dynamic camera state
+      this.smoothCamX = 0;
+      this.smoothCamY = CONFIG.flightStartY + CONFIG.cameraHeight;
+      this.cameraRoll = 0;
+
       this.colorShiftHue = 0;
       this.pulsePhase = 0;
       this.ambientLight = null;
@@ -1283,6 +1330,17 @@
       return this.speedMultiplier;
     }
 
+    setFlightConfig(key, value) {
+      // Update the CONFIG value and store the lateral limit for use in updateMovement
+      if (key === 'lateralLimit') {
+        this.lateralLimit = value;
+        console.log('Lateral limit set to:', value);
+      } else if (key in CONFIG) {
+        CONFIG[key] = value;
+        console.log(`Flight config ${key} set to:`, value);
+      }
+    }
+
     createParticles() {
       const THREE = this.THREE;
       // Use particleDensity from theme (0-1) to scale particle count
@@ -1969,6 +2027,19 @@
       this.boostTimer = 0;
       this.time = 0;
 
+      // Reset physics state
+      this.lateralVelocity = 0;
+      this.verticalVelocity = 0;
+      this.currentBank = 0;
+      this.currentPitch = 0;
+      this.visualRoll = 0;
+      this.visualPitch = 0;
+
+      // Reset camera state
+      this.smoothCamX = 0;
+      this.smoothCamY = CONFIG.flightStartY + CONFIG.cameraHeight;
+      this.cameraRoll = 0;
+
       this.score = 0;
       this.combo = 1;
       this.comboTimer = 0;
@@ -2366,32 +2437,118 @@
       this.speed += (targetSpeed - this.speed) * 0.1;  // Smoother acceleration (was 0.15)
       this.distance += this.speed * dt * 60;
 
-      // Steering
-      const steerTarget = (this._leftDown ? 1 : 0) + (this._rightDown ? -1 : 0);
-      // Smooth the steering signal to avoid "pause" when switching directions quickly.
-      // Exponential smoothing keeps it framerate-independent.
-      const steerResponse = CONFIG.steerResponse * (this._shiftDown ? CONFIG.steerResponseShiftMult : 1);
-      const steerK = 1 - Math.exp(-steerResponse * dt);
-      this.steerInput += (steerTarget - this.steerInput) * steerK;
-      const steerSpeedMult = this._shiftDown ? CONFIG.steerSpeedShiftMult : 1;
-      const steerSpeed = 0.4 * this.speed * steerSpeedMult;
-      this.lateralPos += this.steerInput * steerSpeed * dt * 60;
-      this.lateralPos = Math.max(-40, Math.min(40, this.lateralPos));
-
-      // Flight (vertical control)
-      if (CONFIG.flightEnabled) {
+      // === REALISTIC FLIGHT PHYSICS ===
+      if (CONFIG.physicsEnabled) {
+        // Get input targets
+        const steerTarget = (this._leftDown ? 1 : 0) + (this._rightDown ? -1 : 0);
         const climbTarget = (this._upDown ? 1 : 0) + (this._downDown ? -1 : 0);
+
+        // Smooth input signals
+        const steerResponse = CONFIG.steerResponse * (this._shiftDown ? CONFIG.steerResponseShiftMult : 1);
+        const steerK = 1 - Math.exp(-steerResponse * dt);
+        this.steerInput += (steerTarget - this.steerInput) * steerK;
+
         const climbResponse = CONFIG.verticalResponse * (this._shiftDown ? CONFIG.verticalResponseShiftMult : 1);
         const climbK = 1 - Math.exp(-climbResponse * dt);
         this.verticalInput += (climbTarget - this.verticalInput) * climbK;
 
-        const climbSpeedMult = (this._shiftDown ? CONFIG.verticalSpeedShiftMult : 1) * CONFIG.verticalSpeedMult;
-        const climbSpeed = 0.32 * this.speed * climbSpeedMult;
-        this.altitude += this.verticalInput * climbSpeed * dt * 60;
-        this.altitude = Math.max(CONFIG.flightMinY, Math.min(CONFIG.flightMaxY, this.altitude));
+        // Speed affects turning - faster = harder to turn (wider radius)
+        const speedRatio = Math.min(1, this.speed / CONFIG.maxSpeed);
+        const turnRateMultiplier = 1.0 - (speedRatio * CONFIG.turnRadiusFactor * (1 - CONFIG.minTurnRateAtSpeed));
+
+        // Apply acceleration to velocities (with turn rate reduction at speed)
+        const lateralAccel = CONFIG.lateralAccel * turnRateMultiplier * (this._shiftDown ? 1.4 : 1);
+        this.lateralVelocity += this.steerInput * lateralAccel * dt;
+
+        if (CONFIG.flightEnabled) {
+          const verticalAccel = CONFIG.verticalAccel * (this._shiftDown ? 1.4 : 1);
+          this.verticalVelocity += this.verticalInput * verticalAccel * dt;
+        }
+
+        // Apply drag (velocity decays over time)
+        const lateralDragFactor = Math.exp(-CONFIG.lateralDrag * dt);
+        const verticalDragFactor = Math.exp(-CONFIG.verticalDrag * dt);
+
+        // Add drift factor - some momentum persists even with drag
+        const effectiveLateralDrag = lateralDragFactor + (1 - lateralDragFactor) * CONFIG.driftFactor;
+        const effectiveVerticalDrag = verticalDragFactor + (1 - verticalDragFactor) * CONFIG.verticalDriftFactor;
+
+        this.lateralVelocity *= effectiveLateralDrag;
+        this.verticalVelocity *= effectiveVerticalDrag;
+
+        // Clamp velocities
+        this.lateralVelocity = Math.max(-CONFIG.maxLateralVel, Math.min(CONFIG.maxLateralVel, this.lateralVelocity));
+        this.verticalVelocity = Math.max(-CONFIG.maxVerticalVel, Math.min(CONFIG.maxVerticalVel, this.verticalVelocity));
+
+        // Apply velocities to position
+        this.lateralPos += this.lateralVelocity * dt;
+        this.lateralPos = Math.max(-this.lateralLimit, Math.min(this.lateralLimit, this.lateralPos));
+
+        if (CONFIG.flightEnabled) {
+          this.altitude += this.verticalVelocity * dt;
+          this.altitude = Math.max(CONFIG.flightMinY, Math.min(CONFIG.flightMaxY, this.altitude));
+        } else {
+          this.altitude = 0.8;
+          this.verticalVelocity = 0;
+        }
+
+        // === BANKING AND ROLL PHYSICS ===
+        // Target bank based on steering input + lateral velocity
+        const inputBank = this.steerInput * CONFIG.bankAngle;
+        const velocityBank = (this.lateralVelocity / CONFIG.maxLateralVel) * CONFIG.bankAngle * CONFIG.bankFromVelocity;
+        const targetBank = -(inputBank + velocityBank); // Negative for correct direction
+
+        // Smooth bank transition
+        const bankK = 1 - Math.exp(-CONFIG.bankResponse * dt);
+        this.currentBank += (targetBank - this.currentBank) * bankK;
+        // Clamp bank to safe range (max ~45 degrees)
+        const maxBank = 0.8;
+        this.currentBank = Math.max(-maxBank, Math.min(maxBank, this.currentBank));
+
+        // Target pitch based on vertical input + vertical velocity
+        const inputPitch = this.verticalInput * CONFIG.pitchFromClimb;
+        const velocityPitch = (this.verticalVelocity / CONFIG.maxVerticalVel) * CONFIG.pitchFromVertVel;
+        const targetPitch = inputPitch + velocityPitch;
+
+        // Smooth pitch transition
+        const pitchK = 1 - Math.exp(-CONFIG.pitchResponse * dt);
+        this.currentPitch += (targetPitch - this.currentPitch) * pitchK;
+
+        // Extra smooth visual roll/pitch for rendering (prevents jitter)
+        this.visualRoll += (this.currentBank - this.visualRoll) * 0.15;
+        this.visualPitch += (this.currentPitch - this.visualPitch) * 0.15;
+
       } else {
-        this.altitude = 0.8;
-        this.verticalInput = 0;
+        // === LEGACY NON-PHYSICS MOVEMENT ===
+        // Steering
+        const steerTarget = (this._leftDown ? 1 : 0) + (this._rightDown ? -1 : 0);
+        const steerResponse = CONFIG.steerResponse * (this._shiftDown ? CONFIG.steerResponseShiftMult : 1);
+        const steerK = 1 - Math.exp(-steerResponse * dt);
+        this.steerInput += (steerTarget - this.steerInput) * steerK;
+        const steerSpeedMult = this._shiftDown ? CONFIG.steerSpeedShiftMult : 1;
+        const steerSpeed = 0.4 * this.speed * steerSpeedMult;
+        this.lateralPos += this.steerInput * steerSpeed * dt * 60;
+        this.lateralPos = Math.max(-this.lateralLimit, Math.min(this.lateralLimit, this.lateralPos));
+
+        // Flight (vertical control)
+        if (CONFIG.flightEnabled) {
+          const climbTarget = (this._upDown ? 1 : 0) + (this._downDown ? -1 : 0);
+          const climbResponse = CONFIG.verticalResponse * (this._shiftDown ? CONFIG.verticalResponseShiftMult : 1);
+          const climbK = 1 - Math.exp(-climbResponse * dt);
+          this.verticalInput += (climbTarget - this.verticalInput) * climbK;
+
+          const climbSpeedMult = (this._shiftDown ? CONFIG.verticalSpeedShiftMult : 1) * CONFIG.verticalSpeedMult;
+          const climbSpeed = 0.32 * this.speed * climbSpeedMult;
+          this.altitude += this.verticalInput * climbSpeed * dt * 60;
+          this.altitude = Math.max(CONFIG.flightMinY, Math.min(CONFIG.flightMaxY, this.altitude));
+        } else {
+          this.altitude = 0.8;
+          this.verticalInput = 0;
+        }
+
+        // Legacy visual roll (for non-physics mode)
+        this.visualRoll = -this.steerInput * 0.35;
+        this.visualPitch = this.verticalInput * CONFIG.pitchFromClimb;
       }
 
       // Chill Ride: flow + gates
@@ -2443,10 +2600,16 @@
         const bob = Math.sin(this.time * 3.6) * 0.06;
         this.player.position.y = this.altitude + bob;
 
-        const targetRoll = -this.steerInput * 0.35;
-        const targetPitch = this.verticalInput * CONFIG.pitchFromClimb;
-        this.player.rotation.z += (targetRoll - this.player.rotation.z) * 0.12;
-        this.player.rotation.x += (targetPitch - this.player.rotation.x) * 0.12;
+        // Use physics-based visual roll/pitch if available, otherwise use legacy
+        if (CONFIG.physicsEnabled) {
+          this.player.rotation.z = this.visualRoll;
+          this.player.rotation.x = this.visualPitch;
+        } else {
+          const targetRoll = -this.steerInput * 0.35;
+          const targetPitch = this.verticalInput * CONFIG.pitchFromClimb;
+          this.player.rotation.z += (targetRoll - this.player.rotation.z) * 0.12;
+          this.player.rotation.x += (targetPitch - this.player.rotation.x) * 0.12;
+        }
 
       }
 
@@ -2474,11 +2637,14 @@
         this.scene.fog.far = this.theme.fogFar - energy * 50 * fogMult;
       }
 
-      // Update animated background
+      // Update animated background with full audio data for reactive effects
       if (this.animatedBackground) {
         this.animatedBackground.update(dt, {
           energy: energy,
-          bass: bass
+          bass: bass,
+          mid: mid,
+          treble: treble,
+          beatPulse: this.audioData.beatPulse || 0
         });
       }
 
@@ -2755,11 +2921,13 @@
     }
 
     updateCamera() {
-      this.updateCameraShake(0.016);  // Approximate dt
+      this.updateCameraShake(0.016);
 
+      // Direct camera follow - no lag, instant response
       const camX = this.lateralPos + this.cameraShake.x;
       const camY = this.altitude + CONFIG.cameraHeight + Math.sin(this.time * 2) * 0.2 + this.cameraShake.y;
       const camZ = this.distance - CONFIG.cameraDistance;
+
       this.camera.position.set(camX, camY, camZ);
       this.camera.lookAt(this.lateralPos, this.altitude + 1.8, this.distance + CONFIG.cameraLookAhead);
     }
@@ -2767,9 +2935,6 @@
     renderBackground() {
       if (this.animatedBackground && this.renderer) {
         this.animatedBackground.render(this.renderer);
-      } else if (!this.animatedBackground) {
-        // Debug: why no animated background?
-        console.log("renderBackground called but no animatedBackground");
       }
     }
 
@@ -2945,6 +3110,12 @@
     setEffectsConfig(config) {
       if (this.instance) {
         this.instance.applyEffectsConfig(config);
+      }
+    },
+
+    setFlightConfig(key, value) {
+      if (this.instance) {
+        this.instance.setFlightConfig(key, value);
       }
     },
 
