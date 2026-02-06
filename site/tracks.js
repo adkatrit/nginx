@@ -13,18 +13,6 @@ window.TRACKS = [
     stemsManifest: "./tracks/terms-and-conditions/manifest.json"
   },
   {
-    title: "Beast Mode",
-    artist: "DeytaDreams",
-    url: null,
-    stemsManifest: "./tracks/beast-mode/manifest.json"
-  },
-  {
-    title: "Gi Mi Di Reins",
-    artist: "DeytaDreams",
-    url: null,
-    stemsManifest: "./tracks/gi-mi-di-reins/manifest.json"
-  },
-  {
     title: "Soft Systems",
     artist: "DeytaDreams",
     url: null,
@@ -59,5 +47,11 @@ window.TRACKS = [
     artist: "DeytaDreams",
     url: null,
     stemsManifest: "./tracks/trade-you-my-hands/manifest.json"
+  },
+  {
+    title: "Turn Your Phone Face Down",
+    artist: "DeytaDreams",
+    url: null,
+    stemsManifest: "./tracks/turn-your-phone-face-down/manifest.json"
   },
 ];

@@ -1,0 +1,74 @@
+{
+  "title": "Turn Your Phone Face Down",
+  "artist": "DeytaDreams",
+  "bpm": 110,
+  "duration": null,
+  "lyrics": "lyrics.json",
+  "stems": {
+    "drums": {
+      "audio": "drums.mp3",
+      "visualization": {
+        "target": "terrain",
+        "effect": "impact",
+        "color": "#ff6644"
+      }
+    },
+    "bass": {
+      "audio": "bass.mp3",
+      "visualization": {
+        "target": "terrain",
+        "effect": "deformation",
+        "color": "#4466ff"
+      }
+    },
+    "vocals": {
+      "audio": "vocals.mp3",
+      "visualization": {
+        "target": "atmosphere",
+        "effect": "fog",
+        "color": "#ffffff"
+      }
+    },
+    "synth": {
+      "audio": "synth.mp3",
+      "visualization": {
+        "target": "background",
+        "effect": "pulse",
+        "color": "#ffaa00"
+      }
+    },
+    "guitar": {
+      "audio": "guitar.mp3",
+      "visualization": {
+        "target": "particles",
+        "effect": "trails",
+        "color": "#ff8844"
+      }
+    },
+    "percussion": {
+      "audio": "percussion.mp3",
+      "visualization": {
+        "target": "particles",
+        "effect": "burst",
+        "color": "#ff4488"
+      }
+    },
+    "backing-vocals": {
+      "audio": "backing-vocals.mp3",
+      "visualization": {
+        "target": "atmosphere",
+        "effect": "glow",
+        "color": "#aaddff"
+      }
+    },
+    "other": {
+      "audio": "other.mp3",
+      "visualization": {
+        "target": "background",
+        "effect": "pulse",
+        "color": "#88ff88"
+      }
+    }
+  },
+  "mix": null
+}
