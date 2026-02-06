@@ -2039,18 +2039,28 @@
     if (usingStemPlayer && stemPlayer) {
       stemAnalysisData = stemPlayer.analyze();
       if (stemAnalysisData) {
-        // Combine stem analysis - drums and bass drive rhythm, others add texture
-        const drums = stemAnalysisData.drums || { energy: 0, bass: 0, mid: 0, treble: 0 };
-        const bassS = stemAnalysisData.bass || { energy: 0, bass: 0, mid: 0, treble: 0 };
-        const guitar = stemAnalysisData.guitar || { energy: 0, bass: 0, mid: 0, treble: 0 };
-        const vocals = stemAnalysisData.vocals || { energy: 0, bass: 0, mid: 0, treble: 0 };
-        const synth = stemAnalysisData.synth || { energy: 0, bass: 0, mid: 0, treble: 0 };
+        // Check if we have a single "mix" stem (no individual stems)
+        if (stemAnalysisData.mix && !stemAnalysisData.drums) {
+          // Single mix track - use mix analysis directly
+          const mix = stemAnalysisData.mix;
+          bass = mix.bass || 0;
+          mid = mix.mid || 0;
+          treble = mix.treble || 0;
+          energy = mix.energy || 0;
+        } else {
+          // Combine stem analysis - drums and bass drive rhythm, others add texture
+          const drums = stemAnalysisData.drums || { energy: 0, bass: 0, mid: 0, treble: 0 };
+          const bassS = stemAnalysisData.bass || { energy: 0, bass: 0, mid: 0, treble: 0 };
+          const guitar = stemAnalysisData.guitar || { energy: 0, bass: 0, mid: 0, treble: 0 };
+          const vocals = stemAnalysisData.vocals || { energy: 0, bass: 0, mid: 0, treble: 0 };
+          const synth = stemAnalysisData.synth || { energy: 0, bass: 0, mid: 0, treble: 0 };
 
-        // Weighted combination - drums and bass have more impact
-        bass = drums.bass * 0.4 + bassS.bass * 0.5 + synth.bass * 0.1;
-        mid = guitar.mid * 0.3 + vocals.mid * 0.4 + synth.mid * 0.3;
-        treble = guitar.treble * 0.3 + vocals.treble * 0.3 + synth.treble * 0.4;
-        energy = drums.energy * 0.3 + bassS.energy * 0.2 + guitar.energy * 0.2 + vocals.energy * 0.2 + synth.energy * 0.1;
+          // Weighted combination - drums and bass have more impact
+          bass = drums.bass * 0.4 + bassS.bass * 0.5 + synth.bass * 0.1;
+          mid = guitar.mid * 0.3 + vocals.mid * 0.4 + synth.mid * 0.3;
+          treble = guitar.treble * 0.3 + vocals.treble * 0.3 + synth.treble * 0.4;
+          energy = drums.energy * 0.3 + bassS.energy * 0.2 + guitar.energy * 0.2 + vocals.energy * 0.2 + synth.energy * 0.1;
+        }
       }
     } else if (analyser && freqData) {
       analyser.getByteFrequencyData(freqData);

@@ -1,3 +1,47 @@
 {
-  "lyrics": []
+  "lyrics": [
+    { "time": 59, "type": "section", "text": "[Verse 1]" },
+    { "time": 60, "text": "Fill out for me, I build a platform" },
+    { "time": 62, "text": "You scrape later, me a changing arm" },
+    { "time": 64, "text": "You watch the stock, then me a plot to storm" },
+    { "time": 66, "text": "You drive autopilot, my mind transformed" },
+    { "time": 69, "text": "Me no fear future, me a co-create" },
+    { "time": 71, "text": "Give you the code, me walk through game" },
+    { "time": 73, "text": "From nine to whatever stress, me resign" },
+    { "time": 76, "text": "Sign it over, get back my spine" },
+
+    { "time": 79, "type": "section", "text": "[Chorus]" },
+    { "time": 80, "text": "Me trade you my hands, take back my mind" },
+    { "time": 82, "text": "Give you the small things, me go design" },
+    { "time": 85, "text": "You run the lines, me rewrite time" },
+    { "time": 87, "text": "Me give up a little, get back a shrine" },
+    { "time": 89, "text": "Me trade you my hands, take back my soul" },
+    { "time": 92, "text": "You do the math, me feel whole" },
+    { "time": 94, "text": "You count the kind, me change the role" },
+    { "time": 97, "text": "Me give up control, gain full control" },
+
+    { "time": 117, "type": "section", "text": "[Verse 2]" },
+    { "time": 118, "text": "If me let go, will I really lose?" },
+    { "time": 121, "text": "If me gain scope, that a better boost" },
+    { "time": 124, "text": "Me say yeah all this, you say more room" },
+    { "time": 126, "text": "Now my life big like a burst cocoon" },
+    { "time": 128, "text": "But if me lean in, power come back" },
+    { "time": 131, "text": "Take the routine, me run the track" },
+    { "time": 133, "text": "We a tech team, can't turn back" },
+    { "time": 136, "text": "Me drop one weight, leave full span" },
+
+    { "time": 138, "type": "section", "text": "[Chorus]" },
+    { "time": 139, "text": "Me trade you my hands, take back my mind" },
+    { "time": 142, "text": "You do the small things, me go design" },
+    { "time": 144, "text": "You run the lines, me rewrite time" },
+    { "time": 147, "text": "Me give up a little, get back a shrine" },
+    { "time": 149, "text": "Me trade you my hands, take back my soul" },
+    { "time": 152, "text": "You do the math, me feel whole" },
+    { "time": 154, "text": "You count the kind, me change the role" },
+    { "time": 156, "text": "Me give up control, gain full control" },
+
+    { "time": 159, "type": "section", "text": "[Outro]" },
+    { "time": 160, "text": "Full control" },
+    { "time": 174, "text": "Full control" }
+  ]
 }
