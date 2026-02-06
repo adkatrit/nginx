@@ -1,8 +1,11 @@
 /**
  * StemPlayer - Multi-track stem playback with per-stem audio analysis
  *
- * Loads and synchronizes multiple audio stems, providing:
- * - Synchronized playback of all stems
+ * Uses AudioBufferSourceNode for sample-accurate synchronized playback.
+ * All stems start at the exact same AudioContext time, eliminating drift.
+ *
+ * Provides:
+ * - Synchronized playback of all stems (sample-accurate)
  * - Per-stem audio analysis (energy, bass, mid, treble)
  * - Per-stem volume/mute control
  * - MIDI event scheduling for note-accurate visualization
@@ -10,13 +13,17 @@
 class StemPlayer {
   constructor(audioContext) {
     this.audioContext = audioContext;
-    this.stems = new Map(); // stemId -> { audio, source, gainNode, analyser, data }
+    this.stems = new Map(); // stemId -> { buffer, sourceNode, gainNode, analyser, data }
     this.manifest = null;
     this.basePath = '';
     this.isPlaying = false;
     this.isLoaded = false;
     this.masterGain = this.audioContext.createGain();
     this.masterGain.connect(this.audioContext.destination);
+
+    // Playback timing
+    this.startTime = 0; // AudioContext time when playback started
+    this.pauseOffset = 0; // Position in track when paused
 
     // Analysis settings
     this.fftSize = 256;
@@ -27,19 +34,23 @@ class StemPlayer {
       'stemAnalysis': [],
       'midiNote': [],
       'loaded': [],
-      'error': []
+      'error': [],
+      'progress': []
     };
 
     // MIDI data
     this.midiData = new Map(); // stemId -> parsed MIDI events
     this.midiSchedule = []; // Upcoming MIDI events sorted by time
     this.lastMidiCheck = 0;
+
+    // Track duration
+    this.duration = 0;
   }
 
   /**
    * Load stems from a manifest file
    */
-  async loadFromManifest(manifestUrl) {
+  async loadFromManifest(manifestUrl, progressCallback) {
     try {
       this.basePath = manifestUrl.substring(0, manifestUrl.lastIndexOf('/') + 1);
 
@@ -48,13 +59,53 @@ class StemPlayer {
 
       this.manifest = await response.json();
 
-      // Load all stems in parallel
-      const loadPromises = [];
-      for (const [stemId, stemConfig] of Object.entries(this.manifest.stems)) {
-        loadPromises.push(this.loadStem(stemId, stemConfig));
+      // Load all stems in parallel, tracking progress
+      const stemEntries = Object.entries(this.manifest.stems);
+      const totalStems = stemEntries.length;
+      let loadedStems = 0;
+
+      console.log(`[StemPlayer] Loading ${totalStems} stems as AudioBuffers...`);
+
+      const loadPromises = stemEntries.map(async ([stemId, stemConfig]) => {
+        try {
+          await this.loadStem(stemId, stemConfig);
+          loadedStems++;
+          console.log(`[StemPlayer] ✓ Loaded: ${stemId} (${loadedStems}/${totalStems})`);
+
+          // Emit progress
+          if (progressCallback) {
+            progressCallback(loadedStems, totalStems, stemId);
+          }
+          this.emit('progress', { loaded: loadedStems, total: totalStems, current: stemId });
+
+          return { stemId, success: true };
+        } catch (err) {
+          loadedStems++;
+          console.error(`[StemPlayer] ✗ Failed to load ${stemId}:`, err.message);
+
+          if (progressCallback) {
+            progressCallback(loadedStems, totalStems, `${stemId} (failed)`);
+          }
+
+          return { stemId, success: false, error: err.message };
+        }
+      });
+
+      const results = await Promise.all(loadPromises);
+      const succeeded = results.filter(r => r.success).length;
+      const failed = results.filter(r => !r.success);
+
+      console.log(`[StemPlayer] Loaded ${succeeded}/${totalStems} stems`);
+      if (failed.length > 0) {
+        console.warn('[StemPlayer] Failed stems:', failed.map(f => f.stemId).join(', '));
       }
 
-      await Promise.all(loadPromises);
+      // Calculate duration from loaded buffers
+      for (const stem of this.stems.values()) {
+        if (stem.buffer && stem.buffer.duration > this.duration) {
+          this.duration = stem.buffer.duration;
+        }
+      }
 
       this.isLoaded = true;
       this.emit('loaded', { manifest: this.manifest });
@@ -67,43 +118,39 @@ class StemPlayer {
   }
 
   /**
-   * Load a single stem
+   * Load a single stem as an AudioBuffer
    */
   async loadStem(stemId, config) {
-    const audioUrl = this.basePath + config.audio;
+    const audioUrl = this.basePath + config.audio + '?v=' + Date.now();
 
-    // Create audio element for streaming playback
-    const audio = new Audio();
-    // Only set crossOrigin for cross-origin requests (avoids CORS issues with local files)
-    try {
-      const url = new URL(audioUrl, window.location.href);
-      if (url.origin !== window.location.origin) {
-        audio.crossOrigin = 'anonymous';
-      }
-    } catch (e) {
-      // Relative URL on same origin - no crossOrigin needed
+    // Fetch and decode audio data into an AudioBuffer
+    const response = await fetch(audioUrl);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} for ${audioUrl}`);
     }
-    audio.preload = 'auto';
 
-    // Create audio graph: source -> analyser -> gain -> master
-    const source = this.audioContext.createMediaElementSource(audio);
-    const analyser = this.audioContext.createAnalyser();
+    const arrayBuffer = await response.arrayBuffer();
+    const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+
+    // Create gain node for this stem (persistent)
     const gainNode = this.audioContext.createGain();
+    gainNode.connect(this.masterGain);
 
+    // Create analyser for this stem (persistent)
+    const analyser = this.audioContext.createAnalyser();
     analyser.fftSize = this.fftSize;
     analyser.smoothingTimeConstant = this.smoothingTimeConstant;
-
-    source.connect(analyser);
     analyser.connect(gainNode);
-    gainNode.connect(this.masterGain);
 
     // Store stem data
     this.stems.set(stemId, {
-      audio,
-      source,
+      buffer: audioBuffer,
+      sourceNode: null, // Created fresh each time we play
       analyser,
       gainNode,
       config,
+      volume: 1,
+      muted: false,
       frequencyData: new Uint8Array(analyser.frequencyBinCount),
       analysis: {
         energy: 0,
@@ -113,14 +160,64 @@ class StemPlayer {
         peak: 0
       }
     });
+  }
 
-    // Load audio
-    return new Promise((resolve, reject) => {
-      audio.addEventListener('canplaythrough', () => resolve(), { once: true });
-      audio.addEventListener('error', (e) => reject(new Error(`Failed to load ${audioUrl}: ${e.message}`)), { once: true });
-      audio.src = audioUrl;
-      audio.load();
-    });
+  /**
+   * Create source nodes for all stems and start them at the exact same time
+   */
+  _createAndStartSources(offset = 0) {
+    // Schedule all stems to start at exactly the same moment
+    const startAt = this.audioContext.currentTime + 0.05; // 50ms ahead for scheduling
+
+    for (const [stemId, stem] of this.stems) {
+      // Create a new source node (they're single-use)
+      const sourceNode = this.audioContext.createBufferSource();
+      sourceNode.buffer = stem.buffer;
+      sourceNode.connect(stem.analyser);
+
+      // Start at exactly the scheduled time, from the offset position
+      sourceNode.start(startAt, offset);
+
+      // Store reference so we can stop it later
+      stem.sourceNode = sourceNode;
+
+      // Handle natural end of playback
+      sourceNode.onended = () => {
+        if (this.isPlaying && stem.sourceNode === sourceNode) {
+          // Check if all stems have ended
+          let allEnded = true;
+          for (const s of this.stems.values()) {
+            if (s.sourceNode && s.sourceNode.playbackState !== 3) { // 3 = finished
+              allEnded = false;
+              break;
+            }
+          }
+          if (allEnded) {
+            this.isPlaying = false;
+            this.pauseOffset = 0;
+          }
+        }
+      };
+    }
+
+    this.startTime = startAt - offset;
+    this.isPlaying = true;
+  }
+
+  /**
+   * Stop all source nodes
+   */
+  _stopSources() {
+    for (const [stemId, stem] of this.stems) {
+      if (stem.sourceNode) {
+        try {
+          stem.sourceNode.stop();
+        } catch (e) {
+          // Already stopped
+        }
+        stem.sourceNode = null;
+      }
+    }
   }
 
   /**
@@ -130,7 +227,8 @@ class StemPlayer {
     const stem = this.stems.get(stemId);
     if (!stem || !stem.config.midi) return null;
 
-    const midiUrl = this.basePath + stem.config.midi;
+    // Cache-bust MIDI URL
+    const midiUrl = this.basePath + stem.config.midi + '?v=' + Date.now();
 
     try {
       const response = await fetch(midiUrl);
@@ -316,31 +414,28 @@ class StemPlayer {
    * Play all stems synchronized
    */
   play() {
-    if (!this.isLoaded) return;
+    if (!this.isLoaded || this.isPlaying) return;
 
     // Resume audio context if suspended
     if (this.audioContext.state === 'suspended') {
       this.audioContext.resume();
     }
 
-    // Sync all stems to the same time
-    const currentTime = this.getCurrentTime();
-
-    for (const [stemId, stem] of this.stems) {
-      stem.audio.currentTime = currentTime;
-      stem.audio.play().catch(e => console.warn(`Failed to play ${stemId}:`, e));
-    }
-
-    this.isPlaying = true;
+    // Create new source nodes and start them at the exact same time
+    this._createAndStartSources(this.pauseOffset);
   }
 
   /**
    * Pause all stems
    */
   pause() {
-    for (const [stemId, stem] of this.stems) {
-      stem.audio.pause();
-    }
+    if (!this.isPlaying) return;
+
+    // Store current position before stopping
+    this.pauseOffset = this.getCurrentTime();
+
+    // Stop all sources
+    this._stopSources();
     this.isPlaying = false;
   }
 
@@ -348,11 +443,9 @@ class StemPlayer {
    * Stop and reset to beginning
    */
   stop() {
-    for (const [stemId, stem] of this.stems) {
-      stem.audio.pause();
-      stem.audio.currentTime = 0;
-    }
+    this._stopSources();
     this.isPlaying = false;
+    this.pauseOffset = 0;
     this.lastMidiCheck = 0;
   }
 
@@ -360,27 +453,37 @@ class StemPlayer {
    * Seek to a position (in seconds)
    */
   seek(time) {
-    for (const [stemId, stem] of this.stems) {
-      stem.audio.currentTime = time;
+    const wasPlaying = this.isPlaying;
+
+    // Stop current playback
+    this._stopSources();
+    this.isPlaying = false;
+
+    // Set new position
+    this.pauseOffset = Math.max(0, Math.min(time, this.duration));
+    this.lastMidiCheck = this.pauseOffset;
+
+    // Resume if was playing
+    if (wasPlaying) {
+      this._createAndStartSources(this.pauseOffset);
     }
-    this.lastMidiCheck = time;
   }
 
   /**
    * Get current playback time
    */
   getCurrentTime() {
-    // Use the first stem as reference
-    const firstStem = this.stems.values().next().value;
-    return firstStem ? firstStem.audio.currentTime : 0;
+    if (this.isPlaying) {
+      return this.audioContext.currentTime - this.startTime;
+    }
+    return this.pauseOffset;
   }
 
   /**
    * Get duration
    */
   getDuration() {
-    const firstStem = this.stems.values().next().value;
-    return firstStem ? firstStem.audio.duration : 0;
+    return this.duration;
   }
 
   /**
@@ -389,7 +492,10 @@ class StemPlayer {
   setStemVolume(stemId, volume) {
     const stem = this.stems.get(stemId);
     if (stem) {
-      stem.gainNode.gain.value = Math.max(0, Math.min(1, volume));
+      stem.volume = Math.max(0, Math.min(1, volume));
+      if (!stem.muted) {
+        stem.gainNode.gain.value = stem.volume;
+      }
     }
   }
 
@@ -400,7 +506,7 @@ class StemPlayer {
     const stem = this.stems.get(stemId);
     if (stem) {
       stem.muted = muted;
-      stem.gainNode.gain.value = muted ? 0 : (stem.volume || 1);
+      stem.gainNode.gain.value = muted ? 0 : stem.volume;
     }
   }
 
@@ -409,7 +515,7 @@ class StemPlayer {
    */
   soloStem(stemId) {
     for (const [id, stem] of this.stems) {
-      stem.gainNode.gain.value = id === stemId ? 1 : 0;
+      stem.gainNode.gain.value = id === stemId ? stem.volume : 0;
     }
   }
 
@@ -418,7 +524,7 @@ class StemPlayer {
    */
   unsoloAll() {
     for (const [id, stem] of this.stems) {
-      stem.gainNode.gain.value = stem.muted ? 0 : (stem.volume || 1);
+      stem.gainNode.gain.value = stem.muted ? 0 : stem.volume;
     }
   }
 
@@ -439,7 +545,13 @@ class StemPlayer {
     const analysisResults = {};
 
     for (const [stemId, stem] of this.stems) {
-      stem.analyser.getByteFrequencyData(stem.frequencyData);
+      // Only get frequency data if we're playing
+      if (this.isPlaying && stem.sourceNode) {
+        stem.analyser.getByteFrequencyData(stem.frequencyData);
+      } else {
+        // Clear data when not playing
+        stem.frequencyData.fill(0);
+      }
 
       const data = stem.frequencyData;
       const binCount = data.length;
@@ -471,10 +583,10 @@ class StemPlayer {
       }
 
       // Normalize
-      const bass = bassSum / bassEnd;
-      const mid = midSum / (midEnd - bassEnd);
-      const treble = trebleSum / (binCount - midEnd);
-      const energy = totalSum / binCount;
+      const bass = bassEnd > 0 ? bassSum / bassEnd : 0;
+      const mid = (midEnd - bassEnd) > 0 ? midSum / (midEnd - bassEnd) : 0;
+      const treble = (binCount - midEnd) > 0 ? trebleSum / (binCount - midEnd) : 0;
+      const energy = binCount > 0 ? totalSum / binCount : 0;
 
       stem.analysis = { energy, bass, mid, treble, peak };
       analysisResults[stemId] = stem.analysis;
@@ -557,16 +669,15 @@ class StemPlayer {
     this.stop();
 
     for (const [stemId, stem] of this.stems) {
-      stem.audio.src = '';
-      stem.source.disconnect();
-      stem.analyser.disconnect();
-      stem.gainNode.disconnect();
+      if (stem.analyser) stem.analyser.disconnect();
+      if (stem.gainNode) stem.gainNode.disconnect();
     }
 
     this.stems.clear();
     this.midiData.clear();
     this.midiSchedule = [];
     this.isLoaded = false;
+    this.duration = 0;
   }
 }
 

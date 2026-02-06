@@ -5,12 +5,67 @@
   "duration": null,
   "lyrics": "lyrics.json",
   "stems": {
-    "mix": {
-      "audio": "mix.mp3",
+    "drums": {
+      "audio": "drums.mp3",
+      "midi": "drums.mid",
       "visualization": {
         "target": "terrain",
         "effect": "impact",
-        "color": "#ffff44"
+        "color": "#ff4444"
+      }
+    },
+    "bass": {
+      "audio": "bass.mp3",
+      "midi": "bass.mid",
+      "visualization": {
+        "target": "terrain",
+        "effect": "deformation",
+        "color": "#4444ff"
+      }
+    },
+    "vocals": {
+      "audio": "vocals.mp3",
+      "midi": "vocals.mid",
+      "visualization": {
+        "target": "atmosphere",
+        "effect": "fog",
+        "color": "#ffffff"
+      }
+    },
+    "backing-vocals": {
+      "audio": "backing-vocals.mp3",
+      "midi": "backing-vocals.mid",
+      "visualization": {
+        "target": "atmosphere",
+        "effect": "glow",
+        "color": "#aaaaff"
+      }
+    },
+    "synth": {
+      "audio": "synth.mp3",
+      "midi": "synth.mid",
+      "visualization": {
+        "target": "background",
+        "effect": "pulse",
+        "color": "#00ffff"
+      }
+    },
+    "percussion": {
+      "audio": "percussion.mp3",
+      "midi": "percussion.mid",
+      "visualization": {
+        "target": "terrain",
+        "effect": "impact",
+        "color": "#ff8800"
+      }
+    },
+    "fx": {
+      "audio": "fx.mp3",
+      "midi": "fx.mid",
+      "visualization": {
+        "target": "particles",
+        "effect": "burst",
+        "color": "#ff00ff"
       }
     }
   }

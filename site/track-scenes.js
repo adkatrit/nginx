@@ -13,7 +13,7 @@ window.TrackScenes = (function() {
   const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // DATA TIDE - Underwater bioluminescent data ocean
+  // DATA TIDE - Underwater bioluminescent data ocean with coral towers
   // ═══════════════════════════════════════════════════════════════════════════
   function buildDataTide(THREE, scene, audioData) {
     const group = new THREE.Group();
@@ -22,7 +22,80 @@ window.TrackScenes = (function() {
     const lights = [];
 
     // Deep ocean fog - darker, more mysterious
-    scene.fog = new THREE.FogExp2(0x000810, 0.018);
+    scene.fog = new THREE.FogExp2(0x000810, 0.012);
+
+    // CONTINUOUSLY GENERATED CORAL TOWERS
+    const corals = [];
+    const coralGroup = new THREE.Group();
+    const CORAL_SPACING = 8;
+    const CORALS_AHEAD = 25;
+    const CORALS_BEHIND = 8;
+    let nextCoralZ = -50;
+    let coralSideToggle = 0;
+
+    // Helper: Create a single coral at given Z
+    function spawnCoral(z) {
+      const height = 12 + Math.random() * 30;
+      const baseRadius = 0.5 + Math.random() * 1;
+      const segments = 6 + Math.floor(Math.random() * 4);
+
+      const coralPiece = new THREE.Group();
+
+      const stemGeom = new THREE.CylinderGeometry(baseRadius * 0.3, baseRadius, height, segments);
+      const hue = 0.5 + Math.random() * 0.2;
+      const stemMat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color().setHSL(hue, 0.8, 0.3),
+        roughness: 0.6,
+        metalness: 0.3,
+        emissive: new THREE.Color().setHSL(hue, 1, 0.3),
+        emissiveIntensity: 0.2 + Math.random() * 0.2
+      });
+      const stem = new THREE.Mesh(stemGeom, stemMat);
+      stem.position.y = height / 2;
+      coralPiece.add(stem);
+
+      const tipGeom = new THREE.SphereGeometry(baseRadius * 0.8, 8, 8);
+      const tipMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color().setHSL(hue, 1, 0.6),
+        transparent: true,
+        opacity: 0.6,
+        blending: THREE.AdditiveBlending
+      });
+      const tip = new THREE.Mesh(tipGeom, tipMat);
+      tip.position.y = height;
+      coralPiece.add(tip);
+
+      const side = coralSideToggle % 2 === 0 ? -1 : 1;
+      coralSideToggle++;
+      const xOffset = 10 + Math.random() * 20;
+      coralPiece.position.set(
+        side * xOffset,
+        -3,
+        z + Math.random() * 5
+      );
+      coralPiece.rotation.z = (Math.random() - 0.5) * 0.2;
+      coralPiece.userData = {
+        baseHeight: height,
+        baseEmissive: stemMat.emissiveIntensity,
+        phase: Math.random() * Math.PI * 2,
+        stem: stem,
+        tip: tip,
+        stemMat: stemMat,
+        tipMat: tipMat,
+        spawnZ: z
+      };
+      coralGroup.add(coralPiece);
+      corals.push(coralPiece);
+    }
+
+    // Initial spawn
+    for (let z = -50; z < 150; z += CORAL_SPACING) {
+      spawnCoral(z);
+      nextCoralZ = z + CORAL_SPACING;
+    }
+    scene.add(coralGroup);
+
+    let lastDrumPulse = 0;
 
     // Dramatic underwater lighting rig
     const mainLight = new THREE.DirectionalLight(0x0066ff, 0.3);
@@ -161,25 +234,64 @@ window.TrackScenes = (function() {
 
     return {
       group,
-      update(time, freq, amplitude, shipPos, shipSpeed) {
+      update(time, freq, amplitude, shipPos, shipSpeed, audioExtra) {
         const bassEnergy = freq ? (freq[0] + freq[1] + freq[2]) / 3 / 255 : 0;
         const midEnergy = freq ? (freq[10] + freq[20] + freq[30]) / 3 / 255 : 0;
         const highEnergy = freq ? (freq[60] + freq[80] + freq[100]) / 3 / 255 : 0;
 
+        // Get drum pulse
+        const drumPulse = audioExtra?.drumPulse || 0;
+        lastDrumPulse = lastDrumPulse * 0.85 + drumPulse * 0.15;
+
         // Follow the ship's Z position so scene stays with racer
         const shipZ = shipPos ? shipPos.z : 0;
+
+        // CONTINUOUS GENERATION: Spawn new corals ahead, remove behind
+        const coralSpawnAheadZ = shipZ + CORALS_AHEAD * CORAL_SPACING;
+        const coralCleanupZ = shipZ - CORALS_BEHIND * CORAL_SPACING;
+
+        while (nextCoralZ < coralSpawnAheadZ) {
+          spawnCoral(nextCoralZ);
+          nextCoralZ += CORAL_SPACING;
+        }
+
+        for (let i = corals.length - 1; i >= 0; i--) {
+          const c = corals[i];
+          if (c.userData.spawnZ < coralCleanupZ) {
+            coralGroup.remove(c);
+            c.traverse(child => {
+              if (child.geometry) child.geometry.dispose();
+              if (child.material) child.material.dispose();
+            });
+            corals.splice(i, 1);
+          }
+        }
+
+        // DRUM PULSE: Coral towers grow and glow on drum hits
+        corals.forEach(coral => {
+          const data = coral.userData;
+          if (data.stem && data.tip) {
+            // Scale coral taller on drum hits
+            const drumScale = 1 + lastDrumPulse * 0.5;
+            coral.scale.set(1 + lastDrumPulse * 0.2, drumScale, 1 + lastDrumPulse * 0.2);
+
+            // Glow brighter on hits
+            data.stemMat.emissiveIntensity = data.baseEmissive + lastDrumPulse * 0.6;
+            data.tipMat.opacity = 0.6 + lastDrumPulse * 0.4;
+          }
+        });
 
         // Animate bioluminescent point lights
         bioLights.forEach((bl, i) => {
           bl.light.position.x = bl.basePos.x + Math.sin(time * bl.speed + bl.phase) * 3;
           bl.light.position.y = bl.basePos.y + Math.cos(time * bl.speed * 0.7 + bl.phase) * 2;
           bl.light.position.z = bl.basePos.z + Math.sin(time * bl.speed * 0.5 + bl.phase * 2) * 3;
-          bl.light.intensity = 0.5 + midEnergy * 2 + Math.sin(time * 2 + bl.phase) * 0.3;
+          bl.light.intensity = 0.5 + midEnergy * 2 + Math.sin(time * 2 + bl.phase) * 0.3 + lastDrumPulse * 2;
         });
 
-        // Pulse spotlights with bass
+        // Pulse spotlights with bass and drums
         lights.forEach((l, i) => {
-          l.light.intensity = 1 + bassEnergy * 4;
+          l.light.intensity = 1 + bassEnergy * 4 + lastDrumPulse * 3;
           l.light.angle = Math.PI / 8 + Math.sin(time * 0.5 + l.phase) * 0.1;
         });
 
@@ -193,9 +305,11 @@ window.TrackScenes = (function() {
           pos[idx + 1] += v.y + Math.cos(time * 0.3 + v.phase) * 0.004;
           pos[idx + 2] += v.z + Math.sin(time * 0.4 + v.phase) * 0.008;
 
-          if (bassEnergy > 0.5) {
-            pos[idx] += (Math.random() - 0.5) * bassEnergy * 0.08;
-            pos[idx + 1] += (Math.random() - 0.5) * bassEnergy * 0.08;
+          // More particle movement on drum hits
+          if (bassEnergy > 0.5 || lastDrumPulse > 0.3) {
+            const boost = Math.max(bassEnergy, lastDrumPulse);
+            pos[idx] += (Math.random() - 0.5) * boost * 0.1;
+            pos[idx + 1] += (Math.random() - 0.5) * boost * 0.1;
           }
 
           if (pos[idx] > 25) pos[idx] = -25;
@@ -209,24 +323,29 @@ window.TrackScenes = (function() {
 
         // Animate caustic rays
         currents.forEach((ray, i) => {
-          ray.material.opacity = 0.01 + highEnergy * 0.04;
-          ray.scale.x = 1 + Math.sin(time * ray.userData.speed + ray.userData.phase) * 0.4;
+          ray.material.opacity = 0.01 + highEnergy * 0.04 + lastDrumPulse * 0.03;
+          ray.scale.x = 1 + Math.sin(time * ray.userData.speed + ray.userData.phase) * 0.4 + lastDrumPulse * 0.3;
           ray.scale.z = ray.scale.x;
           ray.position.x += Math.sin(time * 0.2 + ray.userData.phase) * 0.02;
         });
 
         particleMat.opacity = 0.6 + bassEnergy * 0.4;
-        particleMat.size = 0.15 + midEnergy * 0.15;
+        particleMat.size = 0.15 + midEnergy * 0.15 + lastDrumPulse * 0.1;
 
         // Follow ship Z position with smooth oscillation overlay
         const zoomOscillation = Math.sin(time * 0.15) * 4 + Math.sin(time * 0.08) * 2;
-        const audioZoom = bassEnergy * 1.5;
+        const audioZoom = bassEnergy * 1.5 + lastDrumPulse * 1;
         group.position.z = shipZ + zoomOscillation - audioZoom;
 
         // Gentle vertical drift
         group.position.y = Math.sin(time * 0.1) * 0.5;
       },
       dispose() {
+        scene.remove(coralGroup);
+        coralGroup.traverse(child => {
+          if (child.geometry) child.geometry.dispose();
+          if (child.material) child.material.dispose();
+        });
         group.traverse(child => {
           if (child.geometry) child.geometry.dispose();
           if (child.material) child.material.dispose();
@@ -1004,11 +1123,78 @@ window.TrackScenes = (function() {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // TRADE YOU MY HANDS - Intimate, warm, soft focus with snow
+  // TRADE YOU MY HANDS - Intimate, warm bamboo forest with snow
   // ═══════════════════════════════════════════════════════════════════════════
   function buildTradeHands(THREE, scene, audioData) {
     const group = new THREE.Group();  // For orbs/lights that follow ship
-    scene.fog = new THREE.FogExp2(0x1a1010, 0.015);
+    scene.fog = new THREE.FogExp2(0x1a1010, 0.012);
+
+    // CONTINUOUSLY GENERATED BAMBOO PILLARS
+    const pillars = [];
+    const pillarGroup = new THREE.Group();
+    const PILLAR_SPACING = 6;        // Z spacing between pillars
+    const PILLARS_AHEAD = 25;        // How many to keep ahead of ship
+    const PILLARS_BEHIND = 8;        // How many to keep behind ship
+    let nextSpawnZ = -50;            // Next Z position to spawn at
+    let sideToggle = 0;              // Alternates left/right placement
+
+    // Helper: Create a single pillar at given Z
+    function spawnPillar(z) {
+      const height = 15 + Math.random() * 25;
+      const radius = 0.3 + Math.random() * 0.4;
+      const geom = new THREE.CylinderGeometry(radius * 0.7, radius, height, 8);
+      const hue = 0.08 + Math.random() * 0.06;
+      const mat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color().setHSL(hue, 0.4, 0.25 + Math.random() * 0.15),
+        roughness: 0.8,
+        metalness: 0.1,
+        emissive: new THREE.Color().setHSL(hue, 0.6, 0.05),
+        emissiveIntensity: 0.3
+      });
+      const pillar = new THREE.Mesh(geom, mat);
+
+      const side = sideToggle % 2 === 0 ? -1 : 1;
+      sideToggle++;
+      const xOffset = 8 + Math.random() * 15;
+      pillar.position.set(
+        side * xOffset,
+        height / 2 - 2,
+        z + Math.random() * 4
+      );
+      pillar.rotation.z = (Math.random() - 0.5) * 0.1;
+      pillar.userData = {
+        baseScale: 1,
+        baseHeight: height,
+        phase: Math.random() * Math.PI * 2,
+        pulseSpeed: 0.5 + Math.random() * 0.5,
+        spawnZ: z
+      };
+      pillarGroup.add(pillar);
+      pillars.push(pillar);
+
+      // Add glow orb at top of some pillars
+      if (Math.random() > 0.6) {
+        const glowGeom = new THREE.SphereGeometry(0.8 + Math.random() * 0.5, 8, 8);
+        const glowMat = new THREE.MeshBasicMaterial({
+          color: new THREE.Color().setHSL(0.95 + Math.random() * 0.1, 0.7, 0.6),
+          transparent: true,
+          opacity: 0.4,
+          blending: THREE.AdditiveBlending
+        });
+        const glow = new THREE.Mesh(glowGeom, glowMat);
+        glow.position.set(pillar.position.x, height - 1, z + Math.random() * 4);
+        glow.userData = { baseY: height - 1, phase: Math.random() * Math.PI * 2, isGlow: true, spawnZ: z };
+        pillarGroup.add(glow);
+        pillars.push(glow);
+      }
+    }
+
+    // Initial spawn
+    for (let z = -50; z < 150; z += PILLAR_SPACING) {
+      spawnPillar(z);
+      nextSpawnZ = z + PILLAR_SPACING;
+    }
+    scene.add(pillarGroup);
 
     // Snow particles - WORLD SPACE (not in group)
     const particleCount = 1200;
@@ -1030,17 +1216,17 @@ window.TrackScenes = (function() {
     particleGeom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
     const particleMat = new THREE.PointsMaterial({
-      size: 1.0,  // Larger for visibility
+      size: 1.0,
       vertexColors: true,
       transparent: true,
       opacity: 0.9,
       blending: THREE.AdditiveBlending,
       sizeAttenuation: true,
-      depthWrite: false,  // Needed for transparent points
-      fog: false  // Disable fog - it was making particles invisible
+      depthWrite: false,
+      fog: false
     });
     const particles = new THREE.Points(particleGeom, particleMat);
-    scene.add(particles);  // Add to SCENE, not group
+    scene.add(particles);
 
     // Orbs follow ship
     const orbs = [];
@@ -1069,12 +1255,65 @@ window.TrackScenes = (function() {
 
     scene.add(group);
     let initialized = false;
+    let lastDrumPulse = 0;
 
     return {
       group,
-      update(time, freq, amplitude, shipPos, shipSpeed) {
+      update(time, freq, amplitude, shipPos, shipSpeed, audioExtra) {
         const midEnergy = freq ? (freq[20] + freq[40] + freq[60]) / 3 / 255 : 0;
         const shipZ = shipPos ? shipPos.z : 0;
+
+        // Get drum pulse from audio extra data
+        const drumPulse = audioExtra?.drumPulse || 0;
+
+        // DRUM PULSE EFFECT: Scale pillars dramatically on drum hits
+        const pulseDecay = 0.15;  // How fast the pulse decays
+        lastDrumPulse = lastDrumPulse * (1 - pulseDecay) + drumPulse * pulseDecay;
+        const bigPulse = lastDrumPulse > 0.3;  // Strong hit threshold
+
+        // CONTINUOUS GENERATION: Spawn new pillars ahead, remove behind
+        const spawnAheadZ = shipZ + PILLARS_AHEAD * PILLAR_SPACING;
+        const cleanupBehindZ = shipZ - PILLARS_BEHIND * PILLAR_SPACING;
+
+        // Spawn new pillars ahead
+        while (nextSpawnZ < spawnAheadZ) {
+          spawnPillar(nextSpawnZ);
+          nextSpawnZ += PILLAR_SPACING;
+        }
+
+        // Remove pillars that are too far behind
+        for (let i = pillars.length - 1; i >= 0; i--) {
+          const p = pillars[i];
+          if (p.userData.spawnZ < cleanupBehindZ) {
+            pillarGroup.remove(p);
+            if (p.geometry) p.geometry.dispose();
+            if (p.material) p.material.dispose();
+            pillars.splice(i, 1);
+          }
+        }
+
+        // Animate pillars with drum pulse
+        pillars.forEach((pillar, i) => {
+          if (pillar.userData.baseHeight) {
+            // Bamboo pillars: scale Y (grow taller) on drum hits
+            const breathe = 1 + Math.sin(time * pillar.userData.pulseSpeed + pillar.userData.phase) * 0.05;
+            const drumScale = 1 + lastDrumPulse * 0.4;  // Up to 40% taller on hits
+            pillar.scale.set(
+              breathe + lastDrumPulse * 0.2,  // Slightly wider
+              drumScale,  // Taller
+              breathe + lastDrumPulse * 0.2
+            );
+            // Flash emissive on strong hits
+            if (pillar.material.emissive) {
+              pillar.material.emissiveIntensity = 0.3 + lastDrumPulse * 1.5;
+            }
+          } else if (pillar.userData.isGlow) {
+            // Glow orbs: pulse opacity and scale
+            const glowPulse = 1 + lastDrumPulse * 0.8;
+            pillar.scale.setScalar(glowPulse);
+            pillar.material.opacity = 0.4 + lastDrumPulse * 0.6;
+          }
+        });
 
         // Orbs/lights follow ship
         group.position.z = shipZ;
@@ -1082,12 +1321,11 @@ window.TrackScenes = (function() {
         const pos = particleGeom.attributes.position.array;
 
         // On first update, spread particles around current ship position
-        // Camera is at shipZ - 12, so place particles from camera forward
         if (!initialized && shipPos) {
           for (let i = 0; i < particleCount; i++) {
-            pos[i * 3] = (Math.random() - 0.5) * 50;  // Wider spread
-            pos[i * 3 + 1] = Math.random() * 15 - 3;  // Mostly above, some below
-            pos[i * 3 + 2] = shipZ - 10 + Math.random() * 100; // Camera to ahead of ship
+            pos[i * 3] = (Math.random() - 0.5) * 50;
+            pos[i * 3 + 1] = Math.random() * 15 - 3;
+            pos[i * 3 + 2] = shipZ - 10 + Math.random() * 100;
           }
           initialized = true;
           particleGeom.attributes.position.needsUpdate = true;
@@ -1095,24 +1333,18 @@ window.TrackScenes = (function() {
         }
 
         // Particles in world space - respawn relative to ship position
-        // Camera is at approximately shipZ - 12
         for (let i = 0; i < particleCount; i++) {
           const pz = pos[i * 3 + 2];
-          // If particle fell behind camera, respawn ahead of ship
           if (pz < shipZ - 15) {
             pos[i * 3] = (Math.random() - 0.5) * 50;
             pos[i * 3 + 1] = Math.random() * 15 - 3;
-            pos[i * 3 + 2] = shipZ + 40 + Math.random() * 60;  // Spawn ahead
-          }
-          // If particle is too far ahead, respawn closer to ship
-          else if (pz > shipZ + 100) {
+            pos[i * 3 + 2] = shipZ + 40 + Math.random() * 60;
+          } else if (pz > shipZ + 100) {
             pos[i * 3] = (Math.random() - 0.5) * 50;
             pos[i * 3 + 1] = Math.random() * 15 - 3;
-            pos[i * 3 + 2] = shipZ - 10 + Math.random() * 30;  // Near camera
+            pos[i * 3 + 2] = shipZ - 10 + Math.random() * 30;
           }
-          // Gentle downward drift (like falling snow)
           pos[i * 3 + 1] -= 0.03;
-          // Reset Y if it falls too low
           if (pos[i * 3 + 1] < -10) {
             pos[i * 3 + 1] = 12 + Math.random() * 3;
           }
@@ -1121,19 +1353,24 @@ window.TrackScenes = (function() {
 
         orbs.forEach(orb => {
           const breathe = 1 + Math.sin(time * 0.5 + orb.userData.phase) * 0.15;
-          orb.scale.setScalar(breathe);
-          orb.material.opacity = 0.1 + midEnergy * 0.08;
+          const orbPulse = 1 + lastDrumPulse * 0.5;  // Orbs also pulse with drums
+          orb.scale.setScalar(breathe * orbPulse);
+          orb.material.opacity = 0.1 + midEnergy * 0.08 + lastDrumPulse * 0.2;
         });
-        warmLight.intensity = 1.5 + midEnergy;
-        pinkLight.intensity = 1 + Math.sin(time * 0.3) * 0.4;
+
+        warmLight.intensity = 1.5 + midEnergy + lastDrumPulse * 2;  // Flash on drums
+        pinkLight.intensity = 1 + Math.sin(time * 0.3) * 0.4 + lastDrumPulse * 1.5;
         particleMat.opacity = 0.6 + midEnergy * 0.2;
       },
       dispose() {
-        // Remove world-space particles
         scene.remove(particles);
         particleGeom.dispose();
         particleMat.dispose();
-        // Remove group (orbs, lights)
+        scene.remove(pillarGroup);
+        pillarGroup.traverse(child => {
+          if (child.geometry) child.geometry.dispose();
+          if (child.material) child.material.dispose();
+        });
         group.traverse(child => {
           if (child.geometry) child.geometry.dispose();
           if (child.material) child.material.dispose();
@@ -1262,13 +1499,83 @@ window.TrackScenes = (function() {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // THE LAST DRAGON - Epic fire realm with embers and smoke
+  // THE LAST DRAGON - Epic fire realm with ruined towers, embers and smoke
   // ═══════════════════════════════════════════════════════════════════════════
   function buildLastDragon(THREE, scene, audioData) {
     const group = new THREE.Group();
 
     // Fiery atmosphere
-    scene.fog = new THREE.FogExp2(0x1a0800, 0.02);
+    scene.fog = new THREE.FogExp2(0x1a0800, 0.015);
+
+    // CONTINUOUSLY GENERATED RUINED TOWERS
+    const towers = [];
+    const towerGroup = new THREE.Group();
+    const TOWER_SPACING = 10;
+    const TOWERS_AHEAD = 25;
+    const TOWERS_BEHIND = 8;
+    let nextTowerZ = -50;
+    let towerSideToggle = 0;
+
+    // Helper: Create a single tower at given Z
+    function spawnTower(z) {
+      const height = 20 + Math.random() * 40;
+      const baseRadius = 1 + Math.random() * 2;
+      const topRadius = baseRadius * (0.3 + Math.random() * 0.4);
+
+      const geom = new THREE.CylinderGeometry(topRadius, baseRadius, height, 6 + Math.floor(Math.random() * 4));
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x1a1008,
+        roughness: 0.9,
+        metalness: 0.2,
+        emissive: 0xff3300,
+        emissiveIntensity: 0.1 + Math.random() * 0.1
+      });
+      const tower = new THREE.Mesh(geom, mat);
+
+      const side = towerSideToggle % 2 === 0 ? -1 : 1;
+      towerSideToggle++;
+      const xOffset = 12 + Math.random() * 25;
+      tower.position.set(
+        side * xOffset,
+        height / 2 - 3,
+        z + Math.random() * 6
+      );
+      tower.rotation.z = (Math.random() - 0.5) * 0.15;
+      tower.rotation.y = Math.random() * Math.PI;
+      tower.userData = {
+        baseHeight: height,
+        baseEmissive: mat.emissiveIntensity,
+        phase: Math.random() * Math.PI * 2,
+        spawnZ: z
+      };
+      towerGroup.add(tower);
+      towers.push(tower);
+
+      // Add fire glow at base of some towers
+      if (Math.random() > 0.5) {
+        const fireGeom = new THREE.SphereGeometry(1.5 + Math.random(), 8, 8);
+        const fireMat = new THREE.MeshBasicMaterial({
+          color: 0xff4400,
+          transparent: true,
+          opacity: 0.4,
+          blending: THREE.AdditiveBlending
+        });
+        const fire = new THREE.Mesh(fireGeom, fireMat);
+        fire.position.set(tower.position.x, 0, z + Math.random() * 6);
+        fire.userData = { isFire: true, phase: Math.random() * Math.PI * 2, spawnZ: z };
+        towerGroup.add(fire);
+        towers.push(fire);
+      }
+    }
+
+    // Initial spawn
+    for (let z = -50; z < 200; z += TOWER_SPACING) {
+      spawnTower(z);
+      nextTowerZ = z + TOWER_SPACING;
+    }
+    scene.add(towerGroup);
+
+    let lastDrumPulse = 0;
 
     // Fire particles (rising embers)
     const emberCount = 1000;
@@ -1368,18 +1675,56 @@ window.TrackScenes = (function() {
 
     return {
       group,
-      update(time, freq, amplitude, shipPos, shipSpeed) {
+      update(time, freq, amplitude, shipPos, shipSpeed, audioExtra) {
         const shipZ = shipPos ? shipPos.z : 0;
         const bassEnergy = freq ? (freq[0] + freq[1] + freq[2]) / 3 / 255 : 0;
         const midEnergy = freq ? (freq[20] + freq[40]) / 2 / 255 : 0;
         const energy = freq ? freq.reduce((a, b) => a + b, 0) / freq.length / 255 : 0;
+
+        // Get drum pulse
+        const drumPulse = audioExtra?.drumPulse || 0;
+        lastDrumPulse = lastDrumPulse * 0.85 + drumPulse * 0.15;
+
+        // CONTINUOUS GENERATION: Spawn new towers ahead, remove behind
+        const towerSpawnAheadZ = shipZ + TOWERS_AHEAD * TOWER_SPACING;
+        const towerCleanupZ = shipZ - TOWERS_BEHIND * TOWER_SPACING;
+
+        while (nextTowerZ < towerSpawnAheadZ) {
+          spawnTower(nextTowerZ);
+          nextTowerZ += TOWER_SPACING;
+        }
+
+        for (let i = towers.length - 1; i >= 0; i--) {
+          const t = towers[i];
+          if (t.userData.spawnZ < towerCleanupZ) {
+            towerGroup.remove(t);
+            if (t.geometry) t.geometry.dispose();
+            if (t.material) t.material.dispose();
+            towers.splice(i, 1);
+          }
+        }
+
+        // DRUM PULSE: Towers glow and scale on hits
+        towers.forEach(tower => {
+          if (tower.userData.isFire) {
+            // Fire orbs pulse dramatically
+            const firePulse = 1 + lastDrumPulse * 1.5;
+            tower.scale.setScalar(firePulse);
+            tower.material.opacity = 0.4 + lastDrumPulse * 0.6;
+          } else if (tower.userData.baseHeight) {
+            // Towers: scale Y and glow emissive on drum hits
+            const drumScale = 1 + lastDrumPulse * 0.3;
+            tower.scale.set(1 + lastDrumPulse * 0.1, drumScale, 1 + lastDrumPulse * 0.1);
+            tower.material.emissiveIntensity = tower.userData.baseEmissive + lastDrumPulse * 0.8;
+          }
+        });
 
         // Rise embers with more intensity
         const ePos = emberGeom.attributes.position.array;
         for (let i = 0; i < emberCount; i++) {
           const v = emberVel[i];
           ePos[i * 3] += v.x + (Math.random() - 0.5) * 0.025;
-          ePos[i * 3 + 1] += v.y * (1 + bassEnergy * 3);
+          ePos[i * 3 + 1] += v.y * (1 + bassEnergy * 3 + lastDrumPulse * 2);
           ePos[i * 3 + 2] += v.z + (Math.random() - 0.5) * 0.025;
 
           if (ePos[i * 3 + 1] > 18) {
@@ -1394,7 +1739,7 @@ window.TrackScenes = (function() {
         smokeClouds.forEach(smoke => {
           smoke.position.x += smoke.userData.vel.x + (Math.random() - 0.5) * 0.02;
           smoke.position.y += smoke.userData.vel.y * (1 + bassEnergy);
-          smoke.scale.setScalar(1 + Math.sin(time + smoke.userData.phase) * 0.3 + bassEnergy * 0.5);
+          smoke.scale.setScalar(1 + Math.sin(time + smoke.userData.phase) * 0.3 + bassEnergy * 0.5 + lastDrumPulse * 0.3);
           smoke.material.opacity = 0.1 + energy * 0.1;
 
           if (smoke.position.y > 18) {
@@ -1403,12 +1748,12 @@ window.TrackScenes = (function() {
           }
         });
 
-        // Dramatic flickering fire lights
+        // Dramatic flickering fire lights - flash on drums
         const flicker1 = Math.random() * 0.8;
         const flicker2 = Math.random() * 0.6;
-        fireLight1.intensity = 3 + bassEnergy * 6 + flicker1;
-        fireLight2.intensity = 2 + midEnergy * 5 + flicker2;
-        fireLight3.intensity = 2 + midEnergy * 5 + flicker2;
+        fireLight1.intensity = 3 + bassEnergy * 6 + flicker1 + lastDrumPulse * 4;
+        fireLight2.intensity = 2 + midEnergy * 5 + flicker2 + lastDrumPulse * 3;
+        fireLight3.intensity = 2 + midEnergy * 5 + flicker2 + lastDrumPulse * 3;
 
         // Color shift based on intensity
         const hue = 0.05 + bassEnergy * 0.03;
@@ -1416,19 +1761,19 @@ window.TrackScenes = (function() {
         fireLight2.color.setHSL(hue + 0.02, 1, 0.5);
 
         // Rim light pulses with music
-        rimLight.intensity = 1 + energy * 2;
+        rimLight.intensity = 1 + energy * 2 + lastDrumPulse * 2;
 
         // Ember lights flicker
         emberLights.forEach((el, i) => {
-          el.light.intensity = 0.3 + Math.sin(time * 8 + el.phase) * 0.3 + bassEnergy * 1.5;
+          el.light.intensity = 0.3 + Math.sin(time * 8 + el.phase) * 0.3 + bassEnergy * 1.5 + lastDrumPulse * 2;
         });
 
         emberMat.opacity = 0.7 + bassEnergy * 0.3;
-        emberMat.size = 0.1 + bassEnergy * 0.08;
+        emberMat.size = 0.1 + bassEnergy * 0.08 + lastDrumPulse * 0.05;
 
-        // Epic zoom oscillation - dramatic sweeping movement
+        // Epic zoom oscillation
         const zoomOscillation = Math.sin(time * 0.12) * 5 + Math.sin(time * 0.07) * 2.5;
-        const bassZoom = bassEnergy * 2; // Push in on heavy hits
+        const bassZoom = bassEnergy * 2 + lastDrumPulse * 1.5;
         group.position.z = shipZ + zoomOscillation - bassZoom;
 
         // Slight tilt for epic feel
@@ -1436,6 +1781,11 @@ window.TrackScenes = (function() {
         group.rotation.y = Math.sin(time * 0.06) * 0.02;
       },
       dispose() {
+        scene.remove(towerGroup);
+        towerGroup.traverse(child => {
+          if (child.geometry) child.geometry.dispose();
+          if (child.material) child.material.dispose();
+        });
         group.traverse(child => {
           if (child.geometry) child.geometry.dispose();
           if (child.material) child.material.dispose();

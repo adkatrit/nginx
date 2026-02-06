@@ -34,6 +34,20 @@
     <!-- Full-screen background visualization -->
     <canvas id="bgViz" class="immersive-bg-viz" aria-hidden="true"></canvas>
 
+    <!-- Track loading overlay -->
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+      <div class="loading-content">
+        <div class="loading-spinner"></div>
+        <div class="loading-title" id="loadingTitle">Loading Track</div>
+        <div class="loading-progress">
+          <div class="loading-bar">
+            <div class="loading-bar-fill" id="loadingBarFill"></div>
+          </div>
+          <div class="loading-status" id="loadingStatus">Preparing...</div>
+        </div>
+      </div>
+    </div>
+
     <!-- Score HUD overlay -->
     <div id="scoreHud" class="score-hud" aria-hidden="true">
       <div class="score-display">
@@ -664,17 +678,17 @@
     <!-- Keep a real media element in the DOM for best mobile behavior -->
     <audio id="playerAudio" preload="metadata" crossorigin="anonymous" playsinline style="display:none"></audio>
 
-    <script src="./tracks.js"></script>
-    <script src="./models.js"></script>
-    <script src="./themes.js"></script>
-    <script src="./backgrounds.js"></script>
-    <script src="./track-scenes.js"></script>
-    <script src="./effects-manager.js"></script>
-    <script src="./noise.js"></script>
-    <script src="./terrain.js"></script>
-    <script src="./environments.js"></script>
-    <script src="./stem-player.js"></script>
-    <script src="./ios-viz.js"></script>
-    <script src="./app.js"></script>
+    <script src="./tracks.js?v=9"></script>
+    <script src="./models.js?v=9"></script>
+    <script src="./themes.js?v=9"></script>
+    <script src="./backgrounds.js?v=9"></script>
+    <script src="./track-scenes.js?v=12"></script>
+    <script src="./effects-manager.js?v=10"></script>
+    <script src="./noise.js?v=9"></script>
+    <script src="./terrain.js?v=9"></script>
+    <script src="./environments.js?v=9"></script>
+    <script src="./stem-player.js?v=12"></script>
+    <script src="./ios-viz.js?v=9"></script>
+    <script src="./app.js?v=12"></script>
   </body>
 </html>

@@ -1992,6 +1992,49 @@
       this.audioData.beatHit = !!beatHit;
     }
 
+    /**
+     * Set per-stem visualization data from manifest
+     * @param {Object} data - { stemId: { analysis: {energy, bass, mid, treble}, viz: {target, effect, color} } }
+     */
+    setStemVizData(data) {
+      this.stemVizData = data;
+
+      // Process stem data into effect accumulators
+      if (data) {
+        let drumEnergy = 0, bassDeform = 0, vocalFog = 0, synthPulse = 0;
+
+        for (const [stemId, stemData] of Object.entries(data)) {
+          const { analysis, viz } = stemData;
+          if (!analysis || !viz) continue;
+
+          const e = analysis.energy || 0;
+          const b = analysis.bass || 0;
+
+          // Accumulate effects based on target/effect type
+          if (viz.target === 'terrain' && viz.effect === 'impact') {
+            drumEnergy = Math.max(drumEnergy, e);
+          }
+          if (viz.target === 'terrain' && viz.effect === 'deformation') {
+            bassDeform = Math.max(bassDeform, b);
+          }
+          if (viz.target === 'atmosphere' && viz.effect === 'fog') {
+            vocalFog = Math.max(vocalFog, e);
+          }
+          if (viz.target === 'background' && viz.effect === 'pulse') {
+            synthPulse = Math.max(synthPulse, e);
+          }
+        }
+
+        // Store for use in update loop
+        this.stemEffects = {
+          drumEnergy,
+          bassDeform,
+          vocalFog,
+          synthPulse
+        };
+      }
+    }
+
     _clamp01(v) {
       return Math.max(0, Math.min(1, v));
     }
@@ -2631,10 +2674,19 @@
       this.updateScore(dt);
       this.emitFlowUpdate(dt);
 
+      // Apply stem-specific effects
+      const stemFx = this.stemEffects || {};
+      const vocalFog = stemFx.vocalFog || 0;
+      const synthPulse = stemFx.synthPulse || 0;
+      const drumEnergy = stemFx.drumEnergy || 0;
+      const bassDeform = stemFx.bassDeform || 0;
+
       if (this.scene.fog) {
         const fogMult = this.visual?.fogDensity ?? 1.0;
-        this.scene.fog.near = this.theme.fogNear - energy * 10 * fogMult;
-        this.scene.fog.far = this.theme.fogFar - energy * 50 * fogMult;
+        // Vocals increase fog density (bring it closer)
+        const vocalFogEffect = vocalFog * 30;
+        this.scene.fog.near = this.theme.fogNear - energy * 10 * fogMult - vocalFogEffect;
+        this.scene.fog.far = this.theme.fogFar - energy * 50 * fogMult - vocalFogEffect * 2;
       }
 
       // Update animated background with full audio data for reactive effects
@@ -2644,8 +2696,28 @@
           bass: bass,
           mid: mid,
           treble: treble,
-          beatPulse: this.audioData.beatPulse || 0
+          beatPulse: this.audioData.beatPulse || 0,
+          // Per-stem effects for background
+          drumEnergy: drumEnergy,
+          bassDeform: bassDeform,
+          synthPulse: synthPulse
         });
+      }
+
+      // Update terrain with audio reactivity (stem effects)
+      if (this.terrainManager) {
+        // Debug: log audio values once per second
+        if (!this._lastTerrainLog || this.time - this._lastTerrainLog > 1) {
+          if (bassDeform > 0.01 || drumEnergy > 0.01) {
+            console.log("[Terrain Audio] bass:", bassDeform.toFixed(2), "drums:", drumEnergy.toFixed(2));
+          }
+          this._lastTerrainLog = this.time;
+        }
+        this.terrainManager.update({
+          bassDeform: bassDeform,
+          drumImpact: drumEnergy,
+          playerZ: this.distance
+        }, this.time);
       }
 
       this.updateCamera();
@@ -3063,6 +3135,10 @@
             audioData.beatPulse || 0,
             !!audioData.beatHit
           );
+          // Pass per-stem visualization data if available
+          if (audioData.stemVizData) {
+            this.instance.setStemVizData(audioData.stemVizData);
+          }
         }
         this.instance.update(dt);
       }

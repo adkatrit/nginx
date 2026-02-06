@@ -25,6 +25,21 @@ const EffectsManager = (function() {
   let audioData = { bass: 0, mid: 0, treble: 0, energy: 0 };
   let shipPosition = { x: 0, y: 0, z: 0 };
 
+  // Per-stem visualization data from manifest
+  // Format: { stemId: { analysis: {energy, bass, mid, treble}, viz: {target, effect, color} } }
+  let stemVizData = null;
+
+  // Stem-driven effect state
+  const stemEffects = {
+    terrainImpacts: [],      // Active terrain impact ripples
+    terrainDeformation: 0,   // Current bass deformation amount
+    atmosphereFog: 0,        // Current fog intensity from vocals
+    atmosphereGlow: 0,       // Current glow intensity
+    backgroundPulse: 0,      // Current background pulse
+    particleBursts: [],      // Active particle bursts
+    particleTrailIntensity: 0 // Current trail intensity
+  };
+
   /**
    * Initialize the effects manager
    */
@@ -59,7 +74,17 @@ const EffectsManager = (function() {
    */
   function update(newConfig) {
     config = newConfig;
-    if (!initialized) return;
+    if (!initialized) {
+      console.warn("[EffectsManager] update() called but not initialized yet");
+      return;
+    }
+
+    console.log("[EffectsManager] Rebuilding effects with config:", {
+      aurora: config?.aurora?.enabled,
+      grid: config?.grid?.enabled,
+      particles: config?.particles?.enabled,
+      lights: config?.lights?.enabled
+    });
 
     // Rebuild effects if needed
     rebuildLightning();
@@ -67,6 +92,14 @@ const EffectsManager = (function() {
     rebuildGrid();
     rebuildLights();
     rebuildParticles();
+
+    // Log what was created
+    console.log("[EffectsManager] After rebuild:", {
+      auroraRibbons: effects.aurora.ribbons?.length || 0,
+      gridFloor: !!effects.grid.floor,
+      gridPerspective: effects.grid.perspective?.length || 0,
+      particles: !!effects.particles.system
+    });
   }
 
   /**
@@ -81,6 +114,14 @@ const EffectsManager = (function() {
    */
   function setShipPosition(pos) {
     shipPosition = pos;
+  }
+
+  /**
+   * Set per-stem visualization data
+   * @param {Object} data - { stemId: { analysis: {energy, bass, mid, treble}, viz: {target, effect, color} } }
+   */
+  function setStemVizData(data) {
+    stemVizData = data;
   }
 
   // ============================================================================
@@ -591,6 +632,288 @@ const EffectsManager = (function() {
   }
 
   /**
+   * Parse hex color to RGB values (0-1 range)
+   */
+  function hexToRgb(hex) {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+      r: parseInt(result[1], 16) / 255,
+      g: parseInt(result[2], 16) / 255,
+      b: parseInt(result[3], 16) / 255
+    } : { r: 1, g: 1, b: 1 };
+  }
+
+  // ============================================================================
+  // STEM-DRIVEN EFFECTS
+  // Processes per-stem visualization data from manifest
+  // ============================================================================
+  let _stemDebugLogged = false;
+  function updateStemEffects(time, deltaTime) {
+    if (!stemVizData || !initialized) return;
+
+    // Debug: log once when stem viz is being processed
+    if (!_stemDebugLogged) {
+      console.log("[StemViz] EffectsManager processing stem data:", Object.keys(stemVizData));
+      console.log("[StemViz] Effects available:", {
+        grid: !!effects.grid.floor,
+        aurora: effects.aurora.ribbons?.length || 0,
+        lights: effects.lights.pulsingLights?.length || 0,
+        particles: !!effects.particles.system
+      });
+      _stemDebugLogged = true;
+    }
+
+    // Reset accumulators
+    let totalTerrainImpact = 0;
+    let totalTerrainDeformation = 0;
+    let totalAtmosphereFog = 0;
+    let totalAtmosphereGlow = 0;
+    let totalBackgroundPulse = 0;
+    let totalParticleTrails = 0;
+    let shouldBurstParticles = false;
+    let burstColor = null;
+
+    // Process each stem
+    for (const [stemId, data] of Object.entries(stemVizData)) {
+      const { analysis, viz } = data;
+      if (!analysis || !viz) continue;
+
+      const energy = analysis.energy || 0;
+      const bass = analysis.bass || 0;
+      const color = viz.color || '#ffffff';
+
+      // Route to appropriate effect based on target and effect type
+      // LOWER THRESHOLDS + HIGHER MULTIPLIERS for dramatic visibility
+      switch (viz.target) {
+        case 'terrain':
+          if (viz.effect === 'impact') {
+            // Impact: drum/percussion hits - LOW threshold for responsiveness
+            if (energy > 0.2) {
+              totalTerrainImpact += energy * 1.5; // Boosted multiplier
+              // Trigger visual ripple on moderate hits
+              if (energy > 0.4 && stemEffects.terrainImpacts.length < 8) {
+                stemEffects.terrainImpacts.push({
+                  time: time,
+                  x: (Math.random() - 0.5) * 30,
+                  z: shipPosition.z + 10 + Math.random() * 30,
+                  intensity: energy * 1.5,
+                  color: hexToRgb(color)
+                });
+              }
+            }
+          } else if (viz.effect === 'deformation') {
+            // Deformation: continuous bass warping - always active
+            totalTerrainDeformation += bass * 1.2; // Boosted
+          }
+          break;
+
+        case 'atmosphere':
+          if (viz.effect === 'fog') {
+            // Fog: vocals - direct mapping, no threshold
+            totalAtmosphereFog += energy * 1.0; // Full strength
+          } else if (viz.effect === 'glow') {
+            // Glow: backing vocals
+            totalAtmosphereGlow += energy * 0.8;
+          }
+          break;
+
+        case 'background':
+          if (viz.effect === 'pulse') {
+            // Pulse: synth drives everything
+            totalBackgroundPulse += energy * 1.0; // Full strength
+          }
+          break;
+
+        case 'particles':
+          if (viz.effect === 'trails') {
+            // Trails: guitar/keyboard - direct mapping
+            totalParticleTrails += energy * 1.0;
+          } else if (viz.effect === 'burst') {
+            // Burst: FX - lower threshold
+            if (energy > 0.3) {
+              shouldBurstParticles = true;
+              burstColor = hexToRgb(color);
+            }
+          }
+          break;
+      }
+    }
+
+    // Apply smoothed effect values
+    const smoothing = 0.15;
+    stemEffects.terrainDeformation += (totalTerrainDeformation - stemEffects.terrainDeformation) * smoothing;
+    stemEffects.atmosphereFog += (totalAtmosphereFog - stemEffects.atmosphereFog) * smoothing;
+    stemEffects.atmosphereGlow += (totalAtmosphereGlow - stemEffects.atmosphereGlow) * smoothing;
+    stemEffects.backgroundPulse += (totalBackgroundPulse - stemEffects.backgroundPulse) * smoothing;
+    stemEffects.particleTrailIntensity += (totalParticleTrails - stemEffects.particleTrailIntensity) * smoothing;
+
+    // Decay old terrain impacts
+    stemEffects.terrainImpacts = stemEffects.terrainImpacts.filter(impact => {
+      const age = time - impact.time;
+      return age < 1.0; // Impacts last 1 second
+    });
+
+    // Trigger particle burst if needed
+    if (shouldBurstParticles && stemEffects.particleBursts.length < 3) {
+      stemEffects.particleBursts.push({
+        time: time,
+        x: shipPosition.x + (Math.random() - 0.5) * 10,
+        y: 2 + Math.random() * 5,
+        z: shipPosition.z + 5 + Math.random() * 15,
+        color: burstColor
+      });
+    }
+
+    // Decay old particle bursts
+    stemEffects.particleBursts = stemEffects.particleBursts.filter(burst => {
+      const age = time - burst.time;
+      return age < 0.8; // Bursts last 0.8 seconds
+    });
+
+    // Apply stem effects to existing effect systems
+    applyStemEffectsToVisuals(time, deltaTime);
+  }
+
+  /**
+   * Apply stem-driven effects to the visual systems
+   * DRAMATIC VERSION - effects should be clearly visible
+   */
+  function applyStemEffectsToVisuals(time, deltaTime) {
+    if (!THREE || !scene) return;
+
+    // Terrain impact: flash grid floor bright on drum hits
+    if (effects.grid.floor) {
+      const impactBoost = stemEffects.terrainImpacts.reduce((sum, i) => {
+        const age = time - i.time;
+        return sum + i.intensity * Math.max(0, 1 - age);
+      }, 0);
+      // DRAMATIC: Flash to full brightness on impacts
+      const baseOpacity = config?.grid?.intensity || 0.3;
+      effects.grid.floor.material.opacity = Math.min(1, baseOpacity + impactBoost * 0.7);
+
+      // Also pulse the grid color on impacts
+      if (impactBoost > 0.1) {
+        const flash = Math.min(1, impactBoost);
+        effects.grid.floor.material.color.setRGB(
+          0.5 + flash * 0.5,  // Red boost
+          1 - flash * 0.3,    // Less green
+          1 - flash * 0.5     // Less blue
+        );
+      } else {
+        effects.grid.floor.material.color.setHex(0x00ffff); // Reset to cyan
+      }
+    }
+
+    // Terrain deformation: BIG wave motion on perspective lines from bass
+    if (effects.grid.perspective && effects.grid.perspective.length > 0) {
+      const deform = stemEffects.terrainDeformation;
+      effects.grid.perspective.forEach((line, i) => {
+        // DRAMATIC: Much larger wave amplitude (10x instead of 2x)
+        const wave = Math.sin(time * 4 + i * 0.3) * deform * 8;
+        line.position.y = -2 + wave;
+
+        // Also scale the lines with bass
+        const scale = 1 + deform * 0.5;
+        line.scale.set(scale, scale, 1);
+      });
+    }
+
+    // Atmosphere fog: aurora ribbons respond to vocals
+    if (effects.aurora.ribbons && effects.aurora.ribbons.length > 0) {
+      const fog = stemEffects.atmosphereFog;
+      effects.aurora.ribbons.forEach((ribbon, i) => {
+        // DRAMATIC: Full opacity range, plus size changes
+        ribbon.material.opacity = Math.min(0.9, 0.1 + fog * 0.8);
+
+        // Scale ribbons up with vocal intensity
+        const scale = 1 + fog * 0.5;
+        ribbon.scale.set(scale, scale, 1);
+
+        // Shift hue slightly based on intensity
+        const hue = (time * 0.1 + i * 0.2 + fog * 0.3) % 1;
+        ribbon.material.color.setHSL(hue, 0.7, 0.5 + fog * 0.3);
+      });
+    }
+
+    // Atmosphere glow: boost ambient lighting
+    if (effects.lights.pulsingLights && stemEffects.atmosphereGlow > 0.05) {
+      effects.lights.pulsingLights.forEach(light => {
+        if (light.isPointLight) {
+          // DRAMATIC: Pulse point light intensity with glow
+          light.intensity = 1 + stemEffects.atmosphereGlow * 3;
+        } else if (light.material) {
+          light.material.opacity = Math.min(0.8, 0.1 + stemEffects.atmosphereGlow * 0.7);
+        }
+      });
+    }
+
+    // Background pulse: synth creates dramatic scene pulsing
+    if (stemEffects.backgroundPulse > 0.05) {
+      const pulse = stemEffects.backgroundPulse;
+
+      // Pulse lightning bolts
+      effects.lightning.bolts.forEach(bolt => {
+        if (bolt.material) {
+          bolt.material.opacity = Math.min(1, 0.3 + pulse * 0.7);
+          bolt.visible = pulse > 0.2;
+        }
+      });
+
+      // DRAMATIC: Pulse the scene fog if available
+      if (scene.fog) {
+        const baseFar = 150;
+        scene.fog.far = baseFar - pulse * 50; // Fog closes in with synth
+      }
+    }
+
+    // Particle trails: DRAMATIC size and color changes from guitar/keyboard
+    if (effects.particles.material) {
+      const trails = stemEffects.particleTrailIntensity;
+      const baseSize = config?.particles?.size || 0.4;
+
+      // DRAMATIC: 3x size boost when active
+      effects.particles.material.size = baseSize * (1 + trails * 2);
+
+      // Color shift toward warm colors with intensity
+      if (trails > 0.1) {
+        const warmth = Math.min(1, trails);
+        effects.particles.material.color.setRGB(
+          1,
+          1 - warmth * 0.3,
+          1 - warmth * 0.5
+        );
+      } else {
+        effects.particles.material.color.setHex(0xffffff);
+      }
+    }
+
+    // Particle bursts: temporarily boost particle velocities toward burst points
+    if (effects.particles.velocities && stemEffects.particleBursts.length > 0) {
+      const positions = effects.particles.geometry?.attributes?.position?.array;
+      if (positions) {
+        stemEffects.particleBursts.forEach(burst => {
+          const age = time - burst.time;
+          const intensity = Math.max(0, 1 - age / 0.8) * 0.5;
+
+          // Boost some nearby particles outward
+          for (let i = 0; i < Math.min(50, effects.particles.velocities.length); i++) {
+            const idx = Math.floor(Math.random() * effects.particles.velocities.length);
+            effects.particles.velocities[idx].x += (Math.random() - 0.5) * intensity;
+            effects.particles.velocities[idx].y += Math.random() * intensity * 0.5;
+          }
+        });
+      }
+    }
+  }
+
+  /**
+   * Get stem effects state for external use (e.g., voyage terrain)
+   */
+  function getStemEffects() {
+    return stemEffects;
+  }
+
+  /**
    * Main update loop - call this from the render loop
    */
   function render(time, deltaTime) {
@@ -602,6 +925,9 @@ const EffectsManager = (function() {
     updateLights(time, deltaTime);
     updateParticles(time, deltaTime);
     updateVisualStyle(time, deltaTime);
+
+    // Update stem-driven effects (per-instrument visualization)
+    updateStemEffects(time, deltaTime);
   }
 
   /**
@@ -792,6 +1118,8 @@ const EffectsManager = (function() {
     render,
     setAudioData,
     setShipPosition,
+    setStemVizData,
+    getStemEffects,
     getShakeOffset,
     getFogDensityMultiplier,
     getSpeedLinesIntensity,

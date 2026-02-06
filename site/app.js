@@ -850,6 +850,39 @@
     }
   }
 
+  // ---- Loading Overlay Functions ----
+  const loadingOverlay = $("loadingOverlay");
+  const loadingTitle = $("loadingTitle");
+  const loadingBarFill = $("loadingBarFill");
+  const loadingStatus = $("loadingStatus");
+
+  function showLoadingOverlay(trackTitle) {
+    if (!loadingOverlay) return;
+    loadingOverlay.style.display = "flex";
+    if (loadingTitle) loadingTitle.textContent = trackTitle || "Loading Track";
+    if (loadingBarFill) loadingBarFill.style.width = "0%";
+    if (loadingStatus) loadingStatus.textContent = "Preparing...";
+  }
+
+  function updateLoadingProgress(loaded, total, currentItem) {
+    if (!loadingOverlay) return;
+    const percent = total > 0 ? Math.round((loaded / total) * 100) : 0;
+    if (loadingBarFill) loadingBarFill.style.width = percent + "%";
+    if (loadingStatus) loadingStatus.textContent = currentItem || `Loading ${loaded}/${total}`;
+  }
+
+  function hideLoadingOverlay() {
+    if (!loadingOverlay) return;
+    // Fade out smoothly
+    loadingOverlay.style.opacity = "0";
+    loadingOverlay.style.transition = "opacity 0.5s ease";
+    setTimeout(() => {
+      loadingOverlay.style.display = "none";
+      loadingOverlay.style.opacity = "1";
+      loadingOverlay.style.transition = "";
+    }, 500);
+  }
+
   // Helper functions for unified playback state (audio or stems)
   function getPlaybackDuration() {
     if (usingStemPlayer && stemPlayer) {
@@ -2036,9 +2069,34 @@
     let treble = 0;
 
     // Use stem analysis if available (provides per-stem data)
+    // Also build per-stem visualization data with configs from manifest
+    let stemVizData = null;
     if (usingStemPlayer && stemPlayer) {
       stemAnalysisData = stemPlayer.analyze();
       if (stemAnalysisData) {
+        // Build per-stem visualization data with configs
+        const manifest = stemPlayer.manifest;
+        if (manifest && manifest.stems) {
+          stemVizData = {};
+          for (const [stemId, stemConfig] of Object.entries(manifest.stems)) {
+            const analysis = stemAnalysisData[stemId];
+            if (analysis && stemConfig.visualization) {
+              stemVizData[stemId] = {
+                analysis: analysis,
+                viz: stemConfig.visualization
+              };
+            }
+          }
+          // Debug: log stem viz data once per track
+          if (!window._stemVizLogged && Object.keys(stemVizData).length > 0) {
+            console.log("[StemViz] Per-stem visualization active:", Object.keys(stemVizData));
+            for (const [id, data] of Object.entries(stemVizData)) {
+              console.log(`  ${id}: target=${data.viz.target}, effect=${data.viz.effect}`);
+            }
+            window._stemVizLogged = true;
+          }
+        }
+
         // Check if we have a single "mix" stem (no individual stems)
         if (stemAnalysisData.mix && !stemAnalysisData.drums) {
           // Single mix track - use mix analysis directly
@@ -2138,12 +2196,17 @@
         treble: treble,
         energy: energy,
         beatPulse: globalBeatPulse,
-        beatHit: bassHit
+        beatHit: bassHit,
+        stemVizData: stemVizData  // Per-stem visualization data
       });
 
       // Update EffectsManager with audio data and ship position
       if (typeof EffectsManager !== 'undefined') {
         EffectsManager.setAudioData({ bass, mid, treble, energy });
+        // Pass per-stem visualization data if available
+        if (stemVizData) {
+          EffectsManager.setStemVizData(stemVizData);
+        }
         const shipPos = EnvironmentMode.getShipPosition();
         if (shipPos) {
           EffectsManager.setShipPosition(shipPos);
@@ -2165,7 +2228,11 @@
     if (currentTrackScene && currentTrackScene.update) {
       const shipPos = EnvironmentMode ? EnvironmentMode.getShipPosition() : null;
       const shipSpeed = EnvironmentMode ? EnvironmentMode.getShipSpeed() : 0;
-      currentTrackScene.update(t, freqData, amplitude, shipPos, shipSpeed);
+      // Pass drum/percussion energy for scene object pulsing
+      const drumEnergy = stemAnalysisData?.drums?.energy || 0;
+      const percussionEnergy = stemAnalysisData?.percussion?.energy || 0;
+      const drumPulse = Math.max(drumEnergy, percussionEnergy);
+      currentTrackScene.update(t, freqData, amplitude, shipPos, shipSpeed, { drumPulse, stemAnalysisData });
     }
 
     // Update OrbitControls for smooth damping
@@ -2914,21 +2981,38 @@
       try {
         console.log("Loading stems for:", t.title);
 
+        // Show loading overlay
+        showLoadingOverlay(t.title);
+        updateLoadingProgress(0, 100, "Loading manifest...");
+
         // Ensure audio context exists
         if (!audioCtx) {
           audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         }
 
         stemPlayer = new window.StemPlayer(audioCtx);
-        await stemPlayer.loadFromManifest(t.stemsManifest);
+
+        // Cache-bust manifest URL to ensure fresh load
+        const manifestUrl = t.stemsManifest + '?v=' + Date.now();
+        updateLoadingProgress(5, 100, "Loading audio stems...");
+
+        // Use progress callback for real-time loading updates
+        await stemPlayer.loadFromManifest(manifestUrl, (loaded, total, current) => {
+          // Scale progress from 5-65% during stem loading
+          const percent = 5 + Math.round((loaded / total) * 60);
+          updateLoadingProgress(percent, 100, `Loading ${current}...`);
+        });
+
+        updateLoadingProgress(70, 100, "Loading MIDI data...");
         await stemPlayer.loadAllMidi();
 
         // Load lyrics if available
+        updateLoadingProgress(85, 100, "Loading lyrics...");
         lyricsData = null;
         currentLyricIndex = -1;
         if (stemPlayer.manifest?.lyrics) {
           try {
-            const lyricsUrl = t.stemsManifest.substring(0, t.stemsManifest.lastIndexOf('/') + 1) + stemPlayer.manifest.lyrics;
+            const lyricsUrl = t.stemsManifest.substring(0, t.stemsManifest.lastIndexOf('/') + 1) + stemPlayer.manifest.lyrics + '?v=' + Date.now();
             const lyricsResp = await fetch(lyricsUrl);
             if (lyricsResp.ok) {
               const lyricsJson = await lyricsResp.json();
@@ -2939,6 +3023,8 @@
             console.warn("Failed to load lyrics:", lyricsErr);
           }
         }
+
+        updateLoadingProgress(95, 100, "Initializing...");
 
         // Set up MIDI event listener for visualization triggers
         stemPlayer.on('midiNote', (event) => {
@@ -2951,11 +3037,38 @@
         usingStemPlayer = true;
         console.log("Stems loaded successfully:", stemPlayer.getStemIds());
 
+        // Enable minimal effects for stem visualization to work
+        // These effects are modulated by stem analysis in EffectsManager
+        if (!effectsConfig.aurora.enabled) {
+          effectsConfig.aurora.enabled = true;
+          effectsConfig.aurora.intensity = 0.4;
+          effectsConfig.aurora.ribbons = 4;
+        }
+        if (!effectsConfig.particles.enabled) {
+          effectsConfig.particles.enabled = true;
+          effectsConfig.particles.type = 'dust';
+          effectsConfig.particles.count = 200;
+          effectsConfig.particles.size = 0.4;
+          effectsConfig.particles.speed = 0.5;
+        }
+        if (!effectsConfig.grid.enabled) {
+          effectsConfig.grid.enabled = true;
+          effectsConfig.grid.intensity = 0.3;
+          effectsConfig.grid.floor = true;
+          effectsConfig.grid.perspective = true;
+        }
+        // Apply updated effects config
+        applyEffectsToEnvironment();
+        console.log("Stem visualization effects enabled");
+
+        updateLoadingProgress(100, 100, "Ready!");
+
         // Pause regular audio (we won't use it)
         audio.pause();
         audio.src = '';
       } catch (err) {
         console.error("Failed to load stems, falling back to regular audio:", err);
+        hideLoadingOverlay();
         if (stemPlayer) {
           stemPlayer.dispose();
           stemPlayer = null;
@@ -2976,6 +3089,9 @@
 
     // Update URL with track slug
     updateUrlHash(t);
+
+    // Hide loading overlay now that track is ready
+    hideLoadingOverlay();
 
     if (autoplay) {
       void play();

@@ -91,13 +91,30 @@ window.TerrainSystem = (function() {
           this.chunkZ + CHUNK_SIZE / 2
         );
       } else {
-        this.mesh = new THREE.Mesh(geometry, material);
+        // Use a group with solid base plane to prevent background bleed-through
+        this.mesh = new THREE.Group();
+
+        // Solid base plane at baseHeight to block the background
+        const baseGeometry = new THREE.PlaneGeometry(CHUNK_SIZE + 2, CHUNK_SIZE + 2, 1, 1); // Slightly larger to overlap seams
+        baseGeometry.rotateX(-Math.PI / 2);
+        const baseMaterial = new THREE.MeshBasicMaterial({
+          color: this.config.lowColor || 0x000810,
+          side: THREE.DoubleSide
+        });
+        const baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
+        baseMesh.position.y = this.config.baseHeight || -2;
+        this.mesh.add(baseMesh);
+
+        // Terrain mesh on top
+        const terrainMesh = new THREE.Mesh(geometry, material);
+        terrainMesh.receiveShadow = true;
+        this.mesh.add(terrainMesh);
+
         this.mesh.position.set(
           this.chunkX + CHUNK_SIZE / 2,
           0,
           this.chunkZ + CHUNK_SIZE / 2
         );
-        this.mesh.receiveShadow = true;
       }
     }
 
@@ -115,7 +132,7 @@ window.TerrainSystem = (function() {
       }
 
       if (config.colorByHeight) {
-        // Shader material with height-based gradient
+        // Shader material with height-based gradient and audio reactivity (color-based, not vertex)
         return new THREE.ShaderMaterial({
           uniforms: {
             lowColor: { value: new THREE.Color(config.lowColor || 0x2d5016) },
@@ -126,17 +143,39 @@ window.TerrainSystem = (function() {
             amplitude: { value: config.amplitude || 8 },
             fogColor: { value: new THREE.Color(config.fogColor || 0x000810) },
             fogNear: { value: config.fogNear || 50 },
-            fogFar: { value: config.fogFar || 300 }
+            fogFar: { value: config.fogFar || 300 },
+            // Audio-reactive uniforms (color-based effects)
+            uTime: { value: 0.0 },
+            uBassDeform: { value: 0.0 },
+            uDrumImpact: { value: 0.0 },
+            uPlayerZ: { value: 0.0 }
           },
           vertexShader: `
+            uniform float uTime;
+            uniform float uBassDeform;
+            uniform float uDrumImpact;
+            uniform float uPlayerZ;
+
             varying float vHeight;
             varying vec3 vNormal;
             varying float vFogDepth;
+            varying float vBassWave;
+            varying float vDrumPulse;
+            varying vec3 vWorldPos;
 
             void main() {
-              vHeight = position.y;
+              vec3 pos = position;
+              vWorldPos = (modelMatrix * vec4(pos, 1.0)).xyz;
+
+              // Calculate audio effects for fragment shader (color-based, no vertex displacement)
+              vBassWave = sin(vWorldPos.x * 0.08 + uTime * 1.5) * cos(vWorldPos.z * 0.06 + uTime) * uBassDeform;
+
+              float distFromPlayer = length(vec2(vWorldPos.x, vWorldPos.z - uPlayerZ));
+              vDrumPulse = exp(-distFromPlayer * 0.015) * uDrumImpact;
+
+              vHeight = pos.y;
               vNormal = normalize(normalMatrix * normal);
-              vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+              vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
               vFogDepth = -mvPosition.z;
               gl_Position = projectionMatrix * mvPosition;
             }
@@ -155,6 +194,9 @@ window.TerrainSystem = (function() {
             varying float vHeight;
             varying vec3 vNormal;
             varying float vFogDepth;
+            varying float vBassWave;
+            varying float vDrumPulse;
+            varying vec3 vWorldPos;
 
             void main() {
               // Normalize height to 0-1 range
@@ -174,6 +216,15 @@ window.TerrainSystem = (function() {
               vec3 lightDir = normalize(vec3(0.5, 1.0, 0.3));
               float diff = max(dot(vNormal, lightDir), 0.0);
               color = color * (0.4 + 0.6 * diff);
+
+              // Audio-reactive color effects (bass = wave glow, drums = bright pulse)
+              float bassGlow = vBassWave * 0.5;
+              float drumFlash = vDrumPulse * 1.0;
+
+              // Add visible color tint: bass adds blue, drums add warm flash
+              vec3 bassColor = vec3(0.2, 0.4, 1.0) * abs(bassGlow);
+              vec3 drumColor = vec3(1.0, 0.6, 0.2) * drumFlash;
+              color = color * (1.0 + drumFlash * 0.5) + bassColor * 0.3 + drumColor * 0.4;
 
               // Apply fog
               float fogFactor = smoothstep(fogNear, fogFar, vFogDepth);
@@ -412,8 +463,45 @@ window.TerrainSystem = (function() {
     }
 
     update(audioData, time) {
-      // Could add audio-reactive terrain animation here
-      // For now, terrain is static
+      // Audio-reactive terrain animation
+      if (!audioData) return;
+
+      const bassDeform = audioData.bassDeform || 0;
+      const drumImpact = audioData.drumImpact || 0;
+      const playerZ = audioData.playerZ || 0;
+
+      // Debug: log once
+      if (!this._audioDebugLogged && (bassDeform > 0.01 || drumImpact > 0.01)) {
+        console.log("[TerrainManager] Updating uniforms - bass:", bassDeform.toFixed(2), "drums:", drumImpact.toFixed(2));
+        console.log("[TerrainManager] Chunks:", this.chunks.size);
+        this._audioDebugLogged = true;
+      }
+
+      let uniformsUpdated = 0;
+      // Update uniforms in all chunk materials
+      for (const chunk of this.chunks.values()) {
+        if (chunk.mesh) {
+          // Handle both single mesh and group structures
+          const meshes = chunk.mesh.isGroup ? chunk.mesh.children : [chunk.mesh];
+          for (const mesh of meshes) {
+            if (mesh.material && mesh.material.uniforms) {
+              if (mesh.material.uniforms.uTime) {
+                mesh.material.uniforms.uTime.value = time;
+                mesh.material.uniforms.uBassDeform.value = bassDeform;
+                mesh.material.uniforms.uDrumImpact.value = drumImpact;
+                mesh.material.uniforms.uPlayerZ.value = playerZ;
+                uniformsUpdated++;
+              }
+            }
+          }
+        }
+      }
+
+      // Debug: log uniform update count once
+      if (!this._uniformDebugLogged && uniformsUpdated > 0) {
+        console.log("[TerrainManager] Updated uniforms on", uniformsUpdated, "meshes");
+        this._uniformDebugLogged = true;
+      }
     }
 
     dispose() {

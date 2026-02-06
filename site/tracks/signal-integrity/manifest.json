@@ -5,12 +5,67 @@
   "duration": null,
   "lyrics": "lyrics.json",
   "stems": {
-    "mix": {
-      "audio": "mix.mp3",
+    "drums": {
+      "audio": "drums.mp3",
+      "midi": "drums.mid",
+      "visualization": {
+        "target": "terrain",
+        "effect": "impact",
+        "color": "#ff4444"
+      }
+    },
+    "bass": {
+      "audio": "bass.mp3",
+      "midi": "bass.mid",
+      "visualization": {
+        "target": "terrain",
+        "effect": "deformation",
+        "color": "#4444ff"
+      }
+    },
+    "vocals": {
+      "audio": "vocals.mp3",
+      "midi": "vocals.mid",
+      "visualization": {
+        "target": "atmosphere",
+        "effect": "fog",
+        "color": "#ffffff"
+      }
+    },
+    "guitar": {
+      "audio": "guitar.mp3",
+      "midi": "guitar.mid",
+      "visualization": {
+        "target": "particles",
+        "effect": "trails",
+        "color": "#ff6600"
+      }
+    },
+    "synth": {
+      "audio": "synth.mp3",
+      "midi": "synth.mid",
       "visualization": {
         "target": "background",
         "effect": "pulse",
-        "color": "#44ffaa"
+        "color": "#00ffff"
+      }
+    },
+    "keyboard": {
+      "audio": "keyboard.mp3",
+      "midi": "keyboard.mid",
+      "visualization": {
+        "target": "particles",
+        "effect": "trails",
+        "color": "#ffaa00"
+      }
+    },
+    "percussion": {
+      "audio": "percussion.mp3",
+      "midi": "percussion.mid",
+      "visualization": {
+        "target": "terrain",
+        "effect": "impact",
+        "color": "#ff8800"
       }
     }
   }
