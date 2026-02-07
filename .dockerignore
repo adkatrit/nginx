@@ -1,0 +1,13 @@
+# Large audio files
+site/_archive/
+*.wav
+*.WAV
+*.flac
+*.zip
+
+# Git
+.git/
+
+# Development
+*.md
+.claude/
