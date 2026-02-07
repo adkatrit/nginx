@@ -855,10 +855,17 @@
   const loadingTitle = $("loadingTitle");
   const loadingBarFill = $("loadingBarFill");
   const loadingStatus = $("loadingStatus");
+  let loadingShownAt = 0;
+  const MIN_LOADING_DISPLAY_MS = 800; // Minimum time to show loading overlay
 
   function showLoadingOverlay(trackTitle) {
-    if (!loadingOverlay) return;
+    console.log("[Loading] showLoadingOverlay called:", trackTitle, "element:", loadingOverlay);
+    if (!loadingOverlay) {
+      console.warn("[Loading] loadingOverlay element not found!");
+      return;
+    }
     loadingOverlay.style.display = "flex";
+    loadingShownAt = Date.now();
     if (loadingTitle) loadingTitle.textContent = trackTitle || "Loading Track";
     if (loadingBarFill) loadingBarFill.style.width = "0%";
     if (loadingStatus) loadingStatus.textContent = "Preparing...";
@@ -873,14 +880,21 @@
 
   function hideLoadingOverlay() {
     if (!loadingOverlay) return;
-    // Fade out smoothly
-    loadingOverlay.style.opacity = "0";
-    loadingOverlay.style.transition = "opacity 0.5s ease";
+
+    // Ensure minimum display time so users can see the loading UI
+    const elapsed = Date.now() - loadingShownAt;
+    const delay = Math.max(0, MIN_LOADING_DISPLAY_MS - elapsed);
+
     setTimeout(() => {
-      loadingOverlay.style.display = "none";
-      loadingOverlay.style.opacity = "1";
-      loadingOverlay.style.transition = "";
-    }, 500);
+      // Fade out smoothly
+      loadingOverlay.style.opacity = "0";
+      loadingOverlay.style.transition = "opacity 0.5s ease";
+      setTimeout(() => {
+        loadingOverlay.style.display = "none";
+        loadingOverlay.style.opacity = "1";
+        loadingOverlay.style.transition = "";
+      }, 500);
+    }, delay);
   }
 
   // Helper functions for unified playback state (audio or stems)
