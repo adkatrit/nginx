@@ -354,6 +354,8 @@
       }
       this.playerCollisionRadius = 1.5;  // Default, updated when model loads
       this.playerOffsetY = 0;  // Vertical offset for model
+      this.showCollisionRadius = false;  // Debug: show collision radius sphere
+      this.collisionRadiusMesh = null;   // Debug mesh for collision radius
 
       // Speed multiplier (0.25 to 2.0, default 1.0)
       const savedSpeed = parseFloat(localStorage.getItem('mysongs-cruise-speed') || '1.0');
@@ -1281,6 +1283,11 @@
           // Set collision radius for this model
           this.playerCollisionRadius = modelConfig.collisionRadius || 1.5;
 
+          // Update collision radius debug mesh if visible
+          if (this.showCollisionRadius) {
+            this.updateCollisionRadiusMesh();
+          }
+
           // Add engine glow effect to loaded model
           this.addModelGlow(model);
 
@@ -1318,6 +1325,42 @@
 
     getAvailableRacerModels() {
       return SELECTABLE_RACERS.slice();
+    }
+
+    updateCollisionRadiusMesh() {
+      const THREE = this.THREE;
+
+      if (this.showCollisionRadius) {
+        // Create or update the collision radius visualization
+        if (!this.collisionRadiusMesh) {
+          const geometry = new THREE.SphereGeometry(1, 24, 16);
+          const material = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.6
+          });
+          this.collisionRadiusMesh = new THREE.Mesh(geometry, material);
+          this.collisionRadiusMesh.name = 'collision-radius-debug';
+        }
+
+        // Update scale to match current collision radius
+        const radius = this.playerCollisionRadius || 1.5;
+        this.collisionRadiusMesh.scale.setScalar(radius);
+
+        // Add to scene if not already added
+        if (!this.collisionRadiusMesh.parent) {
+          this.scene.add(this.collisionRadiusMesh);
+        }
+        this.collisionRadiusMesh.visible = true;
+        console.log('Collision radius debug ON - radius:', radius.toFixed(2));
+      } else {
+        // Hide the mesh
+        if (this.collisionRadiusMesh) {
+          this.collisionRadiusMesh.visible = false;
+        }
+        console.log('Collision radius debug OFF');
+      }
     }
 
     setSpeedMultiplier(multiplier) {
@@ -1960,6 +2003,10 @@
             this.boosting = true;
             this.boostTimer = CONFIG.boostDuration;
           }
+        } else if (e.code === 'KeyR') {
+          // Toggle collision radius debug visualization
+          this.showCollisionRadius = !this.showCollisionRadius;
+          this.updateCollisionRadiusMesh();
         }
       };
       this._onKeyUp = (e) => {
@@ -2665,6 +2712,10 @@
           this.player.rotation.x += (targetPitch - this.player.rotation.x) * 0.12;
         }
 
+        // Update collision radius debug mesh position
+        if (this.collisionRadiusMesh && this.collisionRadiusMesh.visible) {
+          this.collisionRadiusMesh.position.copy(this.player.position);
+        }
       }
 
       // Update model animations
@@ -3096,6 +3147,14 @@
         });
         this.flowGates = [];
         this.flowGateGroup = null;
+      }
+
+      // Collision radius debug mesh cleanup
+      if (this.collisionRadiusMesh) {
+        this.scene.remove(this.collisionRadiusMesh);
+        if (this.collisionRadiusMesh.geometry) this.collisionRadiusMesh.geometry.dispose();
+        if (this.collisionRadiusMesh.material) this.collisionRadiusMesh.material.dispose();
+        this.collisionRadiusMesh = null;
       }
 
       this.scene.fog = null;

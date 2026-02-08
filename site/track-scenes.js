@@ -3222,58 +3222,73 @@ window.TrackScenes = (function() {
     }
     scene.add(phoneGroup);
 
-    // WARM GLOWING ORBS (human presence - larger and more prominent)
+    // WARM GLOWING ORBS OF LIGHT (smaller, brighter, more ethereal)
     const orbs = [];
     const orbGroup = new THREE.Group();
-    const ORB_SPACING = 14;
-    const ORBS_AHEAD = 12;
-    const ORBS_BEHIND = 4;
+    const ORB_SPACING = 10;
+    const ORBS_AHEAD = 15;
+    const ORBS_BEHIND = 5;
     let nextOrbZ = -20;
 
     function spawnOrb(z) {
-      const orbSize = 2.5 + Math.random() * 2.5;
-      const orbGeom = new THREE.SphereGeometry(orbSize, 20, 20);
+      const orbSize = 0.6 + Math.random() * 0.8;  // Much smaller: 0.6-1.4 units
       const hue = 0.06 + Math.random() * 0.06;
-      const orbMat = new THREE.MeshBasicMaterial({
-        color: new THREE.Color().setHSL(hue, 0.85, 0.6),
+      const orbColor = new THREE.Color().setHSL(hue, 0.85, 0.7);
+
+      // Outer glow (soft, diffuse)
+      const glowGeom = new THREE.SphereGeometry(orbSize * 2.5, 16, 16);
+      const glowMat = new THREE.MeshBasicMaterial({
+        color: orbColor,
         transparent: true,
-        opacity: 0.2,
+        opacity: 0.08,
         blending: THREE.AdditiveBlending
       });
-      const orb = new THREE.Mesh(orbGeom, orbMat);
+      const orb = new THREE.Mesh(glowGeom, glowMat);
 
-      // Inner core (brighter)
-      const coreGeom = new THREE.SphereGeometry(orbSize * 0.4, 12, 12);
-      const coreMat = new THREE.MeshBasicMaterial({
+      // Middle glow layer
+      const midGeom = new THREE.SphereGeometry(orbSize * 1.2, 12, 12);
+      const midMat = new THREE.MeshBasicMaterial({
         color: new THREE.Color().setHSL(hue, 0.9, 0.75),
         transparent: true,
-        opacity: 0.5,
+        opacity: 0.25,
+        blending: THREE.AdditiveBlending
+      });
+      const mid = new THREE.Mesh(midGeom, midMat);
+      orb.add(mid);
+
+      // Bright inner core (the light source)
+      const coreGeom = new THREE.SphereGeometry(orbSize * 0.35, 10, 10);
+      const coreMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color().setHSL(hue, 0.7, 0.95),
+        transparent: true,
+        opacity: 0.95,
         blending: THREE.AdditiveBlending
       });
       const core = new THREE.Mesh(coreGeom, coreMat);
       orb.add(core);
 
       orb.position.set(
-        (Math.random() - 0.5) * 20,
-        3 + Math.random() * 10,
-        z + Math.random() * 10
+        (Math.random() - 0.5) * 25,
+        2 + Math.random() * 12,
+        z + Math.random() * 8
       );
 
       orb.userData = {
         spawnZ: z,
         phase: Math.random() * Math.PI * 2,
-        pulseSpeed: 0.3 + Math.random() * 0.3,
+        pulseSpeed: 0.4 + Math.random() * 0.4,
         baseY: orb.position.y,
-        orbMat: orbMat,
+        orbMat: glowMat,
+        midMat: midMat,
         coreMat: coreMat,
         size: orbSize
       };
 
-      // Point light for each orb
+      // Point light for each orb (brighter, tighter radius)
       const light = new THREE.PointLight(
-        new THREE.Color().setHSL(hue, 0.7, 0.55),
-        1.2,
-        15
+        new THREE.Color().setHSL(hue, 0.8, 0.6),
+        0.8,
+        8
       );
       light.position.copy(orb.position);
       orb.userData.light = light;
@@ -3463,22 +3478,25 @@ window.TrackScenes = (function() {
           }
         });
 
-        // GUITAR → Orbs scale breathe
+        // GUITAR → Orbs pulse and glow
         orbs.forEach(orb => {
           const data = orb.userData;
-          const breathe = 1 + Math.sin(time * data.pulseSpeed + data.phase) * 0.3;
-          const guitarPulse = 1 + guitarEnergy * 2;
+          const breathe = 1 + Math.sin(time * data.pulseSpeed + data.phase) * 0.15;
+          const guitarPulse = 1 + guitarEnergy * 0.8;
 
           orb.scale.setScalar(breathe * guitarPulse);
-          data.orbMat.opacity = 0.25 + guitarEnergy * 0.6;
+          data.orbMat.opacity = 0.06 + guitarEnergy * 0.15;
+          if (data.midMat) {
+            data.midMat.opacity = 0.2 + guitarEnergy * 0.4;
+          }
           if (data.coreMat) {
-            data.coreMat.opacity = 0.5 + guitarEnergy * 0.5;
+            data.coreMat.opacity = 0.85 + guitarEnergy * 0.15;
           }
 
-          orb.position.y = data.baseY + Math.sin(time * 0.4 + data.phase) * 2;
+          orb.position.y = data.baseY + Math.sin(time * 0.5 + data.phase) * 1.5;
 
           if (data.light) {
-            data.light.intensity = 1.5 + guitarEnergy * 6;
+            data.light.intensity = 0.6 + guitarEnergy * 2;
             data.light.position.copy(orb.position);
           }
         });

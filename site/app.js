@@ -1144,11 +1144,27 @@
     }
 
     // Find the current lyric based on time
+    // Check both start and end times to handle lyrics with incorrect timestamps
     let newIndex = -1;
-    for (let i = lyricsData.length - 1; i >= 0; i--) {
-      if (currentTime >= lyricsData[i].time) {
+    for (let i = 0; i < lyricsData.length; i++) {
+      const line = lyricsData[i];
+      const lineStart = line.start ?? line.time ?? 0;
+      const lineEnd = line.end ?? (lyricsData[i + 1]?.start ?? lineStart + 10);
+      if (currentTime >= lineStart && currentTime < lineEnd) {
         newIndex = i;
         break;
+      }
+    }
+    // Fallback: if no exact match, find the last line that started before current time
+    // but only consider lines with valid sequential timing
+    if (newIndex === -1) {
+      let lastValidStart = -1;
+      for (let i = 0; i < lyricsData.length; i++) {
+        const lineStart = lyricsData[i].start ?? lyricsData[i].time ?? 0;
+        if (lineStart > lastValidStart && currentTime >= lineStart) {
+          newIndex = i;
+          lastValidStart = lineStart;
+        }
       }
     }
 
@@ -3287,11 +3303,11 @@
         currentLyricIndex = -1;
         if (stemPlayer.manifest?.lyrics) {
           try {
-            const lyricsUrl = t.stemsManifest.substring(0, t.stemsManifest.lastIndexOf('/') + 1) + stemPlayer.manifest.lyrics + '?v=' + Date.now();
+            const lyricsUrl = t.stemsManifest.substring(0, t.stemsManifest.lastIndexOf('/') + 1) + stemPlayer.manifest.lyrics;
             const lyricsResp = await fetch(lyricsUrl);
             if (lyricsResp.ok) {
               const lyricsJson = await lyricsResp.json();
-              lyricsData = lyricsJson.lyrics || [];
+              lyricsData = lyricsJson.lines || lyricsJson.lyrics || [];
               console.log("Lyrics loaded:", lyricsData.length, "lines");
             }
           } catch (lyricsErr) {
@@ -4362,24 +4378,31 @@
   });
 
   // Visibility change
-  document.addEventListener("visibilitychange", () => {
+  document.addEventListener("visibilitychange", async () => {
     if (document.visibilityState !== "visible") {
       stopVizLoop();
       stopIOSVizLoop();
       return;
     }
 
-    if (canUseWebAudioViz() && !audio.paused) {
+    // Reset timing to prevent large delta time jumps after tab was hidden
+    threeLastNowMs = 0;
+
+    // Resume audio context first (required for both stem player and regular audio)
+    if (audioCtx && audioCtx.state === "suspended") {
+      try { await audioCtx.resume(); } catch { /* ignore */ }
+    }
+
+    // Check if playback is active (handle both stem player and regular audio)
+    const isPlaying = usingStemPlayer ? (stemPlayer?.isPlaying) : !audio.paused;
+
+    if (canUseWebAudioViz() && isPlaying) {
       ensureAudioGraph();
       startVizLoop();
       void ensureThreeViz();
-      void tryResumeAudioContext();
-    } else if (isIOS && iosViz && !audio.paused) {
+    } else if (isIOS && iosViz && isPlaying) {
       ensureIOSAudioGraph();
       startIOSVizLoop();
-      if (audioCtx && audioCtx.state !== "running") {
-        audioCtx.resume().catch(() => {});
-      }
     }
   });
 

@@ -2,7 +2,7 @@
   "title": "Turn Your Phone Face Down",
   "artist": "DeytaDreams",
   "bpm": 110,
-  "duration": null,
+  "duration": 198,
   "lyrics": "lyrics.json",
   "stems": {
     "drums": {
@@ -52,23 +52,6 @@
         "effect": "burst",
         "color": "#ff4488"
       }
-    },
-    "backing-vocals": {
-      "audio": "backing-vocals.mp3",
-      "visualization": {
-        "target": "atmosphere",
-        "effect": "glow",
-        "color": "#aaddff"
-      }
-    },
-    "other": {
-      "audio": "other.mp3",
-      "visualization": {
-        "target": "background",
-        "effect": "pulse",
-        "color": "#88ff88"
-      }
     }
-  },
-  "mix": null
+  }
 }

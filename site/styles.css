@@ -3464,7 +3464,7 @@ input[type="range"]:active::-moz-range-thumb {
 /* Mobile adjustments */
 @media (max-width: 768px) {
   .lyrics-overlay {
-    bottom: 100px;
+    bottom: 200px;
     width: 95vw;
   }
 
@@ -3474,6 +3474,12 @@ input[type="range"]:active::-moz-range-thumb {
 
   .lyrics-overlay__next {
     font-size: 0.85rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .lyrics-overlay {
+    bottom: 220px;
   }
 }
 

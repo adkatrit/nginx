@@ -4,12 +4,109 @@
  * Uses AudioBufferSourceNode for sample-accurate synchronized playback.
  * All stems start at the exact same AudioContext time, eliminating drift.
  *
- * Provides:
+ * Features:
  * - Synchronized playback of all stems (sample-accurate)
  * - Per-stem audio analysis (energy, bass, mid, treble)
  * - Per-stem volume/mute control
  * - MIDI event scheduling for note-accurate visualization
+ * - IndexedDB caching for fast reloads
+ * - Progressive loading with priority stems
  */
+
+// IndexedDB cache for decoded audio buffers
+const AudioCache = {
+  dbName: 'stem-player-cache',
+  dbVersion: 1,
+  storeName: 'audio-buffers',
+  db: null,
+
+  async init() {
+    if (this.db) return this.db;
+
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(this.dbName, this.dbVersion);
+
+      request.onerror = () => {
+        console.warn('[AudioCache] IndexedDB not available, caching disabled');
+        resolve(null);
+      };
+
+      request.onsuccess = () => {
+        this.db = request.result;
+        resolve(this.db);
+      };
+
+      request.onupgradeneeded = (event) => {
+        const db = event.target.result;
+        if (!db.objectStoreNames.contains(this.storeName)) {
+          db.createObjectStore(this.storeName, { keyPath: 'url' });
+        }
+      };
+    });
+  },
+
+  async get(url) {
+    if (!this.db) return null;
+
+    return new Promise((resolve) => {
+      try {
+        const transaction = this.db.transaction([this.storeName], 'readonly');
+        const store = transaction.objectStore(this.storeName);
+        const request = store.get(url);
+
+        request.onsuccess = () => {
+          const result = request.result;
+          if (result && result.arrayBuffer) {
+            resolve(result.arrayBuffer);
+          } else {
+            resolve(null);
+          }
+        };
+
+        request.onerror = () => resolve(null);
+      } catch (e) {
+        resolve(null);
+      }
+    });
+  },
+
+  async set(url, arrayBuffer) {
+    if (!this.db) return;
+
+    return new Promise((resolve) => {
+      try {
+        const transaction = this.db.transaction([this.storeName], 'readwrite');
+        const store = transaction.objectStore(this.storeName);
+        store.put({ url, arrayBuffer, timestamp: Date.now() });
+
+        transaction.oncomplete = () => resolve(true);
+        transaction.onerror = () => resolve(false);
+      } catch (e) {
+        resolve(false);
+      }
+    });
+  },
+
+  async clear() {
+    if (!this.db) return;
+
+    return new Promise((resolve) => {
+      try {
+        const transaction = this.db.transaction([this.storeName], 'readwrite');
+        const store = transaction.objectStore(this.storeName);
+        store.clear();
+        transaction.oncomplete = () => resolve(true);
+        transaction.onerror = () => resolve(false);
+      } catch (e) {
+        resolve(false);
+      }
+    });
+  }
+};
+
+// Priority order for stems - load these first
+const STEM_PRIORITY = ['drums', 'bass', 'vocals', 'synth', 'guitar', 'piano', 'keyboard', 'other', 'percussion', 'backing-vocals', 'fx', 'strings'];
+
 class StemPlayer {
   constructor(audioContext) {
     this.audioContext = audioContext;
@@ -18,6 +115,7 @@ class StemPlayer {
     this.basePath = '';
     this.isPlaying = false;
     this.isLoaded = false;
+    this.isPartiallyLoaded = false; // True when at least one stem is ready
     this.masterGain = this.audioContext.createGain();
     this.masterGain.connect(this.audioContext.destination);
 
@@ -34,6 +132,7 @@ class StemPlayer {
       'stemAnalysis': [],
       'midiNote': [],
       'loaded': [],
+      'partialLoad': [],
       'error': [],
       'progress': []
     };
@@ -45,6 +144,14 @@ class StemPlayer {
 
     // Track duration
     this.duration = 0;
+
+    // Loading state
+    this.loadingStems = new Set();
+    this.loadedStems = new Set();
+    this.failedStems = new Set();
+
+    // Initialize cache
+    AudioCache.init().catch(() => {});
   }
 
   /**
@@ -54,61 +161,101 @@ class StemPlayer {
     try {
       this.basePath = manifestUrl.substring(0, manifestUrl.lastIndexOf('/') + 1);
 
+      // Load manifest (with cache bust to ensure fresh config)
       const response = await fetch(manifestUrl);
       if (!response.ok) throw new Error(`Failed to load manifest: ${response.status}`);
 
       this.manifest = await response.json();
 
-      // Load all stems in parallel, tracking progress
+      // Sort stems by priority
       const stemEntries = Object.entries(this.manifest.stems);
-      const totalStems = stemEntries.length;
-      let loadedStems = 0;
-
-      console.log(`[StemPlayer] Loading ${totalStems} stems as AudioBuffers...`);
-
-      const loadPromises = stemEntries.map(async ([stemId, stemConfig]) => {
-        try {
-          await this.loadStem(stemId, stemConfig);
-          loadedStems++;
-          console.log(`[StemPlayer] ✓ Loaded: ${stemId} (${loadedStems}/${totalStems})`);
-
-          // Emit progress
-          if (progressCallback) {
-            progressCallback(loadedStems, totalStems, stemId);
-          }
-          this.emit('progress', { loaded: loadedStems, total: totalStems, current: stemId });
-
-          return { stemId, success: true };
-        } catch (err) {
-          loadedStems++;
-          console.error(`[StemPlayer] ✗ Failed to load ${stemId}:`, err.message);
-
-          if (progressCallback) {
-            progressCallback(loadedStems, totalStems, `${stemId} (failed)`);
-          }
-
-          return { stemId, success: false, error: err.message };
-        }
+      stemEntries.sort((a, b) => {
+        const priorityA = STEM_PRIORITY.indexOf(a[0]);
+        const priorityB = STEM_PRIORITY.indexOf(b[0]);
+        return (priorityA === -1 ? 999 : priorityA) - (priorityB === -1 ? 999 : priorityB);
       });
 
-      const results = await Promise.all(loadPromises);
-      const succeeded = results.filter(r => r.success).length;
-      const failed = results.filter(r => !r.success);
+      const totalStems = stemEntries.length;
+      let loadedCount = 0;
 
-      console.log(`[StemPlayer] Loaded ${succeeded}/${totalStems} stems`);
-      if (failed.length > 0) {
-        console.warn('[StemPlayer] Failed stems:', failed.map(f => f.stemId).join(', '));
-      }
+      console.log(`[StemPlayer] Loading ${totalStems} stems (priority order)...`);
 
-      // Calculate duration from loaded buffers
-      for (const stem of this.stems.values()) {
-        if (stem.buffer && stem.buffer.duration > this.duration) {
-          this.duration = stem.buffer.duration;
+      // Load stems with controlled concurrency (3 at a time for better UX)
+      const CONCURRENCY = 3;
+      const loadQueue = [...stemEntries];
+      const inFlight = new Set();
+
+      const loadNext = async () => {
+        while (loadQueue.length > 0 && inFlight.size < CONCURRENCY) {
+          const [stemId, stemConfig] = loadQueue.shift();
+          inFlight.add(stemId);
+          this.loadingStems.add(stemId);
+
+          this.loadStem(stemId, stemConfig)
+            .then(() => {
+              loadedCount++;
+              this.loadedStems.add(stemId);
+              console.log(`[StemPlayer] ✓ ${stemId} (${loadedCount}/${totalStems})`);
+
+              // Update duration
+              const stem = this.stems.get(stemId);
+              if (stem?.buffer && stem.buffer.duration > this.duration) {
+                this.duration = stem.buffer.duration;
+              }
+
+              // Mark as partially loaded after first stem
+              if (!this.isPartiallyLoaded && this.loadedStems.size >= 1) {
+                this.isPartiallyLoaded = true;
+                this.emit('partialLoad', { loadedStems: Array.from(this.loadedStems) });
+              }
+
+              if (progressCallback) {
+                progressCallback(loadedCount, totalStems, stemId);
+              }
+              this.emit('progress', { loaded: loadedCount, total: totalStems, current: stemId });
+            })
+            .catch((err) => {
+              loadedCount++;
+              this.failedStems.add(stemId);
+              console.warn(`[StemPlayer] ✗ ${stemId}: ${err.message}`);
+
+              if (progressCallback) {
+                progressCallback(loadedCount, totalStems, `${stemId} (failed)`);
+              }
+            })
+            .finally(() => {
+              inFlight.delete(stemId);
+              this.loadingStems.delete(stemId);
+              loadNext(); // Start next stem
+            });
         }
+      };
+
+      // Start initial batch
+      for (let i = 0; i < CONCURRENCY && i < loadQueue.length; i++) {
+        loadNext();
       }
 
-      this.isLoaded = true;
-      this.emit('loaded', { manifest: this.manifest });
+      // Wait for all to complete
+      await new Promise((resolve) => {
+        const checkComplete = setInterval(() => {
+          if (loadedCount >= totalStems) {
+            clearInterval(checkComplete);
+            resolve();
+          }
+        }, 50);
+      });
+
+      const succeeded = this.loadedStems.size;
+      const failed = this.failedStems.size;
+
+      console.log(`[StemPlayer] Complete: ${succeeded}/${totalStems} stems loaded`);
+      if (failed > 0) {
+        console.warn('[StemPlayer] Failed:', Array.from(this.failedStems).join(', '));
+      }
+
+      this.isLoaded = succeeded > 0;
+      this.emit('loaded', { manifest: this.manifest, loadedStems: succeeded, failedStems: failed });
 
       return this.manifest;
     } catch (error) {
@@ -118,19 +265,35 @@ class StemPlayer {
   }
 
   /**
-   * Load a single stem as an AudioBuffer
+   * Load a single stem as an AudioBuffer (with caching)
    */
   async loadStem(stemId, config) {
-    const audioUrl = this.basePath + config.audio + '?v=' + Date.now();
+    // Build URL without cache-busting for browser caching
+    const audioUrl = this.basePath + config.audio;
+    const cacheKey = audioUrl;
 
-    // Fetch and decode audio data into an AudioBuffer
-    const response = await fetch(audioUrl);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} for ${audioUrl}`);
+    let arrayBuffer = null;
+
+    // Try IndexedDB cache first
+    const cachedBuffer = await AudioCache.get(cacheKey);
+    if (cachedBuffer) {
+      console.log(`[StemPlayer] Cache hit: ${stemId}`);
+      arrayBuffer = cachedBuffer;
+    } else {
+      // Fetch from network
+      const response = await fetch(audioUrl);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status} for ${audioUrl}`);
+      }
+
+      arrayBuffer = await response.arrayBuffer();
+
+      // Cache for next time (don't await - do it in background)
+      AudioCache.set(cacheKey, arrayBuffer.slice(0)).catch(() => {});
     }
 
-    const arrayBuffer = await response.arrayBuffer();
-    const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+    // Decode audio
+    const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer.slice(0));
 
     // Create gain node for this stem (persistent)
     const gainNode = this.audioContext.createGain();
@@ -166,10 +329,18 @@ class StemPlayer {
    * Create source nodes for all stems and start them at the exact same time
    */
   _createAndStartSources(offset = 0) {
+    // Only start stems that have loaded
+    const readyStems = Array.from(this.stems.entries()).filter(([id, stem]) => stem.buffer);
+
+    if (readyStems.length === 0) {
+      console.warn('[StemPlayer] No stems ready to play');
+      return;
+    }
+
     // Schedule all stems to start at exactly the same moment
     const startAt = this.audioContext.currentTime + 0.05; // 50ms ahead for scheduling
 
-    for (const [stemId, stem] of this.stems) {
+    for (const [stemId, stem] of readyStems) {
       // Create a new source node (they're single-use)
       const sourceNode = this.audioContext.createBufferSource();
       sourceNode.buffer = stem.buffer;
@@ -227,8 +398,7 @@ class StemPlayer {
     const stem = this.stems.get(stemId);
     if (!stem || !stem.config.midi) return null;
 
-    // Cache-bust MIDI URL
-    const midiUrl = this.basePath + stem.config.midi + '?v=' + Date.now();
+    const midiUrl = this.basePath + stem.config.midi;
 
     try {
       const response = await fetch(midiUrl);
@@ -414,7 +584,13 @@ class StemPlayer {
    * Play all stems synchronized
    */
   play() {
-    if (!this.isLoaded || this.isPlaying) return;
+    if (this.isPlaying) return;
+
+    // Allow playing if at least partially loaded
+    if (!this.isLoaded && !this.isPartiallyLoaded) {
+      console.warn('[StemPlayer] No stems loaded yet');
+      return;
+    }
 
     // Resume audio context if suspended
     if (this.audioContext.state === 'suspended') {
@@ -540,11 +716,14 @@ class StemPlayer {
    * Call this in your animation loop
    */
   analyze() {
-    if (!this.isLoaded) return null;
+    if (!this.isLoaded && !this.isPartiallyLoaded) return null;
 
     const analysisResults = {};
 
     for (const [stemId, stem] of this.stems) {
+      // Skip stems that haven't loaded yet
+      if (!stem.buffer) continue;
+
       // Only get frequency data if we're playing
       if (this.isPlaying && stem.sourceNode) {
         stem.analyser.getByteFrequencyData(stem.frequencyData);
@@ -640,6 +819,27 @@ class StemPlayer {
   }
 
   /**
+   * Check if a specific stem is loaded
+   */
+  isStemLoaded(stemId) {
+    return this.loadedStems.has(stemId);
+  }
+
+  /**
+   * Get loading progress
+   */
+  getLoadingProgress() {
+    const total = this.loadedStems.size + this.loadingStems.size + this.failedStems.size;
+    return {
+      loaded: this.loadedStems.size,
+      loading: this.loadingStems.size,
+      failed: this.failedStems.size,
+      total,
+      percent: total > 0 ? Math.round((this.loadedStems.size / total) * 100) : 0
+    };
+  }
+
+  /**
    * Event emitter methods
    */
   on(event, callback) {
@@ -677,7 +877,20 @@ class StemPlayer {
     this.midiData.clear();
     this.midiSchedule = [];
     this.isLoaded = false;
+    this.isPartiallyLoaded = false;
+    this.loadedStems.clear();
+    this.loadingStems.clear();
+    this.failedStems.clear();
     this.duration = 0;
+  }
+
+  /**
+   * Clear the audio cache (useful if stems are updated)
+   */
+  static async clearCache() {
+    await AudioCache.init();
+    await AudioCache.clear();
+    console.log('[StemPlayer] Cache cleared');
   }
 }
 
