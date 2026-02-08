@@ -46,7 +46,7 @@ window.TrackScenes = (function() {
 
     // Helper: Create a single coral at given Z
     function spawnCoral(z) {
-      const height = 12 + Math.random() * 30;
+      const height = 12 + Math.random() * 51;
       const baseRadius = 0.5 + Math.random() * 1;
       const segments = 6 + Math.floor(Math.random() * 4);
 
@@ -644,7 +644,7 @@ window.TrackScenes = (function() {
     let pillarSideToggle = 0;
 
     function spawnPillar(z) {
-      const height = 8 + Math.random() * 20;
+      const height = 8 + Math.random() * 34;
       const radius = 0.3 + Math.random() * 0.5;
       const hue = 0.3 + Math.random() * 0.1;
 
@@ -872,7 +872,7 @@ window.TrackScenes = (function() {
 
     function spawnBillboard(z) {
       const width = 4 + Math.random() * 6;
-      const height = 3 + Math.random() * 4;
+      const height = 3 + Math.random() * 7.5;
       const hue = Math.random();
 
       // Main billboard panel
@@ -946,7 +946,7 @@ window.TrackScenes = (function() {
 
     function spawnDataPillar(z) {
       const pillarPiece = new THREE.Group();
-      const height = 15 + Math.random() * 25;
+      const height = 15 + Math.random() * 45;
       const radius = 0.3 + Math.random() * 0.4;
 
       // Main pillar (wireframe)
@@ -1233,7 +1233,7 @@ window.TrackScenes = (function() {
 
     function spawnTower(z) {
       const towerPiece = new THREE.Group();
-      const height = 12 + Math.random() * 25;
+      const height = 12 + Math.random() * 43.5;
       const radius = 0.2 + Math.random() * 0.3;
 
       // Main tower (ice crystal-like)
@@ -1309,7 +1309,7 @@ window.TrackScenes = (function() {
     let nextPylonZ = -30;
 
     function spawnPylon(z) {
-      const height = 0.5 + Math.random() * 8;
+      const height = 0.5 + Math.random() * 12.25;
       const geom = new THREE.BoxGeometry(0.15, height, 0.15);
       const mat = new THREE.MeshBasicMaterial({
         color: 0x00ff88,
@@ -1675,392 +1675,837 @@ window.TrackScenes = (function() {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // TRADE YOU MY HANDS - Metamorphosis / Human-AI Symbiosis
-  // Crystalline cocoons that burst into butterflies, orbital light spirals
-  // Theme: "Give up control, gain full control" - liberation through partnership
+  // TRADE YOU MY HANDS - Dense Cybernetic Jungle
+  // Towering bio-mechanical trees, glowing data vines, bioluminescent undergrowth
+  // Theme: Nature and technology in symbiosis - organic circuits, living code
   // ═══════════════════════════════════════════════════════════════════════════
   function buildTradeHands(THREE, scene, audioData) {
     const group = new THREE.Group();
-    // Lighter fog to let sakura background show through
-    scene.fog = new THREE.FogExp2(0x1a1028, 0.004);
 
-    // === COCOONS - Continuously generated crystalline forms ===
-    const cocoons = [];
-    const cocoonGroup = new THREE.Group();
-    const COCOON_SPACING = 12;
-    const COCOONS_AHEAD = 20;
-    const COCOONS_BEHIND = 6;
-    let nextCocoonZ = -40;
+    // Warm sunrise fog - denser to hide distant edges
+    scene.fog = new THREE.FogExp2(0x1a0808, 0.012);
 
-    function spawnCocoon(z) {
-      // Crystalline cocoon shape - elongated icosahedron
-      const geom = new THREE.IcosahedronGeometry(1.2 + Math.random() * 0.8, 1);
-      geom.scale(0.6, 1.4, 0.6);
+    // === INFINITE GROUND PLANE - Hides terrain edge/sky gap ===
+    const groundPlane = new THREE.Mesh(
+      new THREE.PlaneGeometry(2000, 2000),
+      new THREE.MeshBasicMaterial({
+        color: 0x0a0505,  // Very dark warm brown - matches terrain base
+        side: THREE.DoubleSide
+      })
+    );
+    groundPlane.rotation.x = -Math.PI / 2;
+    groundPlane.position.y = -5.5;  // Below terrain base
+    scene.add(groundPlane);
 
-      const isGold = Math.random() > 0.4;
-      const hue = isGold ? 0.12 : 0.55; // Gold or cyan
-      const mat = new THREE.MeshStandardMaterial({
-        color: new THREE.Color().setHSL(hue, 0.6, 0.4),
-        roughness: 0.2,
-        metalness: 0.8,
-        transparent: true,
-        opacity: 0.7,
-        emissive: new THREE.Color().setHSL(hue, 0.8, 0.15),
-        emissiveIntensity: 0.5
-      });
+    // === SUNRISE SKY SHADER - Fully Vocal Reactive ===
+    const sunriseVertexShader = `
+      varying vec3 vWorldPosition;
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        vec4 worldPos = modelMatrix * vec4(position, 1.0);
+        vWorldPosition = worldPos.xyz;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `;
 
-      const cocoon = new THREE.Mesh(geom, mat);
+    const sunriseFragmentShader = `
+      uniform float time;
+      uniform float vocalEnergy;
+      uniform float bassEnergy;
+      uniform float drumEnergy;
+      varying vec3 vWorldPosition;
+      varying vec2 vUv;
+
+      void main() {
+        vec3 dir = normalize(vWorldPosition);
+        float y = dir.y;
+        float x = atan(dir.x, dir.z) / 3.14159;
+
+        float v = vocalEnergy;
+        float b = bassEnergy;
+        float d = drumEnergy;
+
+        // === RICH SATURATED PALETTE - Fixed colors ===
+        vec3 nightSky = vec3(0.012, 0.006, 0.035);    // Very dark purple
+        vec3 deepPurple = vec3(0.05, 0.018, 0.1);     // Dark purple
+        vec3 twilight = vec3(0.12, 0.04, 0.16);       // Purple-magenta
+        vec3 rose = vec3(0.3, 0.07, 0.12);            // Deep rose
+        vec3 coral = vec3(0.55, 0.15, 0.06);          // Rich coral
+        vec3 orange = vec3(0.8, 0.3, 0.04);           // Warm orange
+        vec3 gold = vec3(0.9, 0.5, 0.06);             // Saturated gold
+
+        // === BUILD BASE GRADIENT ===
+        vec3 baseColor;
+
+        if (y < -0.3) {
+          baseColor = nightSky;
+        } else if (y < -0.1) {
+          float t = (y + 0.3) / 0.2;
+          baseColor = mix(nightSky, deepPurple, t);
+        } else if (y < 0.05) {
+          float t = (y + 0.1) / 0.15;
+          baseColor = mix(deepPurple, twilight, t);
+        } else if (y < 0.12) {
+          float t = (y - 0.05) / 0.07;
+          baseColor = mix(twilight, rose, t);
+        } else if (y < 0.2) {
+          float t = (y - 0.12) / 0.08;
+          baseColor = mix(rose, coral, t);
+        } else if (y < 0.3) {
+          float t = (y - 0.2) / 0.1;
+          baseColor = mix(coral, orange, t);
+        } else if (y < 0.42) {
+          float t = (y - 0.3) / 0.12;
+          baseColor = mix(orange, gold, t);
+        } else {
+          float t = (y - 0.42) / 0.58;
+          baseColor = mix(gold, twilight, t);
+        }
+
+        // === LUMINOSITY CONTROL ===
+        // Vocals control brightness, not color
+        // Quiet = dim (0.35x), Singing = bright (1.5x)
+        float luminosity = 0.35 + v * 1.15;
+        vec3 color = baseColor * luminosity;
+
+        // === SUN GLOW - Brighter with vocals, same color ===
+        float sunDist = length(vec2(x, y - 0.06));
+        float sunGlow = smoothstep(0.35, 0.05, sunDist);
+        // Sun just gets brighter, keeps gold color
+        color += gold * sunGlow * (0.1 + v * 0.6) * luminosity;
+
+        // === HORIZON LINE - Brighter with vocals ===
+        float horizonLine = exp(-abs(y - 0.05) * 20.0);
+        color += orange * horizonLine * (0.08 + v * 0.35) * luminosity;
+
+        // === LIGHT RAYS - Visible when singing loud ===
+        if (v > 0.25) {
+          float rayAngle = x * 8.0;
+          float rays = pow(abs(sin(rayAngle)), 10.0);
+          float rayMask = smoothstep(0.08, 0.3, y) * smoothstep(0.55, 0.2, y);
+          float rayIntensity = rays * rayMask * (v - 0.25) * 1.2;
+          color += coral * rayIntensity * 0.3;
+        }
+
+        // === DRUM FLASH - Multiplicative brightness ===
+        color *= 1.0 + d * 0.4 * smoothstep(0.2, -0.2, y);
+
+        // === BASS - Adds depth to bottom ===
+        color += deepPurple * b * smoothstep(0.0, -0.35, y) * 0.4;
+
+        gl_FragColor = vec4(color, 1.0);
+      }
+    `;
+
+    const skyUniforms = {
+      time: { value: 0 },
+      vocalEnergy: { value: 0 },
+      bassEnergy: { value: 0 },
+      drumEnergy: { value: 0 }
+    };
+
+    const skyMat = new THREE.ShaderMaterial({
+      vertexShader: sunriseVertexShader,
+      fragmentShader: sunriseFragmentShader,
+      uniforms: skyUniforms,
+      side: THREE.BackSide,
+      depthWrite: false
+    });
+
+    const skyGeom = new THREE.SphereGeometry(200, 32, 32);
+    const sky = new THREE.Mesh(skyGeom, skyMat);
+    scene.add(sky);
+
+    // === COLOR PALETTE (warm sunrise tones) ===
+    const JUNGLE_DARK = 0x1a0a0a;
+    const JUNGLE_GREEN = 0x2a3a2a;
+    const CYBER_TEAL = 0x00ffaa;
+    const CYBER_BLUE = 0x00aaff;
+    const BIOLUM_PINK = 0xff44aa;
+    const BIOLUM_ORANGE = 0xffaa22;
+
+    // === TREES - Tall procedural jungle trees with cybernetic elements ===
+    const trees = [];
+    const treeGroup = new THREE.Group();
+    const TREE_SPACING = 8;
+    const TREES_AHEAD = 25;
+    const TREES_BEHIND = 8;
+    let nextTreeZ = -60;
+
+    // Create circuit texture for bark
+    function createCircuitCanvas() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 128;
+      canvas.height = 256;
+      const ctx = canvas.getContext('2d');
+
+      // Dark bark base
+      ctx.fillStyle = '#0a1a0d';
+      ctx.fillRect(0, 0, 128, 256);
+
+      // Circuit lines
+      ctx.strokeStyle = '#00ffaa';
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.3;
+
+      for (let i = 0; i < 12; i++) {
+        ctx.beginPath();
+        let x = Math.random() * 128;
+        let y = 0;
+        ctx.moveTo(x, y);
+        while (y < 256) {
+          y += 10 + Math.random() * 30;
+          if (Math.random() > 0.5) {
+            x += (Math.random() - 0.5) * 40;
+            x = Math.max(5, Math.min(123, x));
+          }
+          ctx.lineTo(x, y);
+          // Occasional node
+          if (Math.random() > 0.7) {
+            ctx.fillStyle = '#00ffaa';
+            ctx.fillRect(x - 2, y - 2, 4, 4);
+          }
+        }
+        ctx.stroke();
+      }
+
+      return canvas;
+    }
+
+    const circuitCanvas = createCircuitCanvas();
+    const circuitTexture = new THREE.CanvasTexture(circuitCanvas);
+    circuitTexture.wrapS = THREE.RepeatWrapping;
+    circuitTexture.wrapT = THREE.RepeatWrapping;
+
+    function spawnTree(z) {
+      const treeObj = new THREE.Group();
       const side = Math.random() > 0.5 ? 1 : -1;
-      cocoon.position.set(
-        side * (6 + Math.random() * 10),
-        -2 + Math.random() * 8,
-        z + Math.random() * 6
-      );
-      cocoon.rotation.set(
-        Math.random() * 0.3,
-        Math.random() * Math.PI * 2,
-        Math.random() * 0.5 - 0.25
-      );
+      const xOffset = side * (5 + Math.random() * 12);
 
-      // Inner glow core
-      const coreGeom = new THREE.IcosahedronGeometry(0.5, 0);
-      const coreMat = new THREE.MeshBasicMaterial({
-        color: new THREE.Color().setHSL(hue, 0.9, 0.7),
-        transparent: true,
-        opacity: 0.4,
-        blending: THREE.AdditiveBlending
+      // Tree height varies significantly for dense canopy feel
+      const height = 18 + Math.random() * 42;
+      const trunkRadius = 0.4 + Math.random() * 0.5;
+
+      // Trunk - tapered cylinder with circuit bark
+      const trunkGeom = new THREE.CylinderGeometry(
+        trunkRadius * 0.6, trunkRadius, height, 8, 4
+      );
+      const trunkMat = new THREE.MeshStandardMaterial({
+        color: JUNGLE_DARK,
+        roughness: 0.9,
+        metalness: 0.1,
+        emissive: CYBER_TEAL,
+        emissiveIntensity: 0.05,
+        emissiveMap: circuitTexture
       });
-      const core = new THREE.Mesh(coreGeom, coreMat);
-      cocoon.add(core);
+      const trunk = new THREE.Mesh(trunkGeom, trunkMat);
+      trunk.position.y = height / 2 - 5;
+      treeObj.add(trunk);
 
-      cocoon.userData = {
+      // Glowing data veins running up trunk
+      const vineCount = 2 + Math.floor(Math.random() * 3);
+      for (let v = 0; v < vineCount; v++) {
+        const vineGeom = new THREE.BufferGeometry();
+        const vinePoints = [];
+        const vineAngle = (v / vineCount) * Math.PI * 2 + Math.random() * 0.5;
+
+        for (let i = 0; i <= 20; i++) {
+          const t = i / 20;
+          const spiralAngle = vineAngle + t * Math.PI * (1 + Math.random());
+          const r = trunkRadius + 0.05 + Math.sin(t * Math.PI * 4) * 0.08;
+          vinePoints.push(
+            Math.cos(spiralAngle) * r,
+            t * height - 5,
+            Math.sin(spiralAngle) * r
+          );
+        }
+        vineGeom.setAttribute('position', new THREE.Float32BufferAttribute(vinePoints, 3));
+
+        const vineMat = new THREE.LineBasicMaterial({
+          color: Math.random() > 0.5 ? CYBER_TEAL : CYBER_BLUE,
+          transparent: true,
+          opacity: 0.8,
+          blending: THREE.AdditiveBlending,
+          linewidth: 2  // Thicker lines
+        });
+        const vine = new THREE.Line(vineGeom, vineMat);
+        vine.userData.vineMat = vineMat;
+        treeObj.add(vine);
+      }
+
+      // Canopy - multiple layered leaf clusters
+      const canopyLayers = 3 + Math.floor(Math.random() * 3);
+      for (let layer = 0; layer < canopyLayers; layer++) {
+        const layerHeight = height - 3 - layer * 3 + Math.random() * 2;
+        const layerRadius = 2 + (canopyLayers - layer) * 1.5 + Math.random() * 2;
+
+        // Leaf cluster geometry - stretched icosahedron
+        const leafGeom = new THREE.IcosahedronGeometry(layerRadius, 1);
+        leafGeom.scale(1, 0.4, 1);
+
+        const leafMat = new THREE.MeshStandardMaterial({
+          color: JUNGLE_GREEN,
+          roughness: 0.7,
+          metalness: 0.2,
+          transparent: true,
+          opacity: 0.85,
+          emissive: CYBER_TEAL,
+          emissiveIntensity: 0.03,
+          side: THREE.DoubleSide
+        });
+
+        const leaves = new THREE.Mesh(leafGeom, leafMat);
+        leaves.position.y = layerHeight;
+        leaves.position.x = (Math.random() - 0.5) * 2;
+        leaves.position.z = (Math.random() - 0.5) * 2;
+        leaves.rotation.y = Math.random() * Math.PI;
+        leaves.userData.leafMat = leafMat;
+        treeObj.add(leaves);
+      }
+
+      // Occasional hanging vines with data nodes
+      if (Math.random() > 0.4) {
+        const hangingVineCount = 1 + Math.floor(Math.random() * 3);
+        for (let hv = 0; hv < hangingVineCount; hv++) {
+          const vineLen = 4 + Math.random() * 8;
+          const vineGeom = new THREE.CylinderGeometry(0.02, 0.02, vineLen, 4);
+          const vineMat = new THREE.MeshBasicMaterial({
+            color: 0x2a4a3a,
+            transparent: true,
+            opacity: 0.7
+          });
+          const hangVine = new THREE.Mesh(vineGeom, vineMat);
+          hangVine.position.set(
+            (Math.random() - 0.5) * 3,
+            height - 5 - vineLen / 2,
+            (Math.random() - 0.5) * 3
+          );
+          treeObj.add(hangVine);
+
+          // Glowing node at bottom
+          const nodeGeom = new THREE.SphereGeometry(0.08, 8, 8);
+          const nodeMat = new THREE.MeshBasicMaterial({
+            color: Math.random() > 0.5 ? BIOLUM_PINK : BIOLUM_ORANGE,
+            transparent: true,
+            opacity: 0.8,
+            blending: THREE.AdditiveBlending
+          });
+          const node = new THREE.Mesh(nodeGeom, nodeMat);
+          node.position.copy(hangVine.position);
+          node.position.y -= vineLen / 2;
+          node.userData.nodeMat = nodeMat;
+          node.userData.baseY = node.position.y;
+          node.userData.phase = Math.random() * Math.PI * 2;
+          treeObj.add(node);
+        }
+      }
+
+      treeObj.position.set(xOffset, 0, z + Math.random() * 4);
+      treeObj.rotation.y = Math.random() * Math.PI * 2;
+      treeObj.userData = {
         spawnZ: z,
         phase: Math.random() * Math.PI * 2,
-        pulseSpeed: 0.3 + Math.random() * 0.4,
-        hue,
-        mat,
-        coreMat,
-        hatched: false,
-        hatchProgress: 0
+        trunkMat,
+        swaySpeed: 0.2 + Math.random() * 0.3
       };
 
-      cocoonGroup.add(cocoon);
-      cocoons.push(cocoon);
+      treeGroup.add(treeObj);
+      trees.push(treeObj);
     }
 
-    for (let z = -40; z < 200; z += COCOON_SPACING) {
-      spawnCocoon(z);
-      nextCocoonZ = z + COCOON_SPACING;
+    // Initial tree spawning
+    for (let z = -60; z < 200; z += TREE_SPACING) {
+      spawnTree(z);
+      nextTreeZ = z + TREE_SPACING;
     }
-    scene.add(cocoonGroup);
+    scene.add(treeGroup);
 
-    // === BUTTERFLIES - Born from cocoons on drum hits ===
-    const butterflies = [];
-    const butterflyGroup = new THREE.Group();
-    scene.add(butterflyGroup);
+    // === BIOLUMINESCENT UNDERGROWTH ===
+    const undergrowth = [];
+    const undergrowthGroup = new THREE.Group();
+    const UNDERGROWTH_SPACING = 3;
+    let nextUndergrowthZ = -50;
 
-    function spawnButterfly(position, hue) {
-      // Simple wing geometry
-      const wingShape = new THREE.Shape();
-      wingShape.moveTo(0, 0);
-      wingShape.bezierCurveTo(0.8, 0.3, 1.2, 1.2, 0.3, 1.5);
-      wingShape.bezierCurveTo(-0.2, 1.0, 0, 0.3, 0, 0);
+    function spawnUndergrowth(z) {
+      const plantGroup = new THREE.Group();
+      const side = Math.random() > 0.5 ? 1 : -1;
+      const xOffset = side * (2 + Math.random() * 15);
 
-      const wingGeom = new THREE.ShapeGeometry(wingShape);
-      const wingMat = new THREE.MeshBasicMaterial({
-        color: new THREE.Color().setHSL(hue, 0.8, 0.6),
+      // Glowing mushroom cluster or fern
+      const plantType = Math.random();
+
+      if (plantType < 0.5) {
+        // Bioluminescent mushroom cluster
+        const mushCount = 2 + Math.floor(Math.random() * 4);
+        for (let m = 0; m < mushCount; m++) {
+          const capRadius = 0.15 + Math.random() * 0.25;
+          const stemHeight = 0.2 + Math.random() * 0.4;
+
+          // Stem
+          const stemGeom = new THREE.CylinderGeometry(0.03, 0.04, stemHeight, 6);
+          const stemMat = new THREE.MeshStandardMaterial({
+            color: 0x2a3a2a,
+            roughness: 0.8
+          });
+          const stem = new THREE.Mesh(stemGeom, stemMat);
+          stem.position.set(
+            (Math.random() - 0.5) * 0.5,
+            stemHeight / 2 - 4.5,
+            (Math.random() - 0.5) * 0.5
+          );
+          plantGroup.add(stem);
+
+          // Glowing cap
+          const capGeom = new THREE.SphereGeometry(capRadius, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2);
+          const glowColor = Math.random() > 0.5 ? BIOLUM_PINK : CYBER_TEAL;
+          const capMat = new THREE.MeshBasicMaterial({
+            color: glowColor,
+            transparent: true,
+            opacity: 0.7,
+            blending: THREE.AdditiveBlending
+          });
+          const cap = new THREE.Mesh(capGeom, capMat);
+          cap.position.copy(stem.position);
+          cap.position.y += stemHeight / 2;
+          cap.userData.capMat = capMat;
+          cap.userData.phase = Math.random() * Math.PI * 2;
+          plantGroup.add(cap);
+        }
+      } else {
+        // Cyber fern with glowing edges
+        const frondCount = 3 + Math.floor(Math.random() * 4);
+        for (let f = 0; f < frondCount; f++) {
+          const frondLen = 0.8 + Math.random() * 1.2;
+          const frondAngle = (f / frondCount) * Math.PI * 2;
+
+          const frondShape = new THREE.Shape();
+          frondShape.moveTo(0, 0);
+          frondShape.quadraticCurveTo(frondLen * 0.5, frondLen * 0.3, frondLen, 0);
+          frondShape.quadraticCurveTo(frondLen * 0.5, -frondLen * 0.1, 0, 0);
+
+          const frondGeom = new THREE.ShapeGeometry(frondShape);
+          const frondMat = new THREE.MeshBasicMaterial({
+            color: 0x1a3a2a,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.8
+          });
+          const frond = new THREE.Mesh(frondGeom, frondMat);
+          frond.position.y = -4.5;
+          frond.rotation.y = frondAngle;
+          frond.rotation.x = -0.3 - Math.random() * 0.4;
+          plantGroup.add(frond);
+
+          // Glowing edge line
+          const edgeGeom = new THREE.BufferGeometry();
+          const edgePoints = [];
+          for (let i = 0; i <= 10; i++) {
+            const t = i / 10;
+            const x = t * frondLen;
+            const y = Math.sin(t * Math.PI) * frondLen * 0.2;
+            edgePoints.push(x, y, 0);
+          }
+          edgeGeom.setAttribute('position', new THREE.Float32BufferAttribute(edgePoints, 3));
+          const edgeMat = new THREE.LineBasicMaterial({
+            color: CYBER_TEAL,
+            transparent: true,
+            opacity: 0.5,
+            blending: THREE.AdditiveBlending
+          });
+          const edge = new THREE.Line(edgeGeom, edgeMat);
+          edge.position.copy(frond.position);
+          edge.rotation.copy(frond.rotation);
+          edge.userData.edgeMat = edgeMat;
+          plantGroup.add(edge);
+        }
+      }
+
+      plantGroup.position.set(xOffset, 0, z + Math.random() * 2);
+      plantGroup.userData = { spawnZ: z, phase: Math.random() * Math.PI * 2 };
+
+      undergrowthGroup.add(plantGroup);
+      undergrowth.push(plantGroup);
+    }
+
+    for (let z = -50; z < 180; z += UNDERGROWTH_SPACING) {
+      spawnUndergrowth(z);
+      nextUndergrowthZ = z + UNDERGROWTH_SPACING;
+    }
+    scene.add(undergrowthGroup);
+
+    // === CYBERNETIC FIREFLIES ===
+    const fireflyCount = 400;
+    const fireflyGeom = new THREE.BufferGeometry();
+    const fireflyPos = new Float32Array(fireflyCount * 3);
+    const fireflyColors = new Float32Array(fireflyCount * 3);
+    const fireflyData = [];
+
+    for (let i = 0; i < fireflyCount; i++) {
+      fireflyPos[i * 3] = (Math.random() - 0.5) * 50;
+      fireflyPos[i * 3 + 1] = -4 + Math.random() * 20;
+      fireflyPos[i * 3 + 2] = Math.random() * 80;
+
+      // Color varies between teal, pink, and orange
+      const colorChoice = Math.random();
+      let col;
+      if (colorChoice < 0.5) {
+        col = new THREE.Color(CYBER_TEAL);
+      } else if (colorChoice < 0.8) {
+        col = new THREE.Color(BIOLUM_PINK);
+      } else {
+        col = new THREE.Color(BIOLUM_ORANGE);
+      }
+      fireflyColors[i * 3] = col.r;
+      fireflyColors[i * 3 + 1] = col.g;
+      fireflyColors[i * 3 + 2] = col.b;
+
+      fireflyData.push({
+        speed: 0.3 + Math.random() * 0.8,
+        phase: Math.random() * Math.PI * 2,
+        driftX: (Math.random() - 0.5) * 0.04,
+        driftY: (Math.random() - 0.5) * 0.02,
+        pulseSpeed: 2 + Math.random() * 4
+      });
+    }
+    fireflyGeom.setAttribute('position', new THREE.BufferAttribute(fireflyPos, 3));
+    fireflyGeom.setAttribute('color', new THREE.BufferAttribute(fireflyColors, 3));
+
+    const fireflyMat = new THREE.PointsMaterial({
+      size: 0.5,  // Much larger base size
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      sizeAttenuation: true
+    });
+    const fireflies = new THREE.Points(fireflyGeom, fireflyMat);
+    scene.add(fireflies);
+
+    // === CANOPY LIGHT RAYS ===
+    const rayCount = 8;
+    const rays = [];
+    for (let i = 0; i < rayCount; i++) {
+      const rayGeom = new THREE.CylinderGeometry(0.1, 2, 25, 8, 1, true);
+      const rayMat = new THREE.MeshBasicMaterial({
+        color: 0xaaffaa,
         transparent: true,
-        opacity: 0.7,
+        opacity: 0.03,
         side: THREE.DoubleSide,
-        blending: THREE.AdditiveBlending
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
       });
-
-      const butterfly = new THREE.Group();
-
-      const leftWing = new THREE.Mesh(wingGeom, wingMat);
-      leftWing.scale.set(0.8, 0.8, 0.8);
-      leftWing.position.x = -0.1;
-      butterfly.add(leftWing);
-
-      const rightWing = new THREE.Mesh(wingGeom.clone(), wingMat.clone());
-      rightWing.scale.set(-0.8, 0.8, 0.8);
-      rightWing.position.x = 0.1;
-      butterfly.add(rightWing);
-
-      butterfly.position.copy(position);
-      butterfly.userData = {
-        velocity: new THREE.Vector3(
-          (Math.random() - 0.5) * 0.15,
-          0.08 + Math.random() * 0.08,
-          (Math.random() - 0.5) * 0.1
-        ),
+      const ray = new THREE.Mesh(rayGeom, rayMat);
+      ray.position.set(
+        (Math.random() - 0.5) * 30,
+        8,
+        i * 15
+      );
+      ray.rotation.x = 0.1 + Math.random() * 0.2;
+      ray.rotation.z = (Math.random() - 0.5) * 0.3;
+      ray.userData = {
+        baseX: ray.position.x,
         phase: Math.random() * Math.PI * 2,
-        wingSpeed: 8 + Math.random() * 4,
-        leftWing,
-        rightWing,
-        life: 1.0,
-        wingMat
+        rayMat
       };
-
-      butterflyGroup.add(butterfly);
-      butterflies.push(butterfly);
+      group.add(ray);
+      rays.push(ray);
     }
 
-    // === ORBITAL SPIRAL - Partnership energy around ship ===
-    const spiralCount = 200;
-    const spiralGeom = new THREE.BufferGeometry();
-    const spiralPos = new Float32Array(spiralCount * 3);
-    const spiralColors = new Float32Array(spiralCount * 3);
+    // === AMBIENT JUNGLE MIST PARTICLES ===
+    const mistCount = 300;
+    const mistGeom = new THREE.BufferGeometry();
+    const mistPos = new Float32Array(mistCount * 3);
 
-    for (let i = 0; i < spiralCount; i++) {
-      const t = i / spiralCount;
-      const angle = t * Math.PI * 6;
-      const radius = 3 + t * 5;
-      spiralPos[i * 3] = Math.cos(angle) * radius;
-      spiralPos[i * 3 + 1] = (t - 0.5) * 8;
-      spiralPos[i * 3 + 2] = Math.sin(angle) * radius;
-
-      const hue = t * 0.15 + 0.08; // Gold to amber
-      const col = new THREE.Color().setHSL(hue, 0.7, 0.6);
-      spiralColors[i * 3] = col.r;
-      spiralColors[i * 3 + 1] = col.g;
-      spiralColors[i * 3 + 2] = col.b;
+    for (let i = 0; i < mistCount; i++) {
+      mistPos[i * 3] = (Math.random() - 0.5) * 60;
+      mistPos[i * 3 + 1] = -4 + Math.random() * 6;
+      mistPos[i * 3 + 2] = Math.random() * 100;
     }
-    spiralGeom.setAttribute('position', new THREE.BufferAttribute(spiralPos, 3));
-    spiralGeom.setAttribute('color', new THREE.BufferAttribute(spiralColors, 3));
+    mistGeom.setAttribute('position', new THREE.BufferAttribute(mistPos, 3));
 
-    const spiralMat = new THREE.PointsMaterial({
-      size: 0.3,
-      vertexColors: true,
+    const mistMat = new THREE.PointsMaterial({
+      size: 1.5,
+      color: 0x88aa88,
       transparent: true,
-      opacity: 0.6,
-      blending: THREE.AdditiveBlending,
+      opacity: 0.15,
+      blending: THREE.NormalBlending,
       depthWrite: false
     });
-    const spiral = new THREE.Points(spiralGeom, spiralMat);
-    group.add(spiral);
+    const mist = new THREE.Points(mistGeom, mistMat);
+    scene.add(mist);
 
-    // === AMBIENT PARTICLES - Floating energy motes ===
-    const moteCount = 600;
-    const moteGeom = new THREE.BufferGeometry();
-    const motePos = new Float32Array(moteCount * 3);
-    const moteColors = new Float32Array(moteCount * 3);
-    const moteData = [];
+    // === LIGHTING ===
+    // Warm sunset ambient with slight green tint for jungle
+    const ambientLight = new THREE.AmbientLight(0x2a1a15, 0.5);
+    scene.add(ambientLight);
 
-    for (let i = 0; i < moteCount; i++) {
-      motePos[i * 3] = (Math.random() - 0.5) * 60;
-      motePos[i * 3 + 1] = (Math.random() - 0.5) * 25;
-      motePos[i * 3 + 2] = Math.random() * 100;
+    // Cyan accent light (follows ship) - cybernetic element
+    const cyberLight = new THREE.PointLight(CYBER_TEAL, 1.5, 25);
+    cyberLight.position.set(0, 2, 0);
+    group.add(cyberLight);
 
-      const hue = Math.random() > 0.6 ? 0.12 : 0.55;
-      const col = new THREE.Color().setHSL(hue, 0.5, 0.7);
-      moteColors[i * 3] = col.r;
-      moteColors[i * 3 + 1] = col.g;
-      moteColors[i * 3 + 2] = col.b;
+    // Pink/orange accent for sunset warmth
+    const pinkLight = new THREE.PointLight(0xff6644, 1.2, 30);
+    pinkLight.position.set(5, -2, 5);
+    group.add(pinkLight);
 
-      moteData.push({
-        speed: 0.5 + Math.random() * 1,
-        phase: Math.random() * Math.PI * 2,
-        drift: (Math.random() - 0.5) * 0.02
-      });
-    }
-    moteGeom.setAttribute('position', new THREE.BufferAttribute(motePos, 3));
-    moteGeom.setAttribute('color', new THREE.BufferAttribute(moteColors, 3));
-
-    const moteMat = new THREE.PointsMaterial({
-      size: 0.4,
-      vertexColors: true,
-      transparent: true,
-      opacity: 0.5,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false
-    });
-    const motes = new THREE.Points(moteGeom, moteMat);
-    scene.add(motes);
-
-    // === LIGHTS ===
-    const goldLight = new THREE.PointLight(0xffaa44, 2, 40);
-    goldLight.position.set(0, 3, 0);
-    group.add(goldLight);
-
-    const cyanLight = new THREE.PointLight(0x44aaff, 1.5, 35);
-    cyanLight.position.set(-5, -2, 5);
-    group.add(cyanLight);
-
-    const ambientGlow = new THREE.AmbientLight(0x1a1020, 0.3);
-    scene.add(ambientGlow);
+    // Warm sunset directional light from horizon
+    const moonLight = new THREE.DirectionalLight(0xff8855, 0.6);
+    moonLight.position.set(0, 5, 50);
+    scene.add(moonLight);
 
     scene.add(group);
 
     let initialized = false;
     let lastDrumPulse = 0;
+    let lastBassPulse = 0;
     let lastVocalPulse = 0;
+
+    let lastSynthPulse = 0;
 
     return {
       group,
-      // STRICT 1:1 stem-to-effect mapping
+      // STRICT 1:1 stem-to-effect mapping (4 stems only)
       stemEffects: {
-        drums: { target: 'cocoons', effect: 'pulse scale', color: '#ffcc66' },
-        bass: { target: 'motes', effect: 'drift intensity', color: '#8866ff' },
-        vocals: { target: 'ambient lights', effect: 'background glow', color: '#ff99bb' },
-        synth: { target: 'spiral trail', effect: 'opacity', color: '#66ffcc' },
-        guitar: { target: 'butterflies', effect: 'flutter speed', color: '#ffaa44' }
+        drums: { target: 'terrain', effect: 'impact', color: '#ff4444' },
+        bass: { target: 'trees', effect: 'glow', color: '#4444ff' },
+        vocals: { target: 'sky', effect: 'brightness', color: '#ffaa44' },
+        synth: { target: 'fireflies', effect: 'activity', color: '#00ffaa' }
       },
+
       update(time, freq, amplitude, shipPos, shipSpeed, stemData) {
         const shipZ = shipPos ? shipPos.z : 0;
 
-        // STRICT 1:1 STEM MAPPING - respects enabled/threshold/gain overrides
+        // STRICT 1:1 STEM MAPPING - Only 4 stems
         const drumEnergy = getEffectiveStemEnergy('drums', stemData?.drums?.energy || 0);
         const bassEnergy = getEffectiveStemEnergy('bass', stemData?.bass?.energy || 0);
         const vocalEnergy = getEffectiveStemEnergy('vocals', stemData?.vocals?.energy || 0);
         const synthEnergy = getEffectiveStemEnergy('synth', stemData?.synth?.energy || 0);
-        const guitarEnergy = getEffectiveStemEnergy('guitar', stemData?.guitar?.energy || 0);
 
-        // Smooth drum pulse
+        // Smooth energy transitions
         lastDrumPulse = lastDrumPulse * 0.85 + drumEnergy * 0.15;
+        lastBassPulse = lastBassPulse * 0.88 + bassEnergy * 0.12;
         lastVocalPulse = lastVocalPulse * 0.9 + vocalEnergy * 0.1;
+        lastSynthPulse = lastSynthPulse * 0.9 + synthEnergy * 0.1;
 
-        // === COCOON GENERATION ===
-        const spawnZ = shipZ + COCOONS_AHEAD * COCOON_SPACING;
-        const cleanZ = shipZ - COCOONS_BEHIND * COCOON_SPACING;
-
-        while (nextCocoonZ < spawnZ) {
-          spawnCocoon(nextCocoonZ);
-          nextCocoonZ += COCOON_SPACING;
+        // === SUNRISE SKY & GROUND - Follow player ===
+        if (shipPos) {
+          sky.position.set(shipPos.x, shipPos.y, shipPos.z);
+          groundPlane.position.x = shipPos.x;
+          groundPlane.position.z = shipPos.z;
         }
 
-        // Cleanup old cocoons
-        for (let i = cocoons.length - 1; i >= 0; i--) {
-          if (cocoons[i].userData.spawnZ < cleanZ) {
-            const c = cocoons[i];
-            cocoonGroup.remove(c);
-            c.traverse(child => {
+        // Update sky shader uniforms - full stem reactivity
+        skyUniforms.time.value = time;
+        skyUniforms.vocalEnergy.value = lastVocalPulse;
+        skyUniforms.bassEnergy.value = lastBassPulse;
+        skyUniforms.drumEnergy.value = lastDrumPulse;
+
+        // Fog warms dramatically with vocals - darker base to hide edges
+        scene.fog.color.setHSL(
+          0.02 + lastVocalPulse * 0.03,  // Hue shifts warmer with vocals
+          0.3 + lastVocalPulse * 0.3,     // More saturated when singing
+          0.03 + lastVocalPulse * 0.06    // Very dark base, brighter with vocals
+        );
+        scene.fog.density = 0.012 - lastVocalPulse * 0.004;  // Fog clears when singing
+
+        // === TREE SPAWNING & CLEANUP ===
+        const spawnTreeZ = shipZ + TREES_AHEAD * TREE_SPACING;
+        const cleanTreeZ = shipZ - TREES_BEHIND * TREE_SPACING;
+
+        while (nextTreeZ < spawnTreeZ) {
+          spawnTree(nextTreeZ);
+          nextTreeZ += TREE_SPACING;
+        }
+
+        for (let i = trees.length - 1; i >= 0; i--) {
+          if (trees[i].userData.spawnZ < cleanTreeZ) {
+            const t = trees[i];
+            treeGroup.remove(t);
+            t.traverse(child => {
               if (child.geometry) child.geometry.dispose();
               if (child.material) child.material.dispose();
             });
-            cocoons.splice(i, 1);
+            trees.splice(i, 1);
           }
         }
 
-        // === ANIMATE COCOONS ===
-        cocoons.forEach(cocoon => {
-          const data = cocoon.userData;
+        // === ANIMATE TREES ===
+        trees.forEach(tree => {
+          const data = tree.userData;
 
-          // Gentle pulsing
-          const breathe = 1 + Math.sin(time * data.pulseSpeed + data.phase) * 0.1;
-          const pulse = 1 + lastDrumPulse * 0.3;
-          cocoon.scale.setScalar(breathe * pulse);
+          // Gentle swaying
+          tree.rotation.z = Math.sin(time * data.swaySpeed + data.phase) * 0.02;
 
-          // Glow intensity with vocals
-          data.mat.emissiveIntensity = 0.3 + lastVocalPulse * 0.8 + lastDrumPulse * 0.5;
-          if (data.coreMat) {
-            data.coreMat.opacity = 0.3 + lastVocalPulse * 0.4 + lastDrumPulse * 0.3;
+          // BASS → Circuit bark glow (intense blue pulse)
+          if (data.trunkMat) {
+            // Much stronger glow - 0.1 base up to 0.8 with bass
+            data.trunkMat.emissiveIntensity = 0.1 + lastBassPulse * 0.7;
+            // Vivid blue color shift with bass
+            const bassAmt = lastBassPulse;
+            // Blend from teal (0, 1, 0.67) toward bright blue (0.2, 0.5, 1)
+            data.trunkMat.emissive.setRGB(
+              bassAmt * 0.3,
+              0.8 - bassAmt * 0.3,
+              0.7 + bassAmt * 0.3
+            );
           }
 
-          // Hatch on strong drum hits
-          if (!data.hatched && lastDrumPulse > 0.5 && Math.random() > 0.7) {
-            data.hatched = true;
-            spawnButterfly(cocoon.position.clone(), data.hue);
-            data.mat.opacity = 0.3;
-          }
-
-          // Slow rotation
-          cocoon.rotation.y += 0.003;
+          // Animate data vines and nodes inside tree
+          tree.traverse(child => {
+            if (child.userData.vineMat) {
+              // BASS → Vine pulse - very bright with bass
+              child.userData.vineMat.opacity = 0.5 + lastBassPulse * 0.5;
+            }
+            if (child.userData.leafMat) {
+              // Leaves glow brighter with bass
+              child.userData.leafMat.emissiveIntensity = 0.05 + lastBassPulse * 0.25;
+            }
+            if (child.userData.nodeMat) {
+              // Hanging nodes pulse dramatically with bass
+              const nodePhase = child.userData.phase;
+              child.userData.nodeMat.opacity = 0.6 + Math.sin(time * 3 + nodePhase) * 0.2 + lastBassPulse * 0.4;
+              child.position.y = child.userData.baseY + Math.sin(time * 2 + nodePhase) * 0.15;
+            }
+          });
         });
 
-        // === ANIMATE BUTTERFLIES ===
-        for (let i = butterflies.length - 1; i >= 0; i--) {
-          const b = butterflies[i];
-          const data = b.userData;
+        // === UNDERGROWTH SPAWNING & CLEANUP ===
+        const spawnUnderZ = shipZ + 60;
+        const cleanUnderZ = shipZ - 30;
 
-          // Wing flapping
-          const wingAngle = Math.sin(time * data.wingSpeed + data.phase) * 0.8;
-          data.leftWing.rotation.y = wingAngle;
-          data.rightWing.rotation.y = -wingAngle;
+        while (nextUndergrowthZ < spawnUnderZ) {
+          spawnUndergrowth(nextUndergrowthZ);
+          nextUndergrowthZ += UNDERGROWTH_SPACING;
+        }
 
-          // Movement
-          b.position.add(data.velocity);
-          b.position.x += Math.sin(time * 2 + data.phase) * 0.03;
-
-          // Fade out
-          data.life -= 0.003;
-          data.wingMat.opacity = data.life * 0.7;
-
-          // Remove dead butterflies
-          if (data.life <= 0 || b.position.y > 20) {
-            butterflyGroup.remove(b);
-            b.traverse(child => {
+        for (let i = undergrowth.length - 1; i >= 0; i--) {
+          if (undergrowth[i].userData.spawnZ < cleanUnderZ) {
+            const u = undergrowth[i];
+            undergrowthGroup.remove(u);
+            u.traverse(child => {
               if (child.geometry) child.geometry.dispose();
               if (child.material) child.material.dispose();
             });
-            butterflies.splice(i, 1);
+            undergrowth.splice(i, 1);
           }
         }
 
-        // === ANIMATE SPIRAL ===
-        const sPos = spiralGeom.attributes.position.array;
-        for (let i = 0; i < spiralCount; i++) {
-          const t = i / spiralCount;
-          const angle = t * Math.PI * 6 + time * 0.5;
-          const radius = 3 + t * 5 + lastDrumPulse * 2;
-          sPos[i * 3] = Math.cos(angle) * radius;
-          sPos[i * 3 + 1] = (t - 0.5) * 8 + Math.sin(time + t * 10) * 0.5;
-          sPos[i * 3 + 2] = Math.sin(angle) * radius;
-        }
-        spiralGeom.attributes.position.needsUpdate = true;
-        // SYNTH → Spiral trail opacity
-        spiralMat.opacity = 0.4 + synthEnergy * 0.6;
-        spiralMat.size = 0.3 + synthEnergy * 0.3;
+        // === ANIMATE UNDERGROWTH ===
+        // Ambient glow with subtle drum response
+        undergrowth.forEach(plant => {
+          plant.traverse(child => {
+            if (child.userData.capMat) {
+              const p = child.userData.phase;
+              // Ambient pulse + drum flash
+              child.userData.capMat.opacity = 0.3 + Math.sin(time * 2 + p) * 0.15 + lastDrumPulse * 0.25;
+            }
+            if (child.userData.edgeMat) {
+              child.userData.edgeMat.opacity = 0.25 + lastDrumPulse * 0.3;
+            }
+          });
+        });
 
-        // BASS → Motes drift intensity
-        const mPos = moteGeom.attributes.position.array;
+        // === ANIMATE FIREFLIES ===
+        const ffPos = fireflyGeom.attributes.position.array;
         if (!initialized && shipPos) {
-          for (let i = 0; i < moteCount; i++) {
-            mPos[i * 3 + 2] = shipZ - 30 + Math.random() * 80;
+          for (let i = 0; i < fireflyCount; i++) {
+            ffPos[i * 3 + 2] = shipZ - 20 + Math.random() * 60;
           }
           initialized = true;
         }
 
-        for (let i = 0; i < moteCount; i++) {
-          const d = moteData[i];
-          const bassDrift = 1 + bassEnergy * 2;
-          mPos[i * 3] += (Math.sin(time * d.speed + d.phase) * 0.02 + d.drift) * bassDrift;
-          mPos[i * 3 + 1] += Math.cos(time * d.speed * 0.7 + d.phase) * 0.015 * bassDrift;
+        // SYNTH → Firefly swarm activity (green-cyan glow)
+        // Strong base movement, synth adds frenzy
+        const swarmIntensity = 1.5 + lastSynthPulse * 4;
+        for (let i = 0; i < fireflyCount; i++) {
+          const d = fireflyData[i];
+
+          // Movement - always active, even more with synth
+          ffPos[i * 3] += (Math.sin(time * d.speed + d.phase) * 0.05 + d.driftX) * swarmIntensity;
+          ffPos[i * 3 + 1] += (Math.cos(time * d.speed * 0.7 + d.phase) * 0.03 + d.driftY) * swarmIntensity;
+
+          // Boundary wrapping
+          if (ffPos[i * 3] < -30) ffPos[i * 3] = 30;
+          if (ffPos[i * 3] > 30) ffPos[i * 3] = -30;
+          if (ffPos[i * 3 + 1] < -5) ffPos[i * 3 + 1] = 15;
+          if (ffPos[i * 3 + 1] > 20) ffPos[i * 3 + 1] = -4;
 
           // Keep near ship
-          if (mPos[i * 3 + 2] < shipZ - 35 || mPos[i * 3 + 2] > shipZ + 50) {
-            mPos[i * 3 + 2] = shipZ - 30 + Math.random() * 80;
-            mPos[i * 3] = (Math.random() - 0.5) * 60;
+          if (ffPos[i * 3 + 2] < shipZ - 25 || ffPos[i * 3 + 2] > shipZ + 40) {
+            ffPos[i * 3 + 2] = shipZ - 20 + Math.random() * 60;
+            ffPos[i * 3] = (Math.random() - 0.5) * 50;
           }
         }
-        moteGeom.attributes.position.needsUpdate = true;
-        moteMat.opacity = 0.3 + bassEnergy * 0.4;
-        moteMat.size = 0.4 + bassEnergy * 0.3;
+        fireflyGeom.attributes.position.needsUpdate = true;
+        // Higher base visibility - synth boosts further
+        fireflyMat.opacity = 0.7 + lastSynthPulse * 0.3;
+        fireflyMat.size = 0.5 + lastSynthPulse * 0.5;
 
-        // VOCALS → Background ambient lights
-        goldLight.intensity = 1.5 + vocalEnergy * 4;
-        cyanLight.intensity = 1 + vocalEnergy * 3;
-        cyanLight.position.x = Math.sin(time * 0.3) * 8;
+        // === ANIMATE CANOPY RAYS ===
+        rays.forEach((ray, idx) => {
+          const rd = ray.userData;
+          // Gentle drift
+          ray.position.x = rd.baseX + Math.sin(time * 0.3 + rd.phase) * 2;
+          ray.position.z = shipZ + idx * 15 - 10;
+
+          // DRUMS → Ray opacity (flash on drum hits)
+          rd.rayMat.opacity = 0.02 + lastDrumPulse * 0.1;
+        });
+
+        // === ANIMATE MIST ===
+        const mPos = mistGeom.attributes.position.array;
+        for (let i = 0; i < mistCount; i++) {
+          mPos[i * 3] += 0.01;
+          if (mPos[i * 3] > 35) mPos[i * 3] = -35;
+
+          if (mPos[i * 3 + 2] < shipZ - 30 || mPos[i * 3 + 2] > shipZ + 70) {
+            mPos[i * 3 + 2] = shipZ - 25 + Math.random() * 90;
+          }
+        }
+        mistGeom.attributes.position.needsUpdate = true;
+
+        // === LIGHTS ===
+        cyberLight.intensity = 1.5 + lastDrumPulse * 3;
+        pinkLight.intensity = 0.8 + lastBassPulse * 2;
+        pinkLight.position.x = Math.sin(time * 0.5) * 8;
 
         // Group follows ship
         group.position.z = shipZ;
       },
 
       dispose() {
-        scene.remove(cocoonGroup);
-        cocoonGroup.traverse(child => {
+        // Sunset sky cleanup
+        scene.remove(sky);
+        skyGeom.dispose();
+        skyMat.dispose();
+        skyTexture.dispose();
+        scene.remove(sun);
+        sun.traverse(child => {
           if (child.geometry) child.geometry.dispose();
           if (child.material) child.material.dispose();
         });
-        scene.remove(butterflyGroup);
-        butterflyGroup.traverse(child => {
+
+        scene.remove(treeGroup);
+        treeGroup.traverse(child => {
           if (child.geometry) child.geometry.dispose();
           if (child.material) child.material.dispose();
         });
-        scene.remove(motes);
-        moteGeom.dispose();
-        moteMat.dispose();
-        scene.remove(ambientGlow);
+        scene.remove(undergrowthGroup);
+        undergrowthGroup.traverse(child => {
+          if (child.geometry) child.geometry.dispose();
+          if (child.material) child.material.dispose();
+        });
+        scene.remove(fireflies);
+        fireflyGeom.dispose();
+        fireflyMat.dispose();
+        scene.remove(mist);
+        mistGeom.dispose();
+        mistMat.dispose();
+        scene.remove(ambientLight);
+        scene.remove(moonLight);
         group.traverse(child => {
           if (child.geometry) child.geometry.dispose();
           if (child.material) child.material.dispose();
@@ -2208,7 +2653,7 @@ window.TrackScenes = (function() {
 
     // Helper: Create a single tower at given Z
     function spawnTower(z) {
-      const height = 20 + Math.random() * 40;
+      const height = 20 + Math.random() * 70;
       const baseRadius = 1 + Math.random() * 2;
       const topRadius = baseRadius * (0.3 + Math.random() * 0.4);
 
@@ -2665,7 +3110,7 @@ window.TrackScenes = (function() {
       const towerPiece = new THREE.Group();
 
       // Main tower body - glass/chrome
-      const height = 25 + Math.random() * 45;  // 25-70 units tall
+      const height = 25 + Math.random() * 80;  // 25-105 units tall
       const width = 3 + Math.random() * 4;
       const depth = 3 + Math.random() * 4;
 
@@ -3047,600 +3492,477 @@ window.TrackScenes = (function() {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // TURN YOUR PHONE FACE DOWN - Warm, intimate, human connection vs digital
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ═══════════════════════════════════════════════════════════════════════════
-  // TURN YOUR PHONE FACE DOWN - "The Quiet Room"
-  // A scene about genuine human connection when you put down your phone
+  // TURN YOUR PHONE FACE DOWN - "The Letting Go"
+  // Pure audio-reactive: Phones slowly turn face-down as you disconnect
+  // Warm fireflies emerge, stars reveal themselves, intimacy grows with vocals
   // ═══════════════════════════════════════════════════════════════════════════
   function buildPhoneFaceDown(THREE, scene, audioData) {
     const group = new THREE.Group();
 
-    // Deep intimate atmosphere - warm amber transitioning from cold
-    scene.fog = new THREE.FogExp2(0x0a0805, 0.018);
+    // Start with cool digital darkness, warming as vocals come in
+    scene.fog = new THREE.FogExp2(0x080810, 0.012);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // HEARTBEAT CORE - Central pulsing warmth (drums)
-    // ═══════════════════════════════════════════════════════════════════════
-    const heartbeatGroup = new THREE.Group();
-
-    // Inner core - bright warm center
-    const coreGeom = new THREE.SphereGeometry(1.5, 32, 32);
-    const coreMat = new THREE.MeshBasicMaterial({
-      color: 0xffaa66,
-      transparent: true,
-      opacity: 0.9
-    });
-    const heartCore = new THREE.Mesh(coreGeom, coreMat);
-    heartbeatGroup.add(heartCore);
-
-    // Middle pulse ring
-    const midGeom = new THREE.SphereGeometry(3, 24, 24);
-    const midMat = new THREE.MeshBasicMaterial({
-      color: 0xff8844,
-      transparent: true,
-      opacity: 0.3,
-      blending: THREE.AdditiveBlending
-    });
-    const heartMid = new THREE.Mesh(midGeom, midMat);
-    heartbeatGroup.add(heartMid);
-
-    // Outer glow aura
-    const auraGeom = new THREE.SphereGeometry(6, 20, 20);
-    const auraMat = new THREE.MeshBasicMaterial({
-      color: 0xff6633,
-      transparent: true,
-      opacity: 0.1,
-      blending: THREE.AdditiveBlending
-    });
-    const heartAura = new THREE.Mesh(auraGeom, auraMat);
-    heartbeatGroup.add(heartAura);
-
-    // Central point light
-    const heartLight = new THREE.PointLight(0xffaa66, 4, 50);
-    heartbeatGroup.add(heartLight);
-
-    heartbeatGroup.position.set(0, 6, 0);
-    group.add(heartbeatGroup);
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // GROUND RIPPLES - Circular waves spreading outward (bass)
-    // ═══════════════════════════════════════════════════════════════════════
-    const ripples = [];
-    const rippleGroup = new THREE.Group();
-    const MAX_RIPPLES = 8;
-
-    function createRipple(intensity) {
-      const ripple = new THREE.Group();
-
-      // Ring geometry
-      const ringGeom = new THREE.RingGeometry(0.5, 1.5, 64);
-      const ringMat = new THREE.MeshBasicMaterial({
-        color: 0xffcc88,
-        transparent: true,
-        opacity: 0.6 * intensity,
-        side: THREE.DoubleSide,
-        blending: THREE.AdditiveBlending
-      });
-      const ring = new THREE.Mesh(ringGeom, ringMat);
-      ring.rotation.x = -Math.PI / 2;
-      ripple.add(ring);
-
-      ripple.userData = {
-        age: 0,
-        maxAge: 3,
-        ringMat: ringMat,
-        startOpacity: 0.6 * intensity
-      };
-
-      ripple.position.y = 0.1;
-      rippleGroup.add(ripple);
-      ripples.push(ripple);
-
-      // Limit ripples
-      while (ripples.length > MAX_RIPPLES) {
-        const old = ripples.shift();
-        rippleGroup.remove(old);
-        old.traverse(c => {
-          if (c.geometry) c.geometry.dispose();
-          if (c.material) c.material.dispose();
-        });
-      }
-    }
-
-    rippleGroup.position.y = 0;
-    group.add(rippleGroup);
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // ASCENDING PHONES - Phones floating up and fading (synth)
+    // FLOATING PHONES - Slowly rotating to face down, screens dimming
     // ═══════════════════════════════════════════════════════════════════════
     const phones = [];
     const phoneGroup = new THREE.Group();
-    const PHONE_COUNT = 25;
+    const PHONE_COUNT = 40;
 
-    function spawnPhone(shipZ) {
-      const phoneWidth = 0.8 + Math.random() * 0.4;
-      const phoneHeight = phoneWidth * 2;
-      const phone = new THREE.Group();
+    function createPhone(x, y, z) {
+      const phoneGrp = new THREE.Group();
 
-      // Phone body
-      const bodyGeom = new THREE.BoxGeometry(phoneWidth, phoneHeight, 0.08);
+      // Phone body (dark with slight glow)
+      const bodyGeom = new THREE.BoxGeometry(0.6, 1.0, 0.08);
       const bodyMat = new THREE.MeshStandardMaterial({
-        color: 0x222222,
-        roughness: 0.2,
-        metalness: 0.9,
-        transparent: true,
-        opacity: 0.9
+        color: 0x222233,
+        metalness: 0.8,
+        roughness: 0.3,
+        emissive: 0x111122,
+        emissiveIntensity: 0.1
       });
       const body = new THREE.Mesh(bodyGeom, bodyMat);
-      phone.add(body);
+      phoneGrp.add(body);
 
-      // Screen glow (starts blue, will fade)
-      const screenGeom = new THREE.PlaneGeometry(phoneWidth * 0.88, phoneHeight * 0.88);
+      // Screen (glowing, will dim over time)
+      const screenGeom = new THREE.PlaneGeometry(0.5, 0.85);
       const screenMat = new THREE.MeshBasicMaterial({
         color: 0x4488ff,
         transparent: true,
-        opacity: 0.7,
+        opacity: 0.6,
         blending: THREE.AdditiveBlending
       });
       const screen = new THREE.Mesh(screenGeom, screenMat);
-      screen.position.z = 0.045;
-      phone.add(screen);
+      screen.position.z = 0.041;
+      phoneGrp.add(screen);
 
-      // Notification badges
-      const notifColors = [0xff3344, 0x44ff66, 0xffaa00, 0x44aaff];
-      for (let i = 0; i < 2 + Math.floor(Math.random() * 3); i++) {
-        const notifGeom = new THREE.CircleGeometry(0.06, 8);
-        const notifMat = new THREE.MeshBasicMaterial({
-          color: notifColors[Math.floor(Math.random() * notifColors.length)],
-          transparent: true,
-          opacity: 0.9
-        });
-        const notif = new THREE.Mesh(notifGeom, notifMat);
-        notif.position.set(
-          (Math.random() - 0.5) * phoneWidth * 0.7,
-          (Math.random() - 0.5) * phoneHeight * 0.7,
-          0.05
-        );
-        phone.add(notif);
-      }
-
-      // Start below, will float up
-      phone.position.set(
-        (Math.random() - 0.5) * 35,
-        -5 + Math.random() * 8,
-        shipZ + (Math.random() - 0.5) * 60
+      phoneGrp.position.set(x, y, z);
+      phoneGrp.rotation.set(
+        Math.random() * 0.3,
+        Math.random() * Math.PI * 2,
+        Math.random() * 0.3
       );
-      phone.rotation.z = (Math.random() - 0.5) * 0.3;
-      phone.rotation.y = Math.random() * 0.2;
 
-      phone.userData = {
-        riseSpeed: 0.02 + Math.random() * 0.015,
-        rotSpeed: (Math.random() - 0.5) * 0.01,
-        driftX: (Math.random() - 0.5) * 0.02,
-        phase: Math.random() * Math.PI * 2,
-        bodyMat: bodyMat,
-        screenMat: screenMat,
-        fadeHeight: 25 + Math.random() * 10
+      phoneGrp.userData = {
+        bodyMat,
+        screenMat,
+        baseY: y,
+        rotSpeed: 0.1 + Math.random() * 0.2,
+        bobSpeed: 0.3 + Math.random() * 0.4,
+        bobPhase: Math.random() * Math.PI * 2,
+        faceDownProgress: 0, // 0 = screen up, 1 = screen down
+        targetFaceDown: Math.random() // How far it will rotate
       };
 
-      phoneGroup.add(phone);
-      phones.push(phone);
+      return phoneGrp;
     }
 
-    // Initial phones
+    // Spawn initial phones
     for (let i = 0; i < PHONE_COUNT; i++) {
-      spawnPhone(0);
-      // Spread initial heights
-      phones[i].position.y = -5 + Math.random() * 35;
+      const phone = createPhone(
+        (Math.random() - 0.5) * 60,
+        (Math.random() - 0.5) * 25,
+        Math.random() * 120
+      );
+      phoneGroup.add(phone);
+      phones.push(phone);
     }
     scene.add(phoneGroup);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // CONNECTION THREADS - Ethereal lines between warm points (guitar)
+    // FIREFLIES - Warm points of light representing human connection
+    // Spawn more when vocals are active
     // ═══════════════════════════════════════════════════════════════════════
-    const connectionPoints = [];
-    const threads = [];
-    const threadGroup = new THREE.Group();
-    const POINT_COUNT = 12;
+    const fireflyCount = 200;
+    const fireflyGeom = new THREE.BufferGeometry();
+    const fireflyPos = new Float32Array(fireflyCount * 3);
+    const fireflySizes = new Float32Array(fireflyCount);
+    const fireflyPhases = new Float32Array(fireflyCount);
 
-    // Create warm connection points
-    for (let i = 0; i < POINT_COUNT; i++) {
-      const angle = (i / POINT_COUNT) * Math.PI * 2;
-      const radius = 15 + Math.random() * 10;
-      const point = {
-        x: Math.cos(angle) * radius,
-        y: 3 + Math.random() * 10,
-        z: Math.sin(angle) * radius,
-        phase: Math.random() * Math.PI * 2
-      };
-      connectionPoints.push(point);
+    for (let i = 0; i < fireflyCount; i++) {
+      fireflyPos[i * 3] = (Math.random() - 0.5) * 80;
+      fireflyPos[i * 3 + 1] = (Math.random() - 0.5) * 30;
+      fireflyPos[i * 3 + 2] = Math.random() * 100;
+      fireflySizes[i] = 0.1 + Math.random() * 0.15;
+      fireflyPhases[i] = Math.random() * Math.PI * 2;
+    }
+    fireflyGeom.setAttribute('position', new THREE.BufferAttribute(fireflyPos, 3));
 
-      // Warm glow at each point
-      const glowGeom = new THREE.SphereGeometry(0.4, 12, 12);
-      const glowMat = new THREE.MeshBasicMaterial({
-        color: 0xffcc88,
+    const fireflyMat = new THREE.PointsMaterial({
+      color: 0xffdd88,
+      size: 0.2,
+      transparent: true,
+      opacity: 0.6,
+      blending: THREE.AdditiveBlending
+    });
+    const fireflies = new THREE.Points(fireflyGeom, fireflyMat);
+    scene.add(fireflies);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // STARS - Reveal themselves as you "disconnect"
+    // Synth drives star brightness
+    // ═══════════════════════════════════════════════════════════════════════
+    const starCount = 300;
+    const starGeom = new THREE.BufferGeometry();
+    const starPos = new Float32Array(starCount * 3);
+    const starColors = new Float32Array(starCount * 3);
+
+    for (let i = 0; i < starCount; i++) {
+      // Stars in a dome above
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.random() * Math.PI * 0.4; // Upper hemisphere
+      const r = 80 + Math.random() * 40;
+      starPos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+      starPos[i * 3 + 1] = r * Math.cos(phi) + 20;
+      starPos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+
+      // Varied star colors (warm white to cool blue)
+      const temp = Math.random();
+      const col = new THREE.Color().setHSL(0.1 + temp * 0.5, 0.3, 0.7 + temp * 0.3);
+      starColors[i * 3] = col.r;
+      starColors[i * 3 + 1] = col.g;
+      starColors[i * 3 + 2] = col.b;
+    }
+    starGeom.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+    starGeom.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
+
+    const starMat = new THREE.PointsMaterial({
+      size: 0.4,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.3,
+      blending: THREE.AdditiveBlending
+    });
+    const stars = new THREE.Points(starGeom, starMat);
+    scene.add(stars);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // GROUND PLANE - Soft reflective surface with ripples from bass
+    // ═══════════════════════════════════════════════════════════════════════
+    const groundGeom = new THREE.PlaneGeometry(200, 200, 32, 32);
+    const groundMat = new THREE.MeshStandardMaterial({
+      color: 0x151520,
+      metalness: 0.6,
+      roughness: 0.4,
+      transparent: true,
+      opacity: 0.8
+    });
+    const ground = new THREE.Mesh(groundGeom, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -15;
+    group.add(ground);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // WARM GLOW ORB - Pulses with vocals, represents human presence
+    // ═══════════════════════════════════════════════════════════════════════
+    const glowGeom = new THREE.SphereGeometry(3, 32, 32);
+    const glowMat = new THREE.MeshBasicMaterial({
+      color: 0xffaa66,
+      transparent: true,
+      opacity: 0.15,
+      blending: THREE.AdditiveBlending
+    });
+    const glowOrb = new THREE.Mesh(glowGeom, glowMat);
+    glowOrb.position.set(0, 0, 40);
+    group.add(glowOrb);
+
+    // Inner glow
+    const innerGlowGeom = new THREE.SphereGeometry(1.5, 32, 32);
+    const innerGlowMat = new THREE.MeshBasicMaterial({
+      color: 0xffddaa,
+      transparent: true,
+      opacity: 0.3,
+      blending: THREE.AdditiveBlending
+    });
+    const innerGlow = new THREE.Mesh(innerGlowGeom, innerGlowMat);
+    glowOrb.add(innerGlow);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // TRAILING PARTICLES - Follow guitar energy
+    // ═══════════════════════════════════════════════════════════════════════
+    const trailParticles = [];
+    const trailGroup = new THREE.Group();
+    const MAX_TRAILS = 60;
+
+    function spawnTrailParticle(x, y, z, color) {
+      const geom = new THREE.SphereGeometry(0.15, 8, 8);
+      const mat = new THREE.MeshBasicMaterial({
+        color: color,
         transparent: true,
-        opacity: 0.5,
+        opacity: 0.8,
         blending: THREE.AdditiveBlending
       });
-      const glow = new THREE.Mesh(glowGeom, glowMat);
-      glow.position.set(point.x, point.y, point.z);
-      point.mesh = glow;
-      point.mat = glowMat;
-      threadGroup.add(glow);
+      const particle = new THREE.Mesh(geom, mat);
+      particle.position.set(x, y, z);
+      particle.userData = {
+        mat,
+        vel: new THREE.Vector3(
+          (Math.random() - 0.5) * 0.3,
+          (Math.random() - 0.5) * 0.2,
+          (Math.random() - 0.5) * 0.3
+        ),
+        life: 1.0
+      };
+      trailGroup.add(particle);
+      trailParticles.push(particle);
+
+      while (trailParticles.length > MAX_TRAILS) {
+        const old = trailParticles.shift();
+        trailGroup.remove(old);
+        old.geometry.dispose();
+        old.material.dispose();
+      }
     }
-
-    // Create threads between nearby points
-    for (let i = 0; i < connectionPoints.length; i++) {
-      const p1 = connectionPoints[i];
-      const p2 = connectionPoints[(i + 1) % connectionPoints.length];
-      const p3 = connectionPoints[(i + 3) % connectionPoints.length];
-
-      [p2, p3].forEach(target => {
-        const curve = new THREE.QuadraticBezierCurve3(
-          new THREE.Vector3(p1.x, p1.y, p1.z),
-          new THREE.Vector3((p1.x + target.x) / 2, (p1.y + target.y) / 2 + 3, (p1.z + target.z) / 2),
-          new THREE.Vector3(target.x, target.y, target.z)
-        );
-        const points = curve.getPoints(20);
-        const lineGeom = new THREE.BufferGeometry().setFromPoints(points);
-        const lineMat = new THREE.LineBasicMaterial({
-          color: 0xffaa66,
-          transparent: true,
-          opacity: 0.15,
-          blending: THREE.AdditiveBlending
-        });
-        const line = new THREE.Line(lineGeom, lineMat);
-        line.userData = { mat: lineMat, baseOpacity: 0.15 };
-        threadGroup.add(line);
-        threads.push(line);
-      });
-    }
-
-    group.add(threadGroup);
+    scene.add(trailGroup);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // CONVERSATION SPARKS - Particles near center (vocals)
+    // LIGHTING
     // ═══════════════════════════════════════════════════════════════════════
-    const sparkCount = 400;
-    const sparkGeom = new THREE.BufferGeometry();
-    const sparkPos = new Float32Array(sparkCount * 3);
-    const sparkData = [];
+    const mainLight = new THREE.PointLight(0xffcc88, 0.4, 100);
+    mainLight.position.set(0, 15, 30);
+    group.add(mainLight);
 
-    for (let i = 0; i < sparkCount; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const radius = 2 + Math.random() * 8;
-      sparkPos[i * 3] = Math.cos(angle) * radius;
-      sparkPos[i * 3 + 1] = 4 + Math.random() * 8;
-      sparkPos[i * 3 + 2] = Math.sin(angle) * radius;
-      sparkData.push({
-        baseRadius: radius,
-        angle: angle,
-        yBase: sparkPos[i * 3 + 1],
-        phase: Math.random() * Math.PI * 2,
-        orbitSpeed: 0.2 + Math.random() * 0.3
-      });
-    }
-    sparkGeom.setAttribute('position', new THREE.BufferAttribute(sparkPos, 3));
+    const coolLight = new THREE.PointLight(0x6688ff, 0.3, 80);
+    coolLight.position.set(-15, 10, 20);
+    group.add(coolLight);
 
-    const sparkMat = new THREE.PointsMaterial({
-      color: 0xffffcc,
-      size: 0.15,
-      transparent: true,
-      opacity: 0.4,
-      blending: THREE.AdditiveBlending
-    });
-    const sparks = new THREE.Points(sparkGeom, sparkMat);
-    group.add(sparks);
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // AMBIENT DUST - Floating warm particles (percussion)
-    // ═══════════════════════════════════════════════════════════════════════
-    const dustCount = 600;
-    const dustGeom = new THREE.BufferGeometry();
-    const dustPos = new Float32Array(dustCount * 3);
-    const dustData = [];
-
-    for (let i = 0; i < dustCount; i++) {
-      dustPos[i * 3] = (Math.random() - 0.5) * 60;
-      dustPos[i * 3 + 1] = Math.random() * 25;
-      dustPos[i * 3 + 2] = (Math.random() - 0.5) * 80;
-      dustData.push({
-        phase: Math.random() * Math.PI * 2,
-        speed: 0.1 + Math.random() * 0.2,
-        driftX: (Math.random() - 0.5) * 0.02,
-        driftY: (Math.random() - 0.5) * 0.01
-      });
-    }
-    dustGeom.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
-
-    const dustMat = new THREE.PointsMaterial({
-      color: 0xffddaa,
-      size: 0.12,
-      transparent: true,
-      opacity: 0.35,
-      blending: THREE.AdditiveBlending
-    });
-    const dust = new THREE.Points(dustGeom, dustMat);
-    group.add(dust);
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // AMBIENT LIGHTING
-    // ═══════════════════════════════════════════════════════════════════════
-    const warmLight1 = new THREE.PointLight(0xffaa66, 2, 40);
-    warmLight1.position.set(-15, 8, -10);
-    group.add(warmLight1);
-
-    const warmLight2 = new THREE.PointLight(0xff8855, 1.5, 35);
-    warmLight2.position.set(15, 6, 10);
-    group.add(warmLight2);
-
-    const ambient = new THREE.HemisphereLight(0xffcc99, 0x111008, 0.25);
-    group.add(ambient);
+    const ambientLight = new THREE.AmbientLight(0x111118, 0.15);
+    scene.add(ambientLight);
 
     scene.add(group);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // MIDI TRIGGER STATE - Fast decay values driven by MIDI noteOn events
-    // NOTE: Vocals excluded - uses audio analysis only → background/atmosphere
+    // STATE
     // ═══════════════════════════════════════════════════════════════════════
-    const midiTriggers = {
-      drums: 0,      // Instant hit, fast decay → heartbeat pulse
-      bass: 0,       // Sustaining → ripple spawn
-      synth: 0,      // Sustaining → phones + sparks (1:M)
-      guitar: 0,     // Sustaining → thread brightness
-      percussion: 0  // Instant hit → dust burst
-    };
-
-    // Decay rates (per frame ~60fps) - instant hits decay faster
-    const decayRates = {
-      drums: 0.92,      // Fast decay for punchy hits
-      bass: 0.96,       // Slower decay for sustaining notes
-      synth: 0.95,      // Medium decay
-      guitar: 0.96,     // Slower for sustained notes
-      percussion: 0.90  // Fastest decay for snappy hits
-    };
-
-    let heartbeatPhase = 0;
     let initialized = false;
-    let lastShipZ = 0;
+    let lastVocalPulse = 0;
+    let lastDrumPulse = 0;
+    let lastBassPulse = 0;
+    let lastSynthPulse = 0;
+    let lastGuitarPulse = 0;
+    let totalEnergy = 0;
+    let disconnectProgress = 0; // 0-1, how "disconnected" the scene is
 
     return {
       group,
       stemEffects: {
-        drums: { target: 'heartbeat', effect: 'pulse', color: '#ffaa66', midi: true },
-        bass: { target: 'ripples', effect: 'spawn waves', color: '#ffcc88', midi: true },
-        vocals: { target: 'background', effect: 'fog + ambient', color: '#ffddcc', midi: false },
-        synth: { target: 'phones + sparks', effect: 'rise + glow', color: '#4488ff', midi: true },
-        guitar: { target: 'threads', effect: 'brightness', color: '#ffaa66', midi: true },
-        percussion: { target: 'dust', effect: 'shimmer', color: '#ffddaa', midi: true }
-      },
-
-      // ═══════════════════════════════════════════════════════════════════
-      // MIDI EVENT HANDLER - Triggers effects on note events
-      // NOTE: Vocals are excluded - they only use audio analysis
-      // ═══════════════════════════════════════════════════════════════════
-      onMidi(event) {
-        if (event.type !== 'noteOn') return;
-        if (event.stemId === 'vocals') return; // Ignore vocal MIDI
-
-        const stemId = event.stemId;
-        const velocity = (event.velocity || 127) / 127; // Normalize 0-1
-
-        // Trigger based on stem
-        switch (stemId) {
-          case 'drums':
-            // Instant heartbeat pulse
-            midiTriggers.drums = Math.min(1, midiTriggers.drums + velocity * 0.8);
-            break;
-
-          case 'bass':
-            // Spawn ripple on note
-            midiTriggers.bass = Math.min(1, midiTriggers.bass + velocity * 0.6);
-            createRipple(velocity);
-            break;
-
-          case 'synth':
-            // Boost phone rise + sparks (1:M mapping)
-            midiTriggers.synth = Math.min(1, midiTriggers.synth + velocity * 0.6);
-            break;
-
-          case 'guitar':
-            // Thread brightness pulse
-            midiTriggers.guitar = Math.min(1, midiTriggers.guitar + velocity * 0.7);
-            break;
-
-          case 'percussion':
-            // Dust burst
-            midiTriggers.percussion = Math.min(1, midiTriggers.percussion + velocity * 0.9);
-            break;
-        }
+        drums: { target: 'phones', effect: 'rotate pulse', color: '#ffaa44' },
+        bass: { target: 'ground', effect: 'ripple', color: '#8866ff' },
+        vocals: { target: 'atmosphere', effect: 'warmth', color: '#ffcc88' },
+        synth: { target: 'stars', effect: 'brightness', color: '#aaccff' },
+        guitar: { target: 'trails', effect: 'spawn', color: '#ffdd66' },
+        keyboard: { target: 'glow', effect: 'color shift', color: '#ffaa88' },
+        percussion: { target: 'fireflies', effect: 'pulse', color: '#ffee88' },
+        fx: { target: 'phones', effect: 'screen flash', color: '#ff88ff' }
       },
 
       update(time, freq, amplitude, shipPos, shipSpeed, audioExtra) {
         const shipZ = shipPos ? shipPos.z : 0;
-        lastShipZ = shipZ;
-
-        // ═══════════════════════════════════════════════════════════════════
-        // DECAY MIDI TRIGGERS - Smooth falloff each frame
-        // ═══════════════════════════════════════════════════════════════════
-        for (const stem in midiTriggers) {
-          midiTriggers[stem] *= decayRates[stem];
-          if (midiTriggers[stem] < 0.01) midiTriggers[stem] = 0;
-        }
-
-        // MIDI triggers (with audio fallback for non-vocal stems)
-        const drumEnergy = midiTriggers.drums || getEffectiveStemEnergy('drums', audioExtra?.drums?.energy || 0) * 0.5;
-        const bassEnergy = midiTriggers.bass || getEffectiveStemEnergy('bass', audioExtra?.bass?.energy || 0) * 0.5;
-        const synthEnergy = midiTriggers.synth || getEffectiveStemEnergy('synth', audioExtra?.synth?.energy || 0) * 0.5;
-        const guitarEnergy = midiTriggers.guitar || getEffectiveStemEnergy('guitar', audioExtra?.guitar?.energy || 0) * 0.5;
-        const percEnergy = midiTriggers.percussion || getEffectiveStemEnergy('percussion', audioExtra?.percussion?.energy || 0) * 0.5;
-
-        // VOCALS: Audio analysis only (no MIDI) → background/atmosphere
-        const vocalEnergy = getEffectiveStemEnergy('vocals', audioExtra?.vocals?.energy || 0);
-
-        // ═══════════════════════════════════════════════════════════════════
-        // DRUMS → Heartbeat pulse (MIDI triggers instant beat)
-        // ═══════════════════════════════════════════════════════════════════
-        heartbeatPhase += 0.03 + drumEnergy * 0.2;
-        const heartbeat = Math.sin(heartbeatPhase) * 0.5 + 0.5;
-        const drumPulse = 1 + drumEnergy * 2;
-
-        heartCore.scale.setScalar(1 + heartbeat * 0.2 + drumEnergy * 0.8);
-        heartMid.scale.setScalar(1 + heartbeat * 0.3 + drumEnergy * 1.2);
-        heartAura.scale.setScalar(1 + heartbeat * 0.4 + drumEnergy * 1.5);
-
-        coreMat.opacity = 0.6 + drumEnergy * 0.4;
-        midMat.opacity = 0.15 + drumEnergy * 0.5;
-        auraMat.opacity = 0.05 + drumEnergy * 0.25;
-        heartLight.intensity = 2 + drumEnergy * 12;
-
-        // ═══════════════════════════════════════════════════════════════════
-        // BASS → Ground ripples (MIDI spawns ripples directly in onMidi)
-        // ═══════════════════════════════════════════════════════════════════
         const dt = 0.016;
-        for (let i = ripples.length - 1; i >= 0; i--) {
-          const ripple = ripples[i];
-          const data = ripple.userData;
-          data.age += dt;
 
-          // Expand outward
-          const progress = data.age / data.maxAge;
-          const scale = 1 + progress * 25;
-          ripple.scale.setScalar(scale);
+        // ═══════════════════════════════════════════════════════════════════
+        // GET STEM ENERGIES
+        // ═══════════════════════════════════════════════════════════════════
+        const vocalEnergy = getEffectiveStemEnergy('vocals', audioExtra?.vocals?.energy || 0);
+        const backingEnergy = getEffectiveStemEnergy('backing-vocals', audioExtra?.['backing-vocals']?.energy || 0);
+        const drumEnergy = getEffectiveStemEnergy('drums', audioExtra?.drums?.energy || 0);
+        const bassEnergy = getEffectiveStemEnergy('bass', audioExtra?.bass?.energy || 0);
+        const synthEnergy = getEffectiveStemEnergy('synth', audioExtra?.synth?.energy || 0);
+        const guitarEnergy = getEffectiveStemEnergy('guitar', audioExtra?.guitar?.energy || 0);
+        const percEnergy = getEffectiveStemEnergy('percussion', audioExtra?.percussion?.energy || 0);
+        const keyboardEnergy = getEffectiveStemEnergy('keyboard', audioExtra?.keyboard?.energy || 0);
 
-          // Fade out
-          data.ringMat.opacity = data.startOpacity * (1 - progress);
+        const combinedVocals = Math.max(vocalEnergy, backingEnergy * 0.7);
 
-          if (data.age > data.maxAge) {
-            rippleGroup.remove(ripple);
-            ripple.traverse(c => {
-              if (c.geometry) c.geometry.dispose();
-              if (c.material) c.material.dispose();
-            });
-            ripples.splice(i, 1);
+        // Smooth pulses
+        lastVocalPulse = lastVocalPulse * 0.88 + combinedVocals * 0.12;
+        lastDrumPulse = lastDrumPulse * 0.85 + drumEnergy * 0.15;
+        lastBassPulse = lastBassPulse * 0.92 + bassEnergy * 0.08;
+        lastSynthPulse = lastSynthPulse * 0.9 + synthEnergy * 0.1;
+        lastGuitarPulse = lastGuitarPulse * 0.88 + guitarEnergy * 0.12;
+
+        // Total energy
+        let energySum = 0;
+        if (audioExtra) {
+          Object.values(audioExtra).forEach(stem => {
+            if (stem && stem.energy) energySum += stem.energy;
+          });
+        }
+        totalEnergy = totalEnergy * 0.92 + (energySum / 8) * 0.08;
+
+        // Disconnect progress slowly builds over time and with vocals
+        disconnectProgress = Math.min(1, disconnectProgress + 0.0003 + lastVocalPulse * 0.002);
+
+        // ═══════════════════════════════════════════════════════════════════
+        // ATMOSPHERE - Warms with vocals
+        // ═══════════════════════════════════════════════════════════════════
+        // Fog warms and clears
+        const fogHue = 0.7 - lastVocalPulse * 0.15; // Blue to warmer
+        scene.fog.color.setHSL(fogHue, 0.3, 0.04 + lastVocalPulse * 0.03);
+        scene.fog.density = 0.015 - lastVocalPulse * 0.008 - disconnectProgress * 0.003;
+
+        // Lights respond
+        mainLight.intensity = 0.3 + lastVocalPulse * 3 + disconnectProgress * 0.5;
+        mainLight.color.setHSL(0.08 + lastVocalPulse * 0.05, 0.7, 0.5 + lastVocalPulse * 0.3);
+
+        coolLight.intensity = 0.2 + lastSynthPulse * 1.5;
+        ambientLight.intensity = 0.1 + lastVocalPulse * 0.3 + disconnectProgress * 0.1;
+
+        // ═══════════════════════════════════════════════════════════════════
+        // PHONES - Rotate toward face-down, screens dim
+        // ═══════════════════════════════════════════════════════════════════
+        for (let i = phones.length - 1; i >= 0; i--) {
+          const phone = phones[i];
+          const pd = phone.userData;
+
+          // Gentle bob
+          phone.position.y = pd.baseY + Math.sin(time * pd.bobSpeed + pd.bobPhase) * 0.5;
+
+          // Slowly rotate toward face-down based on disconnect progress
+          pd.faceDownProgress = Math.min(pd.targetFaceDown, pd.faceDownProgress + 0.001 + lastVocalPulse * 0.003);
+          phone.rotation.x = pd.faceDownProgress * Math.PI; // Flip over
+
+          // Drum hits cause rotation pulses
+          phone.rotation.z += Math.sin(time * 3 + i) * 0.01 * (1 + lastDrumPulse * 2);
+
+          // Screen dims as it faces down
+          pd.screenMat.opacity = 0.6 * (1 - pd.faceDownProgress * 0.8) * (1 - lastVocalPulse * 0.3);
+          pd.screenMat.color.setHSL(0.6 - pd.faceDownProgress * 0.1, 0.6, 0.5);
+
+          // Recycle phones that fall behind
+          if (phone.position.z < shipZ - 40) {
+            phone.position.z = shipZ + 80 + Math.random() * 40;
+            phone.position.x = (Math.random() - 0.5) * 60;
+            pd.faceDownProgress = Math.random() * disconnectProgress * 0.5;
           }
         }
 
         // ═══════════════════════════════════════════════════════════════════
-        // SYNTH → Phones rise faster on MIDI notes
+        // FIREFLIES - Pulse with percussion, drift warmly
         // ═══════════════════════════════════════════════════════════════════
-        phones.forEach(phone => {
-          const data = phone.userData;
-
-          // Rise faster with synth MIDI
-          phone.position.y += data.riseSpeed * (1 + synthEnergy * 3);
-          phone.position.x += data.driftX + Math.sin(time + data.phase) * 0.01;
-          phone.rotation.z += data.rotSpeed * (1 + synthEnergy);
-
-          // Screen flickers on synth notes
-          if (synthEnergy > 0.3) {
-            data.screenMat.color.setHex(0x66aaff);
-          } else {
-            data.screenMat.color.setHex(0x4488ff);
-          }
-
-          // Fade as it rises
-          const fadeProgress = Math.max(0, (phone.position.y - 15) / data.fadeHeight);
-          data.bodyMat.opacity = 0.9 * (1 - fadeProgress);
-          data.screenMat.opacity = 0.7 * (1 - fadeProgress * 1.2);
-
-          // Respawn when faded
-          if (phone.position.y > data.fadeHeight + 15 || data.bodyMat.opacity <= 0) {
-            phone.position.y = -5 + Math.random() * 3;
-            phone.position.x = (Math.random() - 0.5) * 35;
-            phone.position.z = shipZ + (Math.random() - 0.5) * 60;
-            data.bodyMat.opacity = 0.9;
-            data.screenMat.opacity = 0.7;
-          }
-        });
-
-        // ═══════════════════════════════════════════════════════════════════
-        // GUITAR → Connection threads pulse on MIDI
-        // ═══════════════════════════════════════════════════════════════════
-        connectionPoints.forEach((p, i) => {
-          const wobble = Math.sin(time * 0.5 + p.phase) * 2;
-          p.mesh.position.y = p.y + wobble;
-          p.mat.opacity = 0.2 + guitarEnergy * 0.8;
-          p.mesh.scale.setScalar(1 + guitarEnergy * 1.2);
-        });
-
-        threads.forEach(thread => {
-          thread.userData.mat.opacity = thread.userData.baseOpacity + guitarEnergy * 0.6;
-        });
-
-        // ═══════════════════════════════════════════════════════════════════
-        // SYNTH → Sparks orbit and glow (1:M - synth also drives phones)
-        // ═══════════════════════════════════════════════════════════════════
-        const sPos = sparkGeom.attributes.position.array;
-        for (let i = 0; i < sparkCount; i++) {
-          const d = sparkData[i];
-          // Orbit around center, faster with synth MIDI
-          d.angle += d.orbitSpeed * 0.02 * (1 + synthEnergy * 3);
-          const r = d.baseRadius + Math.sin(time * 2 + d.phase) * 1 + synthEnergy * 2;
-          sPos[i * 3] = Math.cos(d.angle) * r;
-          sPos[i * 3 + 1] = d.yBase + Math.sin(time * 0.8 + d.phase) * 1.5 + synthEnergy * 2;
-          sPos[i * 3 + 2] = Math.sin(d.angle) * r;
-        }
-        sparkGeom.attributes.position.needsUpdate = true;
-        sparkMat.opacity = 0.25 + synthEnergy * 0.7;
-        sparkMat.size = 0.1 + synthEnergy * 0.35;
-
-        // ═══════════════════════════════════════════════════════════════════
-        // VOCALS → Background atmosphere (audio analysis only, no MIDI)
-        // ═══════════════════════════════════════════════════════════════════
-        // Fog density shifts with vocals
-        scene.fog.density = 0.015 + vocalEnergy * 0.008;
-
-        // Ambient lights warm up with vocals
-        warmLight1.intensity = 1.5 + vocalEnergy * 3;
-        warmLight2.intensity = 1 + vocalEnergy * 2.5;
-        ambient.intensity = 0.2 + vocalEnergy * 0.3;
-
-        // ═══════════════════════════════════════════════════════════════════
-        // PERCUSSION → Dust bursts on MIDI hits
-        // ═══════════════════════════════════════════════════════════════════
-        const dPos = dustGeom.attributes.position.array;
+        const ffPos = fireflyGeom.attributes.position.array;
         if (!initialized && shipPos) {
-          for (let i = 0; i < dustCount; i++) {
-            dPos[i * 3 + 2] = shipZ - 40 + Math.random() * 80;
+          for (let i = 0; i < fireflyCount; i++) {
+            ffPos[i * 3 + 2] = shipZ - 30 + Math.random() * 100;
           }
           initialized = true;
         }
 
-        for (let i = 0; i < dustCount; i++) {
-          const d = dustData[i];
-          // More erratic movement on percussion hits
-          const burstFactor = percEnergy * 0.15;
-          dPos[i * 3] += d.driftX + (Math.random() - 0.5) * burstFactor;
-          dPos[i * 3 + 1] += d.driftY + Math.sin(time * d.speed + d.phase) * 0.01 + burstFactor * 0.5;
+        for (let i = 0; i < fireflyCount; i++) {
+          // Gentle drift
+          const phase = fireflyPhases[i];
+          ffPos[i * 3] += Math.sin(time * 0.5 + phase) * 0.02;
+          ffPos[i * 3 + 1] += Math.cos(time * 0.3 + phase) * 0.015;
 
-          // Keep near ship
-          if (dPos[i * 3 + 2] < shipZ - 45 || dPos[i * 3 + 2] > shipZ + 45) {
-            dPos[i * 3 + 2] = shipZ - 40 + Math.random() * 80;
-            dPos[i * 3] = (Math.random() - 0.5) * 60;
-            dPos[i * 3 + 1] = Math.random() * 25;
+          // Keep near player
+          if (ffPos[i * 3 + 2] < shipZ - 40 || ffPos[i * 3 + 2] > shipZ + 80) {
+            ffPos[i * 3 + 2] = shipZ + 60 + Math.random() * 30;
+            ffPos[i * 3] = (Math.random() - 0.5) * 80;
+            ffPos[i * 3 + 1] = (Math.random() - 0.5) * 30;
           }
         }
-        dustGeom.attributes.position.needsUpdate = true;
-        dustMat.opacity = 0.2 + percEnergy * 0.6;
-        dustMat.size = 0.08 + percEnergy * 0.25;
+        fireflyGeom.attributes.position.needsUpdate = true;
 
-        // Group follows ship
+        // Fireflies glow more with percussion and vocals
+        fireflyMat.opacity = 0.3 + percEnergy * 0.5 + lastVocalPulse * 0.4 + disconnectProgress * 0.2;
+        fireflyMat.size = 0.15 + percEnergy * 0.15 + lastVocalPulse * 0.1;
+        fireflyMat.color.setHSL(0.1 + lastVocalPulse * 0.05, 0.6, 0.6 + lastVocalPulse * 0.2);
+
+        // ═══════════════════════════════════════════════════════════════════
+        // STARS - Reveal with synth, twinkle
+        // ═══════════════════════════════════════════════════════════════════
+        stars.position.z = shipZ;
+        starMat.opacity = 0.1 + lastSynthPulse * 0.5 + disconnectProgress * 0.4;
+        starMat.size = 0.3 + lastSynthPulse * 0.3;
+
+        // ═══════════════════════════════════════════════════════════════════
+        // GROUND - Ripples with bass
+        // ═══════════════════════════════════════════════════════════════════
+        const gPos = groundGeom.attributes.position.array;
+        for (let i = 0; i < gPos.length; i += 3) {
+          const x = gPos[i];
+          const y = gPos[i + 1];
+          const wave = Math.sin(x * 0.1 + time * 2) * Math.cos(y * 0.1 + time * 1.5);
+          gPos[i + 2] = wave * lastBassPulse * 2;
+        }
+        groundGeom.attributes.position.needsUpdate = true;
+        ground.position.z = shipZ;
+
+        // Ground color warms with vocals
+        groundMat.color.setHSL(0.7 - lastVocalPulse * 0.1, 0.3 + lastVocalPulse * 0.2, 0.08 + lastVocalPulse * 0.05);
+
+        // ═══════════════════════════════════════════════════════════════════
+        // WARM GLOW ORB - Pulses with vocals and keyboard
+        // ═══════════════════════════════════════════════════════════════════
+        glowOrb.position.z = shipZ + 40;
+        const orbScale = 1 + lastVocalPulse * 0.5 + keyboardEnergy * 0.3;
+        glowOrb.scale.setScalar(orbScale);
+        glowMat.opacity = 0.1 + lastVocalPulse * 0.25 + disconnectProgress * 0.1;
+        innerGlowMat.opacity = 0.2 + lastVocalPulse * 0.4;
+
+        // Color shifts with keyboard
+        const orbHue = 0.08 + keyboardEnergy * 0.1;
+        glowMat.color.setHSL(orbHue, 0.7, 0.5);
+        innerGlowMat.color.setHSL(orbHue + 0.02, 0.6, 0.7);
+
+        // ═══════════════════════════════════════════════════════════════════
+        // TRAIL PARTICLES - Spawn with guitar
+        // ═══════════════════════════════════════════════════════════════════
+        if (guitarEnergy > 0.3 && Math.random() < guitarEnergy * 0.4) {
+          const color = new THREE.Color().setHSL(0.1 + Math.random() * 0.1, 0.7, 0.6);
+          spawnTrailParticle(
+            (Math.random() - 0.5) * 20,
+            (Math.random() - 0.5) * 10,
+            shipZ + 20 + Math.random() * 30,
+            color
+          );
+        }
+
+        // Update trail particles
+        for (let i = trailParticles.length - 1; i >= 0; i--) {
+          const p = trailParticles[i];
+          p.position.add(p.userData.vel);
+          p.userData.life -= 0.015;
+          p.userData.mat.opacity = p.userData.life * 0.8;
+          p.scale.setScalar(p.userData.life);
+
+          if (p.userData.life <= 0) {
+            trailGroup.remove(p);
+            p.geometry.dispose();
+            p.material.dispose();
+            trailParticles.splice(i, 1);
+          }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // POSITION UPDATES
+        // ═══════════════════════════════════════════════════════════════════
         group.position.z = shipZ;
-        threadGroup.position.z = shipZ;
-        rippleGroup.position.z = shipZ;
+        mainLight.position.z = shipZ + 30;
+        coolLight.position.z = shipZ + 20;
       },
+
       dispose() {
         scene.remove(phoneGroup);
-        phoneGroup.traverse(child => {
-          if (child.geometry) child.geometry.dispose();
-          if (child.material) child.material.dispose();
+        phoneGroup.traverse(c => {
+          if (c.geometry) c.geometry.dispose();
+          if (c.material) c.material.dispose();
         });
-        group.traverse(child => {
-          if (child.geometry) child.geometry.dispose();
-          if (child.material) child.material.dispose();
+        scene.remove(fireflies);
+        fireflyGeom.dispose();
+        fireflyMat.dispose();
+        scene.remove(stars);
+        starGeom.dispose();
+        starMat.dispose();
+        scene.remove(trailGroup);
+        trailGroup.traverse(c => {
+          if (c.geometry) c.geometry.dispose();
+          if (c.material) c.material.dispose();
+        });
+        scene.remove(ambientLight);
+        group.traverse(c => {
+          if (c.geometry) c.geometry.dispose();
+          if (c.material) c.material.dispose();
         });
         scene.remove(group);
         scene.fog = null;

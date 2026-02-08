@@ -444,68 +444,68 @@ window.TRACK_THEMES = {
   },
 
   // ═══════════════════════════════════════════════════════════════
-  // TRADE YOU MY HANDS - Cherry blossom twilight, intimate vulnerability
-  // Model: Butterfly - delicate as falling petals
-  // Colors: Deep twilight purples, sakura pinks, floating petal atmosphere
+  // TRADE YOU MY HANDS - Dense Cybernetic Jungle
+  // Model: Butterfly - organic life thriving in digital ecosystem
+  // Colors: Deep jungle greens, cybernetic teals, bioluminescent pinks/oranges
   // ═══════════════════════════════════════════════════════════════
   "Trade You My Hands": {
-    name: "Petal Fall",
+    name: "Neural Canopy",
     model: "butterfly",
     colorTheme: "midnight",
     vizMode: "voyage",
     vizParams: {
-      amplitude: 0.4,
-      speed: 0.4,
-      audioReactivity: 0.5,
-      zoom: 0.5,
-      smoothing: 0.85
+      amplitude: 0.5,
+      speed: 0.35,
+      audioReactivity: 0.6,
+      zoom: 0.45,
+      smoothing: 0.82
     },
-    spotlightColor: 0xffaacc,
+    spotlightColor: 0x00ffaa,
     trackColors: {
-      floorPrimary: 0x150a15,
-      floorSecondary: 0x1f1020,
-      wallBase: 0x301830,
-      wallAccent: 0xff99bb,
-      obstacle: 0xcc6699,
-      boostPad: 0xffccee,
-      centerMarker: 0xdd88aa,
-      fogColor: 0x100810,
-      fogNear: 15,
-      fogFar: 180,
-      ambientLight: 0x201020,
-      ambientIntensity: 0.45
+      floorPrimary: 0x061208,
+      floorSecondary: 0x0a1a0d,
+      wallBase: 0x1a3a2a,
+      wallAccent: 0x00ffaa,
+      obstacle: 0x00aaff,
+      boostPad: 0xff44aa,
+      centerMarker: 0x00ffaa,
+      fogColor: 0x061208,
+      fogNear: 8,
+      fogFar: 120,
+      ambientLight: 0x1a2a1a,
+      ambientIntensity: 0.4
     },
     visualStyle: {
       wallStyle: "glow",
       floorPattern: "waves",
-      glowIntensity: 0.4,
+      glowIntensity: 0.5,
       particleType: "dust",
-      particleDensity: 0.6,
-      pulseWithBeat: false,
-      skyGradient: [0x180820, 0x301838],
+      particleDensity: 0.8,
+      pulseWithBeat: true,
+      skyGradient: [0x030806, 0x0a1a10],
       backgroundEffect: {
-        type: "sakura",
-        color1: 0x150a18,
-        color2: 0x251530,
-        color3: 0x452848,
-        accent: 0xff99bb,
-        speed: 0.5,
-        intensity: 0.5,
-        scale: 1.2
+        type: "aurora",
+        color1: 0x030806,
+        color2: 0x061a0d,
+        color3: 0x0a2a1a,
+        accent: 0x00ffaa,
+        speed: 0.3,
+        intensity: 0.4,
+        scale: 0.8
       },
       terrain: {
         enabled: true,
-        scale: 0.035,
-        octaves: 2,
-        persistence: 0.7,
-        amplitude: 1.8,
-        baseHeight: -0.3,
-        ridged: false,
+        scale: 0.04,
+        octaves: 3,
+        persistence: 0.65,
+        amplitude: 2.2,
+        baseHeight: -0.5,
+        ridged: true,
         colorByHeight: true,
-        lowColor: 0x201020,
-        midColor: 0x351830,
-        highColor: 0x502848,
-        peakColor: 0xbb7799
+        lowColor: 0x061208,
+        midColor: 0x0a1a0d,
+        highColor: 0x1a3a2a,
+        peakColor: 0x2a5a4a
       }
     }
   },

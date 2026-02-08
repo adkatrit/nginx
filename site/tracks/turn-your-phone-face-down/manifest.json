@@ -27,9 +27,9 @@
       "audio": "vocals.mp3",
       "midi": "vocals.mid",
       "visualization": {
-        "target": "sparks",
-        "effect": "glow",
-        "color": "#ffffcc"
+        "target": "atmosphere",
+        "effect": "fog",
+        "color": "#ffddcc"
       }
     },
     "synth": {

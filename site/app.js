@@ -3278,6 +3278,7 @@
         }
 
         stemPlayer = new window.StemPlayer(audioCtx);
+        window.currentStemPlayer = stemPlayer; // Expose for scene MIDI look-ahead access
 
         // Cache-bust manifest URL to ensure fresh load
         const manifestUrl = t.stemsManifest + '?v=' + Date.now();

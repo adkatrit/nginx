@@ -819,6 +819,26 @@ class StemPlayer {
   }
 
   /**
+   * Get the full MIDI schedule for look-ahead visualization (Guitar Hero style)
+   * Returns all MIDI events sorted by time
+   */
+  getMidiSchedule() {
+    return this.midiSchedule;
+  }
+
+  /**
+   * Get upcoming MIDI events within a time window
+   * @param {number} currentTime - Current playback time
+   * @param {number} lookAhead - How far ahead to look (in seconds)
+   * @returns {Array} MIDI events in the window
+   */
+  getUpcomingMidiEvents(currentTime, lookAhead = 4) {
+    return this.midiSchedule.filter(
+      event => event.time > currentTime && event.time <= currentTime + lookAhead
+    );
+  }
+
+  /**
    * Check if a specific stem is loaded
    */
   isStemLoaded(stemId) {
