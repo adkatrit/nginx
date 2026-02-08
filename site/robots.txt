@@ -1,0 +1,11 @@
+# robots.txt for jrod.dev (Audio Environments by DeytaDreams)
+User-agent: *
+Allow: /
+Disallow: /_archive/
+Disallow: /models/
+Disallow: /tracks/*/*.mp3
+Disallow: /tracks/*/*.mid
+Disallow: /tracks/*/*.wav
+Disallow: /tracks/*/stems-raw/
+
+Sitemap: https://jrod.dev/sitemap.xml

@@ -1726,26 +1726,32 @@ window.TrackScenes = (function() {
         float b = bassEnergy;
         float d = drumEnergy;
 
+        // === GROUND COLOR - Solid dark for bottom hemisphere ===
+        // This hides any terrain edge fragmentation
+        vec3 groundColor = vec3(0.02, 0.01, 0.01);  // Very dark warm brown
+
+        // Below horizon = solid ground (no sky visible through terrain gaps)
+        if (y < -0.05) {
+          // Solid ground with subtle distance fade
+          float fade = smoothstep(-0.5, -0.05, y);
+          gl_FragColor = vec4(groundColor * (0.3 + fade * 0.7), 1.0);
+          return;
+        }
+
         // === RICH SATURATED PALETTE - Fixed colors ===
-        vec3 nightSky = vec3(0.012, 0.006, 0.035);    // Very dark purple
-        vec3 deepPurple = vec3(0.05, 0.018, 0.1);     // Dark purple
         vec3 twilight = vec3(0.12, 0.04, 0.16);       // Purple-magenta
         vec3 rose = vec3(0.3, 0.07, 0.12);            // Deep rose
         vec3 coral = vec3(0.55, 0.15, 0.06);          // Rich coral
         vec3 orange = vec3(0.8, 0.3, 0.04);           // Warm orange
         vec3 gold = vec3(0.9, 0.5, 0.06);             // Saturated gold
 
-        // === BUILD BASE GRADIENT ===
+        // === BUILD BASE GRADIENT - Only sky portion ===
         vec3 baseColor;
 
-        if (y < -0.3) {
-          baseColor = nightSky;
-        } else if (y < -0.1) {
-          float t = (y + 0.3) / 0.2;
-          baseColor = mix(nightSky, deepPurple, t);
-        } else if (y < 0.05) {
-          float t = (y + 0.1) / 0.15;
-          baseColor = mix(deepPurple, twilight, t);
+        if (y < 0.05) {
+          // Near horizon - blend from ground to twilight
+          float t = (y + 0.05) / 0.1;
+          baseColor = mix(groundColor * 2.0, twilight, t);
         } else if (y < 0.12) {
           float t = (y - 0.05) / 0.07;
           baseColor = mix(twilight, rose, t);
@@ -1770,20 +1776,20 @@ window.TrackScenes = (function() {
         vec3 color = baseColor * luminosity;
 
         // === SUN GLOW - Brighter with vocals, same color ===
-        float sunDist = length(vec2(x, y - 0.06));
+        float sunDist = length(vec2(x, y - 0.08));
         float sunGlow = smoothstep(0.35, 0.05, sunDist);
         // Sun just gets brighter, keeps gold color
-        color += gold * sunGlow * (0.1 + v * 0.6) * luminosity;
+        color += gold * sunGlow * (0.15 + v * 0.6) * luminosity;
 
         // === HORIZON LINE - Brighter with vocals ===
-        float horizonLine = exp(-abs(y - 0.05) * 20.0);
-        color += orange * horizonLine * (0.08 + v * 0.35) * luminosity;
+        float horizonLine = exp(-abs(y - 0.03) * 25.0);
+        color += orange * horizonLine * (0.1 + v * 0.4) * luminosity;
 
         // === LIGHT RAYS - Visible when singing loud ===
         if (v > 0.25) {
           float rayAngle = x * 8.0;
           float rays = pow(abs(sin(rayAngle)), 10.0);
-          float rayMask = smoothstep(0.08, 0.3, y) * smoothstep(0.55, 0.2, y);
+          float rayMask = smoothstep(0.06, 0.3, y) * smoothstep(0.55, 0.2, y);
           float rayIntensity = rays * rayMask * (v - 0.25) * 1.2;
           color += coral * rayIntensity * 0.3;
         }

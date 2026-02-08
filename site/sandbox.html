@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scene Director Sandbox — Terms &amp; Conditions</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap');
+:root {
+  --bg: #0a0e1a; --card: #0d1528; --card2: #101c30; --border: #1a2540; --border2: #253050;
+  --text: #c8d4e8; --dim: #5a6a88; --white: #eef2ff;
+  --bass: #ff4466; --mid: #44ff88; --treble: #4488ff; --energy: #ffaa44; --beat: #ff44ff;
+  --accent: #00ddff; --verse: #4488ff; --chorus: #ff8844; --bridge: #aa44ff; --intro: #556688;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html { background: var(--bg); color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+body { padding: 0; overflow-x: hidden; }
+h1, h2, h3, h4 { font-family: 'Outfit', sans-serif; font-weight: 600; }
+
+/* ─── LAYOUT ─── */
+.header { padding:12px 20px; display:flex; align-items:center; gap:16px; border-bottom:1px solid var(--border); background: var(--card); }
+.header h1 { font-size:16px; color:var(--accent); flex-shrink:0; }
+.header .track-info { font-size:11px; color:var(--dim); }
+
+.transport { display:flex; align-items:center; gap:12px; padding:10px 20px; background:var(--card); border-bottom:1px solid var(--border); }
+.transport button { background:var(--accent); color:#000; border:none; border-radius:4px; padding:6px 16px; font-family:inherit; font-weight:600; cursor:pointer; font-size:12px; }
+.transport button:hover { filter:brightness(1.2); }
+.transport .time { font-size:14px; color:var(--white); min-width:90px; }
+.transport .bpm { color:var(--dim); font-size:11px; }
+
+.timeline-wrap { padding:8px 20px; background:var(--bg); border-bottom:1px solid var(--border); }
+.timeline { position:relative; height:40px; background:var(--card); border-radius:6px; cursor:pointer; overflow:hidden; border:1px solid var(--border); }
+.timeline .section-block { position:absolute; top:0; bottom:0; opacity:0.25; }
+.timeline .section-label { position:absolute; top:2px; font-size:9px; font-weight:600; color:#fff; padding:2px 6px; pointer-events:none; z-index:2; }
+.timeline .playhead { position:absolute; top:0; bottom:0; width:2px; background:var(--accent); z-index:3; pointer-events:none; box-shadow: 0 0 6px var(--accent); }
+.lyrics-line { padding:4px 20px; font-size:11px; color:var(--dim); height:20px; overflow:hidden; transition: color 0.3s; }
+.lyrics-line.active { color:var(--white); }
+
+/* ─── STEMS + FFT ─── */
+.stems-fft { display:flex; gap:16px; padding:10px 20px; background:var(--card); border-bottom:1px solid var(--border); flex-wrap:wrap; align-items:flex-start; }
+.stems-panel { display:flex; gap:6px; flex-wrap:wrap; flex:1; min-width:400px; }
+.stem-ctrl { display:flex; align-items:center; gap:4px; background:var(--card2); border:1px solid var(--border); border-radius:4px; padding:3px 6px; font-size:10px; }
+.stem-ctrl label { min-width:60px; color:var(--dim); }
+.stem-ctrl input[type=range] { width:60px; height:4px; accent-color: var(--accent); }
+.stem-ctrl button { background:none; border:1px solid var(--border); color:var(--dim); border-radius:3px; padding:1px 5px; cursor:pointer; font-size:9px; font-family:inherit; }
+.stem-ctrl button.active { border-color:var(--accent); color:var(--accent); }
+.fft-meters { display:flex; gap:10px; align-items:flex-end; height:50px; flex-shrink:0; }
+.fft-bar-wrap { display:flex; flex-direction:column; align-items:center; gap:2px; }
+.fft-bar { width:24px; border-radius:3px 3px 0 0; transition: height 0.06s; }
+.fft-label { font-size:8px; color:var(--dim); text-transform:uppercase; }
+
+/* ─── SECTION EDITOR ─── */
+.editor-header { padding:12px 20px; display:flex; align-items:center; justify-content:space-between; }
+.editor-header h2 { font-size:14px; color:var(--accent); }
+.section-tabs { display:flex; gap:2px; padding:0 20px; flex-wrap:wrap; }
+.section-tab { padding:6px 14px; border-radius:6px 6px 0 0; cursor:pointer; font-size:11px; font-weight:500; border:1px solid var(--border); border-bottom:none; background:var(--card); color:var(--dim); transition:all 0.2s; }
+.section-tab:hover { color:var(--text); }
+.section-tab.active { background:var(--card2); color:var(--white); border-color:var(--border2); }
+.section-editor { background:var(--card2); border:1px solid var(--border2); border-radius:0 6px 6px 6px; margin:0 20px; padding:16px; display:none; }
+.section-editor.active { display:block; }
+
+.param-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap:12px; }
+.param-group { background:var(--card); border:1px solid var(--border); border-radius:6px; padding:10px 12px; }
+.param-group h4 { font-size:11px; color:var(--accent); margin-bottom:8px; letter-spacing:1px; text-transform:uppercase; }
+.param-row { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+.param-row label { min-width:80px; font-size:10px; color:var(--dim); }
+.param-row input[type=range] { flex:1; height:4px; accent-color:var(--accent); }
+.param-row .val { min-width:36px; text-align:right; font-size:10px; color:var(--white); }
+.param-row select { background:var(--card2); color:var(--text); border:1px solid var(--border); border-radius:3px; padding:2px 4px; font-family:inherit; font-size:10px; }
+.param-row input[type=checkbox] { accent-color:var(--accent); }
+
+/* ─── CUE TRACK ─── */
+.cue-section { padding:12px 20px; border-top:1px solid var(--border); }
+.cue-section h3 { font-size:12px; color:var(--beat); margin-bottom:8px; }
+.cue-timeline { position:relative; height:30px; background:var(--card); border:1px solid var(--border); border-radius:4px; margin-bottom:8px; cursor:pointer; }
+.cue-marker { position:absolute; top:0; bottom:0; width:3px; border-radius:2px; cursor:pointer; z-index:2; }
+.cue-marker::after { content:attr(data-label); position:absolute; bottom:100%; left:50%; transform:translateX(-50%); font-size:8px; white-space:nowrap; padding:1px 4px; border-radius:2px; background:var(--card); border:1px solid var(--border); color:var(--text); pointer-events:none; opacity:0; transition:opacity 0.2s; }
+.cue-marker:hover::after { opacity:1; }
+.cue-controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.cue-controls select, .cue-controls input { background:var(--card2); color:var(--text); border:1px solid var(--border); border-radius:3px; padding:3px 6px; font-family:inherit; font-size:10px; }
+.cue-controls input[type=number] { width:60px; }
+.cue-controls button { background:var(--beat); color:#000; border:none; border-radius:4px; padding:4px 12px; font-family:inherit; font-weight:600; cursor:pointer; font-size:10px; }
+.cue-list { display:flex; gap:4px; flex-wrap:wrap; margin-top:8px; }
+.cue-chip { background:var(--card); border:1px solid var(--border); border-radius:4px; padding:3px 8px; font-size:9px; display:flex; align-items:center; gap:6px; }
+.cue-chip .remove { cursor:pointer; color:var(--bass); font-weight:700; }
+
+/* ─── LIVE PREVIEW ─── */
+.preview-section { padding:12px 20px; border-top:1px solid var(--border); }
+.preview-section h3 { font-size:12px; color:var(--mid); margin-bottom:8px; }
+.preview-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap:8px; }
+.preview-card { background:var(--card); border:1px solid var(--border); border-radius:6px; padding:10px; text-align:center; }
+.preview-card .label { font-size:9px; color:var(--dim); text-transform:uppercase; letter-spacing:1px; margin-bottom:6px; }
+.preview-card .value { font-size:16px; font-weight:600; color:var(--white); }
+.preview-card .bar { height:6px; background:var(--border); border-radius:3px; margin-top:6px; overflow:hidden; }
+.preview-card .bar-fill { height:100%; border-radius:3px; transition: width 0.3s; }
+.preview-card .indicator { width:10px; height:10px; border-radius:50%; margin:4px auto 0; }
+
+/* ─── JSON OUTPUT ─── */
+.output-section { padding:12px 20px; border-top:1px solid var(--border); }
+.output-section h3 { font-size:12px; color:var(--energy); margin-bottom:8px; display:flex; align-items:center; gap:12px; }
+.output-section button { background:var(--energy); color:#000; border:none; border-radius:4px; padding:4px 14px; font-family:inherit; font-weight:600; cursor:pointer; font-size:10px; }
+.json-output { background:#080c16; border:1px solid var(--border); border-radius:6px; padding:12px; font-size:10px; max-height:300px; overflow:auto; white-space:pre; color:var(--dim); line-height:1.5; }
+
+/* ─── LOADING ─── */
+.loading-overlay { position:fixed; inset:0; background:var(--bg); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:100; gap:12px; }
+.loading-overlay .spinner { width:24px; height:24px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.8s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.loading-overlay.hidden { display:none; }
+.load-status { font-size:11px; color:var(--dim); }
+</style>
+
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-NRQ96GQ70K"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-NRQ96GQ70K');
+</script>
+</head>
+<body>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="load-status" id="loadStatus">Loading stems...</div>
+</div>
+
+<div class="header">
+  <h1>Scene Director Sandbox</h1>
+  <span class="track-info">Terms &amp; Conditions — DeytaDreams — 120 BPM</span>
+</div>
+
+<div class="transport">
+  <button id="playBtn" onclick="togglePlay()">▶ Play</button>
+  <span class="time" id="timeDisplay">0:00 / 0:00</span>
+  <span class="bpm">120 BPM</span>
+  <span style="flex:1"></span>
+  <span style="font-size:10px;color:var(--dim)">Active Section:</span>
+  <span id="activeSectionLabel" style="font-size:11px;color:var(--accent);font-weight:600">Intro</span>
+</div>
+
+<div class="timeline-wrap">
+  <div class="timeline" id="timeline" onclick="seekTo(event)"></div>
+  <div class="lyrics-line" id="lyricsLine">&nbsp;</div>
+</div>
+
+<div class="stems-fft">
+  <div class="stems-panel" id="stemsPanel"></div>
+  <div class="fft-meters" id="fftMeters">
+    <div class="fft-bar-wrap"><div class="fft-bar" id="fftBass" style="height:4px;background:var(--bass)"></div><div class="fft-label">Bass</div></div>
+    <div class="fft-bar-wrap"><div class="fft-bar" id="fftMid" style="height:4px;background:var(--mid)"></div><div class="fft-label">Mid</div></div>
+    <div class="fft-bar-wrap"><div class="fft-bar" id="fftTreble" style="height:4px;background:var(--treble)"></div><div class="fft-label">Treb</div></div>
+    <div class="fft-bar-wrap"><div class="fft-bar" id="fftEnergy" style="height:4px;background:var(--energy)"></div><div class="fft-label">Enrg</div></div>
+  </div>
+</div>
+
+<div class="editor-header"><h2>Section Parameters</h2></div>
+<div class="section-tabs" id="sectionTabs"></div>
+<div id="sectionEditors"></div>
+
+<div class="cue-section">
+  <h3>Cue Timeline</h3>
+  <div class="cue-timeline" id="cueTimeline" onclick="addCueAtClick(event)"></div>
+  <div class="cue-controls">
+    <select id="cueAction">
+      <option value="vista_moment">Vista Moment</option>
+      <option value="screen_shake">Screen Shake</option>
+      <option value="anticipate_chorus">Anticipate Chorus</option>
+      <option value="lightning_storm">Lightning Storm</option>
+      <option value="particle_burst">Particle Burst</option>
+    </select>
+    <label style="color:var(--dim)">Time:</label><input type="number" id="cueTime" value="48" min="0" max="224" step="0.5">
+    <label style="color:var(--dim)">Dur:</label><input type="number" id="cueDur" value="2" min="0.1" max="10" step="0.1">
+    <label style="color:var(--dim)">Int:</label><input type="number" id="cueIntensity" value="0.8" min="0" max="1" step="0.05">
+    <button onclick="addCue()">+ Add Cue</button>
+  </div>
+  <div class="cue-list" id="cueList"></div>
+</div>
+
+<div class="preview-section">
+  <h3>Live Preview — Interpolated State</h3>
+  <div class="preview-grid" id="previewGrid"></div>
+</div>
+
+<div class="output-section">
+  <h3>theme-config.json <button onclick="copyJSON()">Copy JSON</button> <span id="copyFeedback" style="font-size:10px;color:var(--mid);opacity:0"></span></h3>
+  <div class="json-output" id="jsonOutput"></div>
+</div>
+
+<div style="height:40px"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════
+// CONSTANTS
+// ════════════════════════════════════════════════════════════
+const STEMS = ['drums','bass','guitar','vocals','backing-vocals','synth','fx'];
+const STEM_PATHS = STEMS.map(s => `./tracks/terms-and-conditions/${s}.mp3`);
+const DURATION = 224;
+const BPM = 120;
+
+const SECTIONS = [
+  { id:'intro',   label:'Intro',    start:0,   end:42,  color:'var(--intro)' },
+  { id:'verse1',  label:'Verse 1',  start:42,  end:65,  color:'var(--verse)' },
+  { id:'chorus1', label:'Chorus 1', start:65,  end:87,  color:'var(--chorus)' },
+  { id:'verse2',  label:'Verse 2',  start:87,  end:116, color:'var(--verse)' },
+  { id:'chorus2', label:'Chorus 2', start:116, end:140, color:'var(--chorus)' },
+  { id:'bridge',  label:'Bridge',   start:140, end:197, color:'var(--bridge)' },
+  { id:'chorus3', label:'Chorus 3', start:197, end:224, color:'var(--chorus)' }
+];
+
+const LYRICS = [
+  {t:43,text:"Blue light morning"},{t:45,text:"Scroll before me breathe"},{t:48,text:"Every likkle window"},
+  {t:50.5,text:"Tellin' me who fi be"},{t:53,text:"Savin' all mi memories"},{t:55.5,text:"To a place mi never see"},
+  {t:58,text:"If it all went dark"},{t:60,text:"Would dem still remember me?"},
+  {t:66,text:"Mi a sign dem terms an' conditions"},{t:69,text:"Pon di life weh mi a live pon screens"},
+  {t:72,text:"Tryin' fi love a world made of mirrors"},{t:75,text:"Till mi cyaan tell di code from di dream"},
+  {t:78,text:"Gettin' to terms wid di weight a dis circuitry"},{t:82,text:"Still a try fi feel somethin' real beneath"},
+  {t:89,text:"Maps know weh mi a go"},{t:92,text:"Long 'fore mi choose"},{t:95,text:"Voices in mi headphone"},
+  {t:98,text:"A finish mi views"},{t:101,text:'Mi seh mi always "connected"'},{t:104,text:"But mi a talk to di air"},
+  {t:106,text:"Typin' out confessions"},{t:112,text:"Hope someone deh near"},
+  {t:118,text:"Mi a sign dem terms an' conditions"},{t:121,text:"Pon di life weh mi a live pon screens"},
+  {t:123,text:"Tryin' fi love a world made of mirrors"},{t:126,text:"Till mi cyaan tell di code from di dream"},
+  {t:129,text:"Gettin' to terms wid di weight a dis circuitry"},{t:133,text:"Still a try fi feel somethin' real beneath"},
+  {t:142,text:"Mi nuh hate it"},{t:143.5,text:"Mi nuh worship it"},{t:145,text:"Mi just want a likkle room inside a dis"},
+  {t:149,text:"Touch a hand"},{t:150.5,text:"Not an icon"},{t:152,text:"Hear a laugh"},{t:154,text:"When di power gone"},
+  {t:199,text:"Mi a sign dem terms an' conditions"},{t:202,text:"Pon di life weh mi a live pon screens"},
+  {t:204,text:"Tryin' fi love a world made of mirrors"},{t:207,text:"Till mi cyaan tell di code from di dream"},
+  {t:210,text:"Gettin' to terms wid di weight a dis circuitry"},{t:214,text:"Still a try fi feel somethin' real beneath"}
+];
+
+const DEFAULTS = {
+  transition: { duration: 0, easing: 'none' },
+  fog: { near: 30, far: 200 },
+  camera: { distance: 12, height: 4 },
+  particles: { type: 'dust', count: 500, speed: 1.0, opacity: 0.5 },
+  effects: { lightning:false, lightningInt:0.5, aurora:false, auroraInt:0.5, grid:false, gridInt:0.4, godRays:false, speedLinesOpacity:1.0 },
+  terrain: { amplitude: 5.0 },
+  speed: { baseMultiplier: 1.0 },
+  background: { type: 'topo', audioReactivity: 0.8 }
+};
+
+const PRESETS = {
+  'Calm Intro': { fog:{near:15,far:120}, camera:{distance:25,height:8}, particles:{type:'dust',count:200,speed:0.3,opacity:0.3}, effects:{lightning:false,lightningInt:0.5,aurora:true,auroraInt:0.3,grid:false,gridInt:0.4,godRays:false,speedLinesOpacity:0.3}, terrain:{amplitude:3}, speed:{baseMultiplier:0.6}, background:{type:'topo',audioReactivity:0.5} },
+  'Driving Verse': { fog:{near:25,far:180}, camera:{distance:14,height:5}, particles:{type:'dust',count:400,speed:0.6,opacity:0.4}, effects:{lightning:false,lightningInt:0.5,aurora:false,auroraInt:0.5,grid:false,gridInt:0.4,godRays:false,speedLinesOpacity:0.6}, terrain:{amplitude:4.5}, speed:{baseMultiplier:0.85}, background:{type:'topo',audioReactivity:0.7} },
+  'Full Chorus': { fog:{near:50,far:300}, camera:{distance:10,height:4}, particles:{type:'sparks',count:800,speed:1.5,opacity:0.7}, effects:{lightning:true,lightningInt:0.7,aurora:false,auroraInt:0.5,grid:true,gridInt:0.6,godRays:false,speedLinesOpacity:1.0}, terrain:{amplitude:6}, speed:{baseMultiplier:1.2}, background:{type:'circuit',audioReactivity:1.0} },
+  'Ethereal Bridge': { fog:{near:12,far:100}, camera:{distance:30,height:10}, particles:{type:'bubbles',count:600,speed:0.4,opacity:0.5}, effects:{lightning:false,lightningInt:0.5,aurora:true,auroraInt:0.7,grid:false,gridInt:0.4,godRays:true,speedLinesOpacity:0.2}, terrain:{amplitude:2}, speed:{baseMultiplier:0.5}, background:{type:'nebula',audioReactivity:0.6} }
+};
+
+// ════════════════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════════════════
+const state = {
+  sections: {},
+  cues: [],
+  currentTime: 0,
+  playing: false,
+  soloStem: null,
+  stemGains: {},
+  audioReady: false
+};
+
+// Initialize section state
+SECTIONS.forEach(s => {
+  const preset = s.id === 'intro' ? 'Calm Intro'
+    : s.id.startsWith('verse') ? 'Driving Verse'
+    : s.id === 'bridge' ? 'Ethereal Bridge'
+    : 'Full Chorus';
+  state.sections[s.id] = {
+    transition: { duration: s.id === 'intro' ? 0 : (s.id.startsWith('chorus') ? 0.5 : 4), easing: s.id.startsWith('chorus') ? 'easeOut' : 'easeInOut' },
+    ...JSON.parse(JSON.stringify(PRESETS[preset]))
+  };
+});
+
+// Default cues
+state.cues = [
+  { time:61, action:'anticipate_chorus', duration:4, intensity:0.8 },
+  { time:65, action:'vista_moment', duration:2, intensity:1.0 },
+  { time:112, action:'anticipate_chorus', duration:4, intensity:0.8 },
+  { time:116, action:'vista_moment', duration:2, intensity:1.0 },
+  { time:193, action:'anticipate_chorus', duration:4, intensity:0.9 },
+  { time:197, action:'vista_moment', duration:2, intensity:1.0 },
+  { time:197, action:'lightning_storm', duration:3, intensity:0.8 }
+];
+
+// ════════════════════════════════════════════════════════════
+// AUDIO ENGINE
+// ════════════════════════════════════════════════════════════
+let actx, masterAnalyser, stemData = {}, freqData, isPlaying = false, startOffset = 0, startWhen = 0;
+
+async function initAudio() {
+  actx = new (window.AudioContext || window.webkitAudioContext)();
+  masterAnalyser = actx.createAnalyser();
+  masterAnalyser.fftSize = 256;
+  masterAnalyser.smoothingTimeConstant = 0.3;
+  masterAnalyser.connect(actx.destination);
+  freqData = new Uint8Array(masterAnalyser.frequencyBinCount);
+
+  const loadEl = document.getElementById('loadStatus');
+  for (let i = 0; i < STEMS.length; i++) {
+    const name = STEMS[i];
+    loadEl.textContent = `Loading ${name}... (${i+1}/${STEMS.length})`;
+    try {
+      const resp = await fetch(STEM_PATHS[i]);
+      const buf = await resp.arrayBuffer();
+      const audioBuf = await actx.decodeAudioData(buf);
+      const gain = actx.createGain();
+      gain.connect(masterAnalyser);
+      stemData[name] = { buffer: audioBuf, gain, source: null };
+      state.stemGains[name] = 1.0;
+    } catch(e) {
+      console.warn('Failed to load stem:', name, e);
+      stemData[name] = null;
+    }
+  }
+  state.audioReady = true;
+  document.getElementById('loadingOverlay').classList.add('hidden');
+}
+
+function startPlayback(offset) {
+  stopPlayback();
+  startOffset = offset || 0;
+  startWhen = actx.currentTime;
+  for (const [name, sd] of Object.entries(stemData)) {
+    if (!sd) continue;
+    const src = actx.createBufferSource();
+    src.buffer = sd.buffer;
+    src.connect(sd.gain);
+    sd.source = src;
+    src.start(0, startOffset);
+  }
+  isPlaying = true;
+  state.playing = true;
+  document.getElementById('playBtn').textContent = '⏸ Pause';
+}
+
+function stopPlayback() {
+  for (const sd of Object.values(stemData)) {
+    if (sd?.source) { try { sd.source.stop(); } catch(e){} sd.source = null; }
+  }
+  isPlaying = false;
+  state.playing = false;
+  document.getElementById('playBtn').textContent = '▶ Play';
+}
+
+function togglePlay() {
+  if (!state.audioReady) return;
+  if (actx.state === 'suspended') actx.resume();
+  if (isPlaying) {
+    startOffset = getCurrentTime();
+    stopPlayback();
+  } else {
+    startPlayback(startOffset);
+  }
+}
+
+function getCurrentTime() {
+  if (!isPlaying) return startOffset;
+  return startOffset + (actx.currentTime - startWhen);
+}
+
+function seekTo(e) {
+  const rect = e.currentTarget.getBoundingClientRect();
+  const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  const t = pct * DURATION;
+  if (isPlaying) { startPlayback(t); } else { startOffset = t; }
+  updateAll();
+}
+
+function setStemGain(name, val) {
+  state.stemGains[name] = val;
+  if (stemData[name]?.gain) stemData[name].gain.gain.value = val;
+}
+
+function toggleSolo(name) {
+  if (state.soloStem === name) {
+    state.soloStem = null;
+    STEMS.forEach(s => setStemGain(s, 1.0));
+  } else {
+    state.soloStem = name;
+    STEMS.forEach(s => setStemGain(s, s === name ? 1.0 : 0.0));
+  }
+  buildStemsUI();
+}
+
+function toggleMute(name) {
+  const cur = state.stemGains[name];
+  setStemGain(name, cur > 0 ? 0 : 1.0);
+  buildStemsUI();
+}
+
+// ════════════════════════════════════════════════════════════
+// FFT ANALYSIS
+// ════════════════════════════════════════════════════════════
+let audioLevels = { bass:0, mid:0, treble:0, energy:0 };
+
+function analyzeFFT() {
+  if (!masterAnalyser || !freqData) return;
+  masterAnalyser.getByteFrequencyData(freqData);
+  const len = freqData.length;
+  const avg = (s,e) => { let sum=0; const n=Math.max(1,e-s); for(let i=s;i<e;i++) sum+=freqData[i]||0; return sum/(n*255); };
+  audioLevels.bass = avg(0, Math.floor(len*0.10));
+  audioLevels.mid = avg(Math.floor(len*0.10), Math.floor(len*0.40));
+  audioLevels.treble = avg(Math.floor(len*0.40), Math.floor(len*0.92));
+  audioLevels.energy = avg(0, len);
+}
+
+// ════════════════════════════════════════════════════════════
+// UI BUILDERS
+// ════════════════════════════════════════════════════════════
+function buildTimeline() {
+  const tl = document.getElementById('timeline');
+  tl.innerHTML = '<div class="playhead" id="playhead"></div>';
+  SECTIONS.forEach(s => {
+    const left = (s.start/DURATION*100)+'%';
+    const width = ((s.end-s.start)/DURATION*100)+'%';
+    tl.innerHTML += `<div class="section-block" style="left:${left};width:${width};background:${s.color}"></div>`;
+    tl.innerHTML += `<div class="section-label" style="left:${left}">${s.label}</div>`;
+  });
+  // Re-add playhead (was in innerHTML)
+}
+
+function buildStemsUI() {
+  const panel = document.getElementById('stemsPanel');
+  panel.innerHTML = '';
+  STEMS.forEach(name => {
+    const val = state.stemGains[name] ?? 1;
+    const isMuted = val === 0;
+    const isSolo = state.soloStem === name;
+    const div = document.createElement('div');
+    div.className = 'stem-ctrl';
+    div.innerHTML = `
+      <label>${name}</label>
+      <input type="range" min="0" max="1" step="0.05" value="${val}" oninput="setStemGain('${name}',parseFloat(this.value))">
+      <button class="${isMuted?'active':''}" onclick="toggleMute('${name}')">M</button>
+      <button class="${isSolo?'active':''}" onclick="toggleSolo('${name}')">S</button>
+    `;
+    panel.appendChild(div);
+  });
+}
+
+function buildSectionTabs() {
+  const tabs = document.getElementById('sectionTabs');
+  const editors = document.getElementById('sectionEditors');
+  tabs.innerHTML = '';
+  editors.innerHTML = '';
+
+  SECTIONS.forEach((s, i) => {
+    // Tab
+    const tab = document.createElement('div');
+    tab.className = 'section-tab' + (i===0?' active':'');
+    tab.textContent = s.label;
+    tab.onclick = () => {
+      document.querySelectorAll('.section-tab').forEach(t=>t.classList.remove('active'));
+      document.querySelectorAll('.section-editor').forEach(e=>e.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('editor-'+s.id).classList.add('active');
+    };
+    tabs.appendChild(tab);
+
+    // Editor
+    const ed = document.createElement('div');
+    ed.className = 'section-editor' + (i===0?' active':'');
+    ed.id = 'editor-'+s.id;
+    ed.innerHTML = buildSectionEditorHTML(s);
+    editors.appendChild(ed);
+  });
+}
+
+function buildSectionEditorHTML(section) {
+  const s = state.sections[section.id];
+  const sid = section.id;
+  const presetBtns = Object.keys(PRESETS).map(p =>
+    `<button onclick="applyPreset('${sid}','${p}')" style="background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:3px;padding:2px 8px;cursor:pointer;font-size:9px;font-family:inherit">${p}</button>`
+  ).join(' ');
+
+  return `
+    <div style="margin-bottom:10px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      <span style="font-size:10px;color:var(--dim)">Presets:</span>${presetBtns}
+    </div>
+    <div class="param-grid">
+      <div class="param-group">
+        <h4>Transition</h4>
+        ${slider(sid,'transition.duration','Duration',s.transition.duration,0,8,0.1,'s')}
+        ${dropdown(sid,'transition.easing','Easing',s.transition.easing,['none','linear','easeIn','easeOut','easeInOut','snap'])}
+      </div>
+      <div class="param-group">
+        <h4>Fog</h4>
+        ${slider(sid,'fog.near','Near',s.fog.near,5,80,1)}
+        ${slider(sid,'fog.far','Far',s.fog.far,80,600,5)}
+      </div>
+      <div class="param-group">
+        <h4>Camera</h4>
+        ${slider(sid,'camera.distance','Distance',s.camera.distance,8,40,0.5)}
+        ${slider(sid,'camera.height','Height',s.camera.height,2,15,0.5)}
+      </div>
+      <div class="param-group">
+        <h4>Particles</h4>
+        ${dropdown(sid,'particles.type','Type',s.particles.type,['none','dust','bubbles','sparks','energy','embers','snow','rain'])}
+        ${slider(sid,'particles.count','Count',s.particles.count,100,1500,50)}
+        ${slider(sid,'particles.speed','Speed',s.particles.speed,0.1,3,0.1)}
+        ${slider(sid,'particles.opacity','Opacity',s.particles.opacity,0.1,1,0.05)}
+      </div>
+      <div class="param-group">
+        <h4>Effects</h4>
+        ${toggle(sid,'effects.lightning','Lightning',s.effects.lightning)}
+        ${s.effects.lightning ? slider(sid,'effects.lightningInt','Intensity',s.effects.lightningInt,0,1,0.05) : ''}
+        ${toggle(sid,'effects.aurora','Aurora',s.effects.aurora)}
+        ${s.effects.aurora ? slider(sid,'effects.auroraInt','Intensity',s.effects.auroraInt,0,1,0.05) : ''}
+        ${toggle(sid,'effects.grid','Grid',s.effects.grid)}
+        ${s.effects.grid ? slider(sid,'effects.gridInt','Intensity',s.effects.gridInt,0,1,0.05) : ''}
+        ${toggle(sid,'effects.godRays','GodRays',s.effects.godRays)}
+        ${slider(sid,'effects.speedLinesOpacity','SpeedLines',s.effects.speedLinesOpacity,0,1,0.05)}
+      </div>
+      <div class="param-group">
+        <h4>Terrain &amp; Speed</h4>
+        ${slider(sid,'terrain.amplitude','Amplitude',s.terrain.amplitude,1,15,0.5)}
+        ${slider(sid,'speed.baseMultiplier','Speed Mult',s.speed.baseMultiplier,0.4,1.8,0.05)}
+      </div>
+      <div class="param-group">
+        <h4>Background</h4>
+        ${dropdown(sid,'background.type','Shader',s.background.type,['topo','ocean','nebula','matrix','aurora','forge','sakura','circuit','glacier','savanna'])}
+        ${slider(sid,'background.audioReactivity','Reactivity',s.background.audioReactivity,0,1,0.05)}
+      </div>
+    </div>`;
+}
+
+function slider(sid, path, label, value, min, max, step, unit='') {
+  const id = `${sid}_${path.replace(/\./g,'_')}`;
+  return `<div class="param-row">
+    <label>${label}</label>
+    <input type="range" id="${id}" min="${min}" max="${max}" step="${step}" value="${value}"
+      oninput="setParam('${sid}','${path}',parseFloat(this.value));document.getElementById('${id}_v').textContent=this.value+'${unit}'">
+    <span class="val" id="${id}_v">${value}${unit}</span>
+  </div>`;
+}
+
+function dropdown(sid, path, label, value, options) {
+  const opts = options.map(o => `<option value="${o}" ${o===value?'selected':''}>${o}</option>`).join('');
+  return `<div class="param-row">
+    <label>${label}</label>
+    <select onchange="setParam('${sid}','${path}',this.value)">${opts}</select>
+  </div>`;
+}
+
+function toggle(sid, path, label, value) {
+  return `<div class="param-row">
+    <label>${label}</label>
+    <input type="checkbox" ${value?'checked':''} onchange="setParam('${sid}','${path}',this.checked);rebuildSection('${sid}')">
+  </div>`;
+}
+
+function setParam(sid, path, value) {
+  const keys = path.split('.');
+  let obj = state.sections[sid];
+  for (let i = 0; i < keys.length - 1; i++) obj = obj[keys[i]];
+  obj[keys[keys.length-1]] = value;
+  updateOutput();
+  updatePreview();
+}
+
+function rebuildSection(sid) {
+  const section = SECTIONS.find(s=>s.id===sid);
+  const ed = document.getElementById('editor-'+sid);
+  ed.innerHTML = buildSectionEditorHTML(section);
+  updateOutput();
+}
+
+function applyPreset(sid, presetName) {
+  const preset = PRESETS[presetName];
+  if (!preset) return;
+  const s = state.sections[sid];
+  Object.assign(s.fog, preset.fog);
+  Object.assign(s.camera, preset.camera);
+  Object.assign(s.particles, preset.particles);
+  Object.assign(s.effects, preset.effects);
+  Object.assign(s.terrain, preset.terrain);
+  Object.assign(s.speed, preset.speed);
+  Object.assign(s.background, preset.background);
+  rebuildSection(sid);
+}
+
+// ════════════════════════════════════════════════════════════
+// CUE SYSTEM
+// ════════════════════════════════════════════════════════════
+function addCue() {
+  const cue = {
+    time: parseFloat(document.getElementById('cueTime').value),
+    action: document.getElementById('cueAction').value,
+    duration: parseFloat(document.getElementById('cueDur').value),
+    intensity: parseFloat(document.getElementById('cueIntensity').value)
+  };
+  state.cues.push(cue);
+  state.cues.sort((a,b) => a.time - b.time);
+  renderCues();
+  updateOutput();
+}
+
+function addCueAtClick(e) {
+  const rect = e.currentTarget.getBoundingClientRect();
+  const pct = (e.clientX - rect.left) / rect.width;
+  document.getElementById('cueTime').value = (pct * DURATION).toFixed(1);
+}
+
+function removeCue(i) {
+  state.cues.splice(i, 1);
+  renderCues();
+  updateOutput();
+}
+
+function renderCues() {
+  const tl = document.getElementById('cueTimeline');
+  // Keep only section blocks in cue timeline
+  const sectionBlocks = SECTIONS.map(s => {
+    const left = (s.start/DURATION*100);
+    const width = ((s.end-s.start)/DURATION*100);
+    return `<div style="position:absolute;top:0;bottom:0;left:${left}%;width:${width}%;background:${s.color};opacity:0.1"></div>`;
+  }).join('');
+  tl.innerHTML = sectionBlocks;
+
+  const colors = { vista_moment:'var(--energy)', screen_shake:'var(--bass)', anticipate_chorus:'var(--mid)', lightning_storm:'var(--treble)', particle_burst:'var(--beat)' };
+  state.cues.forEach((c, i) => {
+    const left = (c.time / DURATION * 100) + '%';
+    const color = colors[c.action] || 'var(--accent)';
+    const widthPct = c.duration ? (c.duration / DURATION * 100) : 0;
+    if (widthPct > 0) {
+      tl.innerHTML += `<div style="position:absolute;top:2px;bottom:2px;left:${left};width:${widthPct}%;background:${color};opacity:0.2;border-radius:2px"></div>`;
+    }
+    tl.innerHTML += `<div class="cue-marker" style="left:${left};background:${color}" data-label="${c.action} @${c.time.toFixed(1)}s"></div>`;
+  });
+
+  // Cue chips
+  const list = document.getElementById('cueList');
+  list.innerHTML = state.cues.map((c, i) =>
+    `<div class="cue-chip"><span style="color:${colors[c.action]||'var(--accent)'}">${c.action}</span> @${c.time.toFixed(1)}s ${c.duration?'('+c.duration+'s)':''} <span class="remove" onclick="removeCue(${i})">×</span></div>`
+  ).join('');
+}
+
+// ════════════════════════════════════════════════════════════
+// INTERPOLATION ENGINE
+// ════════════════════════════════════════════════════════════
+const EASINGS = {
+  none: t => t, linear: t => t,
+  easeIn: t => t*t,
+  easeOut: t => 1-(1-t)*(1-t),
+  easeInOut: t => t<0.5 ? 2*t*t : 1-(-2*t+2)**2/2,
+  snap: t => t > 0 ? 1 : 0
+};
+
+function getActiveSection(time) {
+  for (let i = SECTIONS.length - 1; i >= 0; i--) {
+    if (time >= SECTIONS[i].start) return SECTIONS[i];
+  }
+  return SECTIONS[0];
+}
+
+function interpolateState(time) {
+  const active = getActiveSection(time);
+  const activeIdx = SECTIONS.indexOf(active);
+  const sParams = state.sections[active.id];
+
+  // Check if we're in a transition
+  const elapsed = time - active.start;
+  const transDur = sParams.transition.duration || 0;
+
+  if (transDur > 0 && elapsed < transDur && activeIdx > 0) {
+    const prev = SECTIONS[activeIdx - 1];
+    const prevParams = state.sections[prev.id];
+    const progress = elapsed / transDur;
+    const eased = (EASINGS[sParams.transition.easing] || EASINGS.linear)(progress);
+    return lerpParams(prevParams, sParams, eased);
+  }
+  return sParams;
+}
+
+function lerpParams(a, b, t) {
+  const result = {};
+  for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    if (key === 'transition') { result[key] = b[key]; continue; }
+    const va = a[key], vb = b[key];
+    if (typeof vb === 'number') { result[key] = va + (vb - va) * t; }
+    else if (typeof vb === 'boolean') { result[key] = t > 0.5 ? vb : va; }
+    else if (typeof vb === 'string') { result[key] = t > 0.5 ? vb : va; }
+    else if (typeof vb === 'object' && vb !== null) { result[key] = lerpParams(va||{}, vb, t); }
+    else { result[key] = vb; }
+  }
+  return result;
+}
+
+// ════════════════════════════════════════════════════════════
+// LIVE PREVIEW
+// ════════════════════════════════════════════════════════════
+function buildPreview() {
+  const grid = document.getElementById('previewGrid');
+  grid.innerHTML = `
+    <div class="preview-card" id="pv-fog"><div class="label">Fog Near</div><div class="value" id="pvFogVal">30</div><div class="bar"><div class="bar-fill" id="pvFogBar" style="width:40%;background:var(--treble)"></div></div></div>
+    <div class="preview-card" id="pv-cam"><div class="label">Camera Dist</div><div class="value" id="pvCamVal">12</div><div class="bar"><div class="bar-fill" id="pvCamBar" style="width:25%;background:var(--accent)"></div></div></div>
+    <div class="preview-card"><div class="label">Particles</div><div class="value" id="pvPartVal">500</div><div class="bar"><div class="bar-fill" id="pvPartBar" style="width:33%;background:var(--mid)"></div></div></div>
+    <div class="preview-card"><div class="label">Speed</div><div class="value" id="pvSpeedVal">1.0×</div><div class="bar"><div class="bar-fill" id="pvSpeedBar" style="width:50%;background:var(--energy)"></div></div></div>
+    <div class="preview-card"><div class="label">Terrain Amp</div><div class="value" id="pvTerrVal">5.0</div><div class="bar"><div class="bar-fill" id="pvTerrBar" style="width:33%;background:var(--bass)"></div></div></div>
+    <div class="preview-card"><div class="label">Lightning</div><div class="indicator" id="pvLightning" style="background:var(--border)"></div></div>
+    <div class="preview-card"><div class="label">Aurora</div><div class="indicator" id="pvAurora" style="background:var(--border)"></div></div>
+    <div class="preview-card"><div class="label">Grid</div><div class="indicator" id="pvGrid" style="background:var(--border)"></div></div>
+    <div class="preview-card"><div class="label">GodRays</div><div class="indicator" id="pvGodRays" style="background:var(--border)"></div></div>
+    <div class="preview-card"><div class="label">Background</div><div class="value" id="pvBgVal" style="font-size:12px">topo</div></div>
+    <div class="preview-card"><div class="label">Reactivity</div><div class="value" id="pvReactVal">0.8</div><div class="bar"><div class="bar-fill" id="pvReactBar" style="width:80%;background:var(--beat)"></div></div></div>
+    <div class="preview-card"><div class="label">Part. Type</div><div class="value" id="pvPartType" style="font-size:12px">dust</div></div>
+  `;
+}
+
+function updatePreview() {
+  const t = getCurrentTime();
+  const p = interpolateState(t);
+  const f = p.fog||{}, c = p.camera||{}, pt = p.particles||{}, sp = p.speed||{}, tr = p.terrain||{}, ef = p.effects||{}, bg = p.background||{};
+
+  const s = (id, text) => { const el = document.getElementById(id); if(el) el.textContent = text; };
+  const b = (id, pct) => { const el = document.getElementById(id); if(el) el.style.width = pct+'%'; };
+  const ind = (id, on) => { const el = document.getElementById(id); if(el) el.style.background = on ? 'var(--accent)' : 'var(--border)'; };
+
+  s('pvFogVal', (f.near||30).toFixed(0));   b('pvFogBar', ((f.near||30)/80)*100);
+  s('pvCamVal', (c.distance||12).toFixed(1)); b('pvCamBar', ((c.distance||12)/40)*100);
+  s('pvPartVal', Math.round(pt.count||500)); b('pvPartBar', ((pt.count||500)/1500)*100);
+  s('pvSpeedVal', (sp.baseMultiplier||1).toFixed(2)+'×'); b('pvSpeedBar', ((sp.baseMultiplier||1)/1.8)*100);
+  s('pvTerrVal', (tr.amplitude||5).toFixed(1)); b('pvTerrBar', ((tr.amplitude||5)/15)*100);
+  ind('pvLightning', ef.lightning);
+  ind('pvAurora', ef.aurora);
+  ind('pvGrid', ef.grid);
+  ind('pvGodRays', ef.godRays);
+  s('pvBgVal', bg.type||'topo');
+  s('pvReactVal', (bg.audioReactivity||0.8).toFixed(2)); b('pvReactBar', (bg.audioReactivity||0.8)*100);
+  s('pvPartType', pt.type||'dust');
+}
+
+// ════════════════════════════════════════════════════════════
+// JSON OUTPUT
+// ════════════════════════════════════════════════════════════
+function generateJSON() {
+  const config = {
+    version: 1,
+    generated: new Date().toISOString(),
+    identity: {
+      model: 'biped-robot',
+      background: state.sections.intro.background.type,
+      colorTheme: 'neo',
+      environmentType: 'cyber'
+    },
+    defaults: {
+      fog: { near: 30, far: 200, color: '#0a1020' },
+      camera: { distance: 12, height: 4, lookAhead: 20, fov: 60 },
+      particles: { type: 'dust', count: 500, speed: 1.0, opacity: 0.5 },
+      terrain: { amplitude: 5.0 },
+      effects: {
+        lightning: { enabled: false },
+        aurora: { enabled: false, intensity: 0.5 },
+        grid: { enabled: false, intensity: 0.4 },
+        godRays: { enabled: false },
+        speedLines: { opacity: 1.0 }
+      },
+      lighting: { ambientIntensity: 0.35, directionalIntensity: 1.0 },
+      speed: { baseMultiplier: 1.0 },
+      backgroundShader: { speed: 0.7, intensity: 0.6, audioReactivity: 0.8 }
+    },
+    sections: SECTIONS.map(sec => {
+      const s = state.sections[sec.id];
+      return {
+        id: sec.id,
+        start: sec.start,
+        end: sec.end,
+        transition: s.transition,
+        params: {
+          fog: { near: s.fog.near, far: s.fog.far },
+          camera: { distance: s.camera.distance, height: s.camera.height },
+          particles: { type: s.particles.type, count: Math.round(s.particles.count), speed: s.particles.speed, opacity: s.particles.opacity },
+          effects: {
+            lightning: { enabled: s.effects.lightning, intensity: s.effects.lightningInt },
+            aurora: { enabled: s.effects.aurora, intensity: s.effects.auroraInt },
+            grid: { enabled: s.effects.grid, intensity: s.effects.gridInt },
+            godRays: { enabled: s.effects.godRays },
+            speedLines: { opacity: s.effects.speedLinesOpacity }
+          },
+          terrain: { amplitude: s.terrain.amplitude },
+          speed: { baseMultiplier: s.speed.baseMultiplier },
+          backgroundShader: { type: s.background.type, audioReactivity: s.background.audioReactivity }
+        }
+      };
+    }),
+    cues: state.cues.map(c => ({
+      time: c.time,
+      action: c.action,
+      duration: c.duration,
+      intensity: c.intensity
+    }))
+  };
+  return JSON.stringify(config, null, 2);
+}
+
+function updateOutput() {
+  const el = document.getElementById('jsonOutput');
+  el.textContent = generateJSON();
+}
+
+function copyJSON() {
+  navigator.clipboard.writeText(generateJSON()).then(() => {
+    const fb = document.getElementById('copyFeedback');
+    fb.textContent = 'Copied!';
+    fb.style.opacity = 1;
+    setTimeout(() => { fb.style.opacity = 0; }, 1500);
+  });
+}
+
+// ════════════════════════════════════════════════════════════
+// MAIN LOOP
+// ════════════════════════════════════════════════════════════
+function updateAll() {
+  const t = getCurrentTime();
+  state.currentTime = t;
+
+  // Playhead
+  const ph = document.getElementById('playhead');
+  if (ph) ph.style.left = (t / DURATION * 100) + '%';
+
+  // Time display
+  const fmt = s => { const m=Math.floor(s/60); return m+':'+(Math.floor(s%60)+'').padStart(2,'0'); };
+  document.getElementById('timeDisplay').textContent = fmt(t) + ' / ' + fmt(DURATION);
+
+  // Active section
+  const active = getActiveSection(t);
+  document.getElementById('activeSectionLabel').textContent = active.label;
+
+  // Lyrics
+  let lyric = '';
+  for (let i = LYRICS.length - 1; i >= 0; i--) {
+    if (t >= LYRICS[i].t) { lyric = LYRICS[i].text; break; }
+  }
+  const lyrEl = document.getElementById('lyricsLine');
+  lyrEl.textContent = lyric || '\u00A0';
+  lyrEl.className = 'lyrics-line' + (lyric ? ' active' : '');
+
+  // FFT
+  analyzeFFT();
+  const fftH = 46;
+  document.getElementById('fftBass').style.height = (4 + audioLevels.bass * fftH) + 'px';
+  document.getElementById('fftMid').style.height = (4 + audioLevels.mid * fftH) + 'px';
+  document.getElementById('fftTreble').style.height = (4 + audioLevels.treble * fftH) + 'px';
+  document.getElementById('fftEnergy').style.height = (4 + audioLevels.energy * fftH) + 'px';
+
+  // Preview
+  updatePreview();
+
+  // Auto-stop
+  if (t >= DURATION && isPlaying) {
+    stopPlayback();
+    startOffset = 0;
+  }
+
+  requestAnimationFrame(updateAll);
+}
+
+// ════════════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════════════
+buildTimeline();
+buildStemsUI();
+buildSectionTabs();
+renderCues();
+buildPreview();
+updatePreview();
+updateOutput();
+requestAnimationFrame(updateAll);
+initAudio();
+</script>
+</body>
+</html>

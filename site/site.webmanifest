@@ -1,0 +1,24 @@
+{
+  "name": "Code from Dream — DeytaDreams",
+  "short_name": "Code from Dream",
+  "description": "Original music split into stems and fed to a 3D world that listens back. What stays human when everything becomes signal.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#070a18",
+  "theme_color": "#070a18",
+  "orientation": "any",
+  "categories": ["music", "entertainment"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.ico",
+      "sizes": "48x48",
+      "type": "image/x-icon"
+    }
+  ]
+}

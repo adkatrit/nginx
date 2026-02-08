@@ -1,0 +1,1504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SEO Command Center | Code from Dream</title>
+<meta name="robots" content="noindex, nofollow">
+<style>
+/* ══════════════════════════════════════════════════════════════
+   SEO COMMAND CENTER — Sonar/Radar aesthetic
+   Mission control for jrod.dev visibility operations
+   ══════════════════════════════════════════════════════════════ */
+
+:root {
+  --bg-void: #040810;
+  --bg-deep: #070a18;
+  --bg-panel: #0a0f1e;
+  --bg-card: #0d1225;
+  --bg-elevated: #111832;
+  --border: #1a2548;
+  --border-active: #2a3a68;
+  --text: #c8d4f0;
+  --text-dim: #5a6888;
+  --text-bright: #e8eeff;
+  --green: #3cff6b;
+  --green-dim: #1a8f3a;
+  --green-glow: rgba(60, 255, 107, 0.15);
+  --green-ghost: rgba(60, 255, 107, 0.06);
+  --cyan: #00d4ff;
+  --cyan-dim: #0078a0;
+  --amber: #ffb800;
+  --amber-dim: #8a6200;
+  --red: #ff4466;
+  --red-dim: #8a2233;
+  --purple: #aa66ff;
+  --radius: 4px;
+  --mono: 'Cascadia Mono', 'JetBrains Mono', 'Fira Code', ui-monospace, Consolas, monospace;
+  --sans: 'DM Sans', 'Segoe UI', system-ui, sans-serif;
+}
+
+@font-face { font-family: 'DM Sans'; src: url('https://fonts.gstatic.com/s/dmsans/v15/rP2tp2ywxg089UriI5-g4vlH9VoD8CmcqZG40F9JadbnoEwAkpxhR-3y.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'DM Sans'; src: url('https://fonts.gstatic.com/s/dmsans/v15/rP2tp2ywxg089UriI5-g4vlH9VoD8CmcqZG40F9JadbnoEwAopFhR-3y.woff2') format('woff2'); font-weight: 600; font-display: swap; }
+@font-face { font-family: 'DM Sans'; src: url('https://fonts.gstatic.com/s/dmsans/v15/rP2tp2ywxg089UriI5-g4vlH9VoD8CmcqZG40F9JadbnoEwAi5FhR-3y.woff2') format('woff2'); font-weight: 700; font-display: swap; }
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { scroll-behavior: smooth; scrollbar-width: thin; scrollbar-color: #1a2548 #070a18; }
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-deep); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+body {
+  font-family: var(--sans);
+  background: var(--bg-void);
+  color: var(--text);
+  line-height: 1.55;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── SCAN LINE OVERLAY ── */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.03) 2px,
+    rgba(0, 0, 0, 0.03) 4px
+  );
+}
+
+/* ── LAYOUT ── */
+.layout { display: flex; min-height: 100vh; }
+
+/* ── SIDEBAR NAV ── */
+.sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  background: var(--bg-deep);
+  border-right: 1px solid var(--border);
+  padding: 24px 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.sidebar-logo {
+  padding: 0 20px 20px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+
+.sidebar-logo h1 {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--green);
+  margin-bottom: 2px;
+}
+
+.sidebar-logo .subtitle {
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.nav-section {
+  padding: 12px 12px 4px;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 20px;
+  font-size: 12px;
+  color: var(--text-dim);
+  text-decoration: none;
+  transition: all 0.15s;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+}
+
+.nav-link:hover {
+  color: var(--text);
+  background: var(--green-ghost);
+  border-left-color: var(--green-dim);
+}
+
+.nav-link.active {
+  color: var(--green);
+  background: var(--green-ghost);
+  border-left-color: var(--green);
+}
+
+.nav-link .nav-icon { font-size: 14px; width: 18px; text-align: center; opacity: 0.7; }
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+}
+
+.domain-badge {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--green);
+  background: var(--green-ghost);
+  padding: 6px 12px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(60, 255, 107, 0.15);
+  display: block;
+  text-align: center;
+  text-decoration: none;
+}
+
+/* ── MAIN CONTENT ── */
+.main {
+  margin-left: 220px;
+  flex: 1;
+  padding: 32px 40px 80px;
+  max-width: 1200px;
+}
+
+/* ── SECTION HEADERS ── */
+.section { margin-bottom: 48px; scroll-margin-top: 24px; }
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.section-header .icon {
+  font-size: 18px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--green-ghost);
+  border: 1px solid rgba(60, 255, 107, 0.12);
+  border-radius: var(--radius);
+}
+
+.section-header h2 {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-bright);
+}
+
+.section-header .tag {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 2px;
+  background: var(--bg-elevated);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+}
+
+/* ── HERO SCORE ── */
+.hero {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 32px;
+  margin-bottom: 48px;
+  padding: 32px;
+  background: linear-gradient(135deg, var(--bg-panel) 0%, var(--bg-deep) 100%);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--green), transparent);
+  opacity: 0.4;
+}
+
+.gauge-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.gauge {
+  width: 200px;
+  height: 200px;
+  position: relative;
+}
+
+.gauge svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+
+.gauge-bg {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 8;
+}
+
+.gauge-fill {
+  fill: none;
+  stroke: var(--green);
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-dasharray: 565.48;
+  stroke-dashoffset: 565.48;
+  transition: stroke-dashoffset 2s cubic-bezier(0.4, 0, 0.2, 1);
+  filter: drop-shadow(0 0 8px rgba(60, 255, 107, 0.4));
+}
+
+.gauge-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.gauge-value {
+  font-family: var(--mono);
+  font-size: 52px;
+  font-weight: 700;
+  color: var(--green);
+  line-height: 1;
+  text-shadow: 0 0 20px rgba(60, 255, 107, 0.3);
+}
+
+.gauge-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+.gauge-sublabel {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.checklist-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.check-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 0.1s;
+  user-select: none;
+}
+
+.check-item:hover { background: var(--green-ghost); }
+
+.check-item .indicator {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.check-item.done .indicator { background: var(--green); color: var(--bg-void); }
+.check-item.pending .indicator { background: var(--border); color: var(--text-dim); }
+.check-item.done .label { color: var(--text); }
+.check-item.pending .label { color: var(--text-dim); }
+
+.check-item .pts {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+/* ── SOCIAL PREVIEW ── */
+.platform-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.platform-tab {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 6px 16px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-card);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.platform-tab:hover { border-color: var(--border-active); color: var(--text); }
+.platform-tab.active { border-color: var(--green); color: var(--green); background: var(--green-ghost); }
+
+.preview-card {
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  max-width: 520px;
+}
+
+.preview-card.discord { background: #2b2d31; border-color: #1e1f22; }
+.preview-card.twitter { background: #000; border-color: #2f3336; }
+.preview-card.linkedin { background: #1b1f23; border-color: #38434f; }
+.preview-card.facebook { background: #242526; border-color: #3a3b3c; }
+.preview-card.imessage { background: #1c1c1e; border-color: #38383a; border-radius: 16px; }
+
+.preview-card .og-image {
+  width: 100%;
+  aspect-ratio: 1200/630;
+  background: var(--bg-deep) url('/og-image.png') center/cover no-repeat;
+  border-bottom: 1px solid var(--border);
+}
+
+.preview-card .og-meta { padding: 12px 16px; }
+
+.preview-card .og-site {
+  font-size: 11px;
+  color: #8899a6;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+
+.preview-card .og-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.preview-card.discord .og-title { color: #00aff4; }
+.preview-card.twitter .og-title { color: #e7e9ea; }
+.preview-card.linkedin .og-title { color: #e0e0e0; }
+.preview-card.facebook .og-title { color: #e4e6eb; }
+.preview-card.imessage .og-title { color: #fff; }
+
+.preview-card .og-desc {
+  font-size: 13px;
+  color: #8899a6;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.preview-card.discord .og-meta { border-left: 4px solid #5865f2; padding-left: 12px; }
+.preview-card.imessage .og-meta { text-align: center; }
+
+/* ── TRACK CARDS ── */
+.tracks-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
+}
+
+.track-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+
+.track-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 3px;
+  height: 100%;
+  transition: background 0.2s;
+}
+
+.track-card:hover { border-color: var(--border-active); transform: translateY(-1px); }
+.track-card:hover::before { background: var(--green); }
+
+.track-card.expanded { border-color: var(--green-dim); }
+.track-card.expanded::before { background: var(--green); }
+
+.track-name {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text-bright);
+  margin-bottom: 4px;
+}
+
+.track-env {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 12px;
+  font-style: italic;
+}
+
+.keyword-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+
+.keyword-tag {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 2px;
+  background: var(--bg-elevated);
+  color: var(--cyan);
+  border: 1px solid rgba(0, 212, 255, 0.15);
+}
+
+.track-expanded {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease, margin 0.3s ease, opacity 0.3s ease;
+  opacity: 0;
+  margin-top: 0;
+}
+
+.track-card.expanded .track-expanded {
+  max-height: 300px;
+  opacity: 1;
+  margin-top: 12px;
+}
+
+.track-expanded .detail-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.track-expanded .detail-label { color: var(--text-dim); }
+.track-expanded .detail-value { color: var(--text); font-family: var(--mono); font-size: 11px; }
+
+.density-bar {
+  display: flex;
+  gap: 1px;
+  margin-top: 8px;
+}
+
+.density-bar .bar {
+  flex: 1;
+  height: 4px;
+  border-radius: 1px;
+  background: var(--border);
+}
+
+.density-bar .bar.filled { background: var(--green); }
+
+/* ── CRAWL MAP ── */
+.crawl-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.crawl-node {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+
+.crawl-node .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.crawl-node .status-dot.allowed { background: var(--green); box-shadow: 0 0 6px var(--green-dim); }
+.crawl-node .status-dot.blocked { background: var(--red); box-shadow: 0 0 6px var(--red-dim); }
+
+.crawl-node .path { color: var(--text); flex: 1; }
+.crawl-node .priority { color: var(--text-dim); font-size: 10px; }
+.crawl-node .rule { color: var(--text-dim); font-size: 10px; margin-left: auto; }
+
+.crawl-indent { margin-left: 24px; }
+.crawl-indent-2 { margin-left: 48px; }
+
+.crawl-divider {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 12px 0 4px;
+}
+
+/* ── ANALYTICS ── */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 16px;
+  text-align: center;
+}
+
+.stat-value {
+  font-family: var(--mono);
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--green);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.stat-value.cyan { color: var(--cyan); }
+.stat-value.amber { color: var(--amber); }
+.stat-value.purple { color: var(--purple); }
+
+.stat-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.lang-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 24px;
+}
+
+.lang-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.lang-bar-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  width: 80px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.lang-bar-track {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-elevated);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.lang-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.lang-bar-value {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  width: 40px;
+}
+
+/* Session timeline */
+.session-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.session-entry {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  font-size: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  transition: all 0.15s;
+}
+
+.session-entry:hover { border-color: var(--border-active); }
+
+.session-num {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  width: 24px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.session-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.session-dot.feature { background: var(--green); }
+.session-dot.bugfix { background: var(--red); }
+.session-dot.config { background: var(--amber); }
+.session-dot.ui { background: var(--cyan); }
+.session-dot.seo { background: var(--purple); }
+.session-dot.research { background: var(--text-dim); }
+
+.session-text { color: var(--text); flex: 1; }
+
+.session-type {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 2px;
+  border: 1px solid;
+  flex-shrink: 0;
+}
+
+.session-type.feature { color: var(--green); border-color: var(--green-dim); }
+.session-type.bugfix { color: var(--red); border-color: var(--red-dim); }
+.session-type.config { color: var(--amber); border-color: var(--amber-dim); }
+.session-type.ui { color: var(--cyan); border-color: var(--cyan-dim); }
+.session-type.seo { color: var(--purple); border-color: rgba(170, 102, 255, 0.4); }
+.session-type.research { color: var(--text-dim); border-color: var(--border); }
+
+/* ── ACTION ITEMS ── */
+.actions-list { display: flex; flex-direction: column; gap: 4px; }
+
+.action-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+  user-select: none;
+}
+
+.action-item:hover { border-color: var(--border-active); }
+.action-item.checked { opacity: 0.5; }
+.action-item.checked .action-text { text-decoration: line-through; }
+
+.action-check {
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--border);
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: transparent;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.action-item.checked .action-check {
+  background: var(--green);
+  border-color: var(--green);
+  color: var(--bg-void);
+}
+
+.action-priority {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  font-weight: 600;
+}
+
+.action-priority.high { background: rgba(255, 68, 102, 0.15); color: var(--red); border: 1px solid rgba(255, 68, 102, 0.25); }
+.action-priority.medium { background: rgba(255, 184, 0, 0.1); color: var(--amber); border: 1px solid rgba(255, 184, 0, 0.2); }
+.action-priority.low { background: var(--bg-elevated); color: var(--text-dim); border: 1px solid var(--border); }
+
+.action-text { font-size: 13px; color: var(--text); flex: 1; }
+
+/* ── CODE VIEWER ── */
+.code-block {
+  background: var(--bg-void);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.code-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  cursor: pointer;
+  user-select: none;
+}
+
+.code-header .arrow {
+  font-size: 10px;
+  transition: transform 0.2s;
+  color: var(--text-dim);
+}
+
+.code-header.open .arrow { transform: rotate(90deg); }
+
+.code-header .filename { color: var(--cyan); }
+
+.code-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.4s ease;
+}
+
+.code-body.open { max-height: 2000px; }
+
+.code-body pre {
+  padding: 16px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text);
+  overflow-x: auto;
+  white-space: pre;
+  tab-size: 2;
+}
+
+.code-body .kw { color: var(--purple); }
+.code-body .str { color: var(--green); }
+.code-body .num { color: var(--amber); }
+.code-body .cm { color: var(--text-dim); font-style: italic; }
+.code-body .prop { color: var(--cyan); }
+.code-body .tag { color: var(--red); }
+
+/* ── COLLAPSIBLE ── */
+.collapsible-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.collapsible-trigger .caret {
+  font-size: 10px;
+  color: var(--text-dim);
+  transition: transform 0.2s;
+}
+
+.collapsible-trigger.open .caret { transform: rotate(90deg); }
+
+.collapsible-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.4s ease;
+}
+
+.collapsible-content.open { max-height: 5000px; }
+
+/* ── UTILITY ── */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.mb-16 { margin-bottom: 16px; }
+.mb-24 { margin-bottom: 24px; }
+
+/* ── PULSE ANIMATION ── */
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+.pulse { animation: pulse-glow 3s ease-in-out infinite; }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 900px) {
+  .sidebar { display: none; }
+  .main { margin-left: 0; padding: 20px; }
+  .hero { grid-template-columns: 1fr; }
+  .grid-2 { grid-template-columns: 1fr; }
+  .checklist-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════ SIDEBAR ══════════ -->
+<div class="layout">
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <h1>SEO Command</h1>
+    <div class="subtitle">Code from Dream</div>
+  </div>
+
+  <div class="nav-section">Overview</div>
+  <a class="nav-link active" data-target="health"><span class="nav-icon">◉</span> Health Score</a>
+  <a class="nav-link" data-target="social"><span class="nav-icon">◈</span> Social Preview</a>
+
+  <div class="nav-section">Content</div>
+  <a class="nav-link" data-target="tracks"><span class="nav-icon">♫</span> Track Catalog</a>
+  <a class="nav-link" data-target="crawl"><span class="nav-icon">⌘</span> Crawl Map</a>
+  <a class="nav-link" data-target="structured"><span class="nav-icon">{ }</span> Structured Data</a>
+
+  <div class="nav-section">Intelligence</div>
+  <a class="nav-link" data-target="analytics"><span class="nav-icon">◫</span> Analytics</a>
+  <a class="nav-link" data-target="actions"><span class="nav-icon">▶</span> Action Items</a>
+
+  <div class="nav-section">Config</div>
+  <a class="nav-link" data-target="server"><span class="nav-icon">⚙</span> Server Config</a>
+
+  <div class="sidebar-footer">
+    <a class="domain-badge" href="https://jrod.dev" target="_blank">jrod.dev ↗</a>
+  </div>
+</nav>
+
+<!-- ══════════ MAIN CONTENT ══════════ -->
+<main class="main">
+
+<!-- ── HEALTH SCORE ── -->
+<section class="section" id="health">
+  <div class="hero">
+    <div class="gauge-container">
+      <div class="gauge">
+        <svg viewBox="0 0 200 200">
+          <circle class="gauge-bg" cx="100" cy="100" r="90" />
+          <circle class="gauge-fill" id="gaugeFill" cx="100" cy="100" r="90" />
+        </svg>
+        <div class="gauge-center">
+          <div class="gauge-value" id="gaugeValue">0</div>
+          <div class="gauge-label">SEO Score</div>
+        </div>
+      </div>
+      <div class="gauge-sublabel" id="gaugeSublabel">16 of 18 checks passing</div>
+    </div>
+
+    <div>
+      <div class="section-header" style="border:none;padding:0;margin-bottom:12px;">
+        <h2 style="font-size:12px;">Implementation Status</h2>
+        <span class="tag">15 items</span>
+      </div>
+      <div class="checklist-grid" id="seoChecklist">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── SOCIAL PREVIEW ── -->
+<section class="section" id="social">
+  <div class="section-header">
+    <div class="icon">◈</div>
+    <h2>Social Preview Simulator</h2>
+    <span class="tag">Open Graph</span>
+  </div>
+  <div class="platform-tabs" id="platformTabs"></div>
+  <div id="previewContainer"></div>
+</section>
+
+<!-- ── TRACK CATALOG ── -->
+<section class="section" id="tracks">
+  <div class="section-header">
+    <div class="icon">♫</div>
+    <h2>Track Catalog & Keywords</h2>
+    <span class="tag">5 active</span>
+  </div>
+  <div class="tracks-grid" id="tracksGrid"></div>
+</section>
+
+<!-- ── CRAWL MAP ── -->
+<section class="section" id="crawl">
+  <div class="section-header">
+    <div class="icon">⌘</div>
+    <h2>Crawl & Index Map</h2>
+    <span class="tag">robots.txt + sitemap</span>
+  </div>
+  <div class="grid-2">
+    <div>
+      <div class="crawl-divider">Sitemap — Indexed Pages</div>
+      <div class="crawl-tree" id="sitemapTree"></div>
+    </div>
+    <div>
+      <div class="crawl-divider">Robots.txt — Blocked Paths</div>
+      <div class="crawl-tree" id="blockedTree"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── STRUCTURED DATA ── -->
+<section class="section" id="structured">
+  <div class="section-header">
+    <div class="icon">{ }</div>
+    <h2>Structured Data</h2>
+    <span class="tag">JSON-LD</span>
+  </div>
+  <div id="structuredDataViewer"></div>
+</section>
+
+<!-- ── ANALYTICS ── -->
+<section class="section" id="analytics">
+  <div class="section-header">
+    <div class="icon">◫</div>
+    <h2>Analytics & Development Intelligence</h2>
+    <span class="tag">GA4 + Claude Code</span>
+  </div>
+
+  <div style="font-family:var(--mono);font-size:11px;color:var(--text-dim);margin-bottom:16px;padding:8px 12px;background:var(--bg-card);border:1px solid var(--border);border-radius:3px;display:inline-block;">
+    GA4 Property: <span style="color:var(--cyan);">G-NRQ96GQ70K</span>
+  </div>
+
+  <div class="stats-row" id="devStats"></div>
+
+  <div class="section-header" style="margin-top:24px;">
+    <h2 style="font-size:11px;">Language Distribution</h2>
+  </div>
+  <div class="lang-bars" id="langBars"></div>
+
+  <div class="section-header" style="margin-top:24px;">
+    <h2 style="font-size:11px;">Development Session Timeline</h2>
+    <span class="tag">13 sessions</span>
+  </div>
+  <div class="session-timeline" id="sessionTimeline"></div>
+</section>
+
+<!-- ── ACTION ITEMS ── -->
+<section class="section" id="actions">
+  <div class="section-header">
+    <div class="icon">▶</div>
+    <h2>Marketing Action Items</h2>
+    <span class="tag" id="actionsTag">0 remaining</span>
+  </div>
+  <div class="actions-list" id="actionsList"></div>
+</section>
+
+<!-- ── SERVER CONFIG ── -->
+<section class="section" id="server">
+  <div class="section-header">
+    <div class="icon">⚙</div>
+    <h2>Server Configuration</h2>
+    <span class="tag">nginx</span>
+  </div>
+  <div id="serverConfig"></div>
+</section>
+
+</main>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   DATA & LOGIC
+   ═══════════════════════════════════════════════════════════════ */
+
+// ── SEO Checklist ──
+const seoItems = [
+  { label: 'Title tag', pts: 10, done: true },
+  { label: 'Meta description', pts: 10, done: true },
+  { label: 'Canonical URL', pts: 5, done: true },
+  { label: 'Open Graph tags', pts: 10, done: true },
+  { label: 'Twitter Card', pts: 10, done: true },
+  { label: 'JSON-LD schemas', pts: 10, done: true },
+  { label: 'robots.txt', pts: 5, done: true },
+  { label: 'sitemap.xml', pts: 5, done: true },
+  { label: 'Web manifest', pts: 5, done: true },
+  { label: 'Security headers', pts: 5, done: true },
+  { label: 'Gzip compression', pts: 5, done: true },
+  { label: 'ARIA accessibility', pts: 5, done: true },
+  { label: 'Noscript fallback', pts: 5, done: true },
+  { label: 'Content Security Policy', pts: 5, done: true, id: 'csp' },
+  { label: 'GA4 all pages', pts: 5, done: true, id: 'ga4all' },
+  { label: 'Deep links', pts: 5, done: true, id: 'deeplinks' },
+  { label: 'Search Console', pts: 5, done: false, id: 'gsc' },
+  { label: 'Bing Webmaster', pts: 5, done: false, id: 'bing' },
+];
+
+// ── Tracks ──
+const tracks = [
+  { name: 'Terms & Conditions', env: 'Digital dystopia with glass towers and holographic contracts',
+    keywords: ['digital dystopia', 'electronic', 'glass towers', 'holographic', 'reggae-infused'],
+    genre: 'Electronic / Reggae', density: 7 },
+  { name: 'Data Tide', env: 'Underwater bioluminescent ocean with coral towers and jellyfish',
+    keywords: ['bioluminescent', 'underwater', 'coral towers', 'ocean', 'ambient'],
+    genre: 'Electronic / Ambient', density: 8 },
+  { name: 'Signal Integrity', env: 'Clean technical oscilloscope and data streams',
+    keywords: ['oscilloscope', 'data streams', 'technical', 'electronic', 'synth-driven'],
+    genre: 'Electronic / Synth', density: 6 },
+  { name: 'Trade You My Hands', env: 'Metamorphosis and human-AI symbiosis',
+    keywords: ['metamorphosis', 'human-AI', 'symbiosis', 'emotional', 'atmospheric'],
+    genre: 'Electronic / Emotional', density: 7 },
+  { name: 'Turn Your Phone Face Down', env: 'Warm intimate space, human connection vs digital life',
+    keywords: ['intimate', 'warmth', 'connection', 'contemplative', 'digital detox'],
+    genre: 'Electronic / Contemplative', density: 9 },
+];
+
+// ── Sitemap ──
+const sitemapPages = [
+  { path: '/', priority: '1.0', label: 'Main App' },
+  { path: '/architecture.html', priority: '0.6', label: 'Architecture Docs' },
+  { path: '/docs/audio-reactivity.html', priority: '0.6', label: 'Audio-Reactivity Docs' },
+  { path: '/sandbox.html', priority: '0.4', label: 'Sandbox' },
+];
+
+const blockedPaths = [
+  { path: '/_archive/*', rule: 'robots.txt' },
+  { path: '/models/*', rule: 'robots.txt' },
+  { path: '/tracks/*/*.mp3', rule: 'robots.txt' },
+  { path: '/tracks/*/*.mid', rule: 'robots.txt' },
+  { path: '/tracks/*/*.wav', rule: 'robots.txt' },
+  { path: '/tracks/*/stems-raw/', rule: 'robots.txt' },
+];
+
+// ── Sessions ──
+const sessions = [
+  { text: 'Audio-reactive speed + 3D model loading + settings export', type: 'feature' },
+  { text: 'Per-track visual theming for racing environments', type: 'feature' },
+  { text: 'Theme overhaul + animated shader backgrounds', type: 'ui' },
+  { text: 'iOS audio visualization fix', type: 'bugfix' },
+  { text: 'Lyrics display + debug hotkey + performance fixes', type: 'bugfix' },
+  { text: 'Access control rules review', type: 'config' },
+  { text: 'System architecture diagram + roadmap brainstorming', type: 'research' },
+  { text: 'iOS UI controls + game mechanics refinement', type: 'feature' },
+  { text: 'Visualization customizations (colors, controls, grid)', type: 'ui' },
+  { text: 'Racer system architecture + particle effects fix', type: 'bugfix' },
+  { text: 'Track themes + model mapping', type: 'config' },
+  { text: 'Stem visualization + lyric customization brainstorming', type: 'research' },
+  { text: 'SEO & visibility makeover', type: 'seo' },
+];
+
+// ── Actions ──
+const actions = [
+  { priority: 'high', text: 'Submit sitemap to Google Search Console', id: 'a-gsc' },
+  { priority: 'high', text: 'Submit sitemap to Bing Webmaster Tools', id: 'a-bing' },
+  { priority: 'medium', text: 'Generate proper 180×180 Apple Touch Icon PNG', id: 'a-icon' },
+  { priority: 'medium', text: 'Set up social media profiles and link back to jrod.dev', id: 'a-social' },
+  { priority: 'low', text: 'Set up prerendering for non-JS crawlers (Rendertron)', id: 'a-prerender' },
+  { priority: 'low', text: 'Create RSS feed for new track releases', id: 'a-rss' },
+  { priority: 'low', text: 'Register deytadreams.com and set up redirect', id: 'a-domain' },
+];
+
+// ── Platforms ──
+const platforms = ['Discord', 'Twitter', 'LinkedIn', 'Facebook', 'iMessage'];
+
+// ── State ──
+const savedState = JSON.parse(localStorage.getItem('seo-dashboard-state') || '{}');
+function saveState() { localStorage.setItem('seo-dashboard-state', JSON.stringify(savedState)); }
+
+/* ═══════════════════════════════════════════════════════════════
+   RENDERERS
+   ═══════════════════════════════════════════════════════════════ */
+
+// ── Score Gauge ──
+function renderGauge() {
+  let score = 0;
+  let maxScore = 0;
+  let passing = 0;
+  seoItems.forEach(item => {
+    maxScore += item.pts;
+    const overridden = savedState['seo-' + (item.id || item.label)];
+    const isDone = overridden !== undefined ? overridden : item.done;
+    if (isDone) { score += item.pts; passing++; }
+  });
+  const pct = score / maxScore;
+  const displayScore = Math.round(pct * 100);
+  const circumference = 2 * Math.PI * 90;
+  const offset = circumference * (1 - pct);
+
+  // Set gauge ring (CSS transition handles the animation)
+  const fill = document.getElementById('gaugeFill');
+  fill.style.strokeDashoffset = offset;
+  if (displayScore >= 90) fill.style.stroke = 'var(--green)';
+  else if (displayScore >= 70) fill.style.stroke = 'var(--amber)';
+  else fill.style.stroke = 'var(--red)';
+
+  // Set score number and sublabel
+  document.getElementById('gaugeValue').textContent = displayScore;
+  document.getElementById('gaugeSublabel').textContent = `${passing} of ${seoItems.length} checks passing`;
+}
+
+// ── SEO Checklist ──
+function renderChecklist() {
+  const grid = document.getElementById('seoChecklist');
+  grid.innerHTML = seoItems.map(item => {
+    const key = 'seo-' + (item.id || item.label);
+    const isDone = savedState[key] !== undefined ? savedState[key] : item.done;
+    return `<div class="check-item ${isDone ? 'done' : 'pending'}" data-key="${key}" data-pts="${item.pts}">
+      <div class="indicator">${isDone ? '✓' : '○'}</div>
+      <span class="label">${item.label}</span>
+      <span class="pts">${item.pts}pt</span>
+    </div>`;
+  }).join('');
+
+  grid.querySelectorAll('.check-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const key = el.dataset.key;
+      const wasDone = el.classList.contains('done');
+      savedState[key] = !wasDone;
+      saveState();
+      renderChecklist();
+      renderGauge();
+    });
+  });
+}
+
+// ── Social Preview ──
+let activePlatform = 'Discord';
+function renderSocialPreview() {
+  const tabsEl = document.getElementById('platformTabs');
+  tabsEl.innerHTML = platforms.map(p =>
+    `<button class="platform-tab ${p === activePlatform ? 'active' : ''}" data-platform="${p}">${p}</button>`
+  ).join('');
+
+  tabsEl.querySelectorAll('.platform-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activePlatform = btn.dataset.platform;
+      renderSocialPreview();
+    });
+  });
+
+  const cls = activePlatform.toLowerCase();
+  document.getElementById('previewContainer').innerHTML = `
+    <div class="preview-card ${cls}">
+      <div class="og-image"></div>
+      <div class="og-meta">
+        <div class="og-site">jrod.dev</div>
+        <div class="og-title">Code from Dream — DeytaDreams</div>
+        <div class="og-desc">Reggae-infused electronic music pulled apart into stems and fed to a 3D world that listens back. Each instrument reshapes the landscape. What stays human when everything becomes signal?</div>
+      </div>
+    </div>`;
+}
+
+// ── Tracks ──
+function renderTracks() {
+  const grid = document.getElementById('tracksGrid');
+  grid.innerHTML = tracks.map((t, i) => `
+    <div class="track-card" data-index="${i}">
+      <div class="track-name">${t.name}</div>
+      <div class="track-env">${t.env}</div>
+      <div class="keyword-tags">${t.keywords.map(k => `<span class="keyword-tag">${k}</span>`).join('')}</div>
+      <div class="density-bar">${Array.from({length:10}, (_, j) => `<div class="bar ${j < t.density ? 'filled' : ''}"></div>`).join('')}</div>
+      <div class="track-expanded">
+        <div class="detail-row"><span class="detail-label">Genre</span><span class="detail-value">${t.genre}</span></div>
+        <div class="detail-row"><span class="detail-label">Keyword Density</span><span class="detail-value">${t.density}/10</span></div>
+        <div class="detail-row"><span class="detail-label">Structured Data</span><span class="detail-value" style="color:var(--green);">MusicRecording ✓</span></div>
+        <div class="detail-row"><span class="detail-label">Deep Link</span><span class="detail-value" style="color:var(--amber);">Not yet</span></div>
+        <div class="detail-row"><span class="detail-label">Noscript Content</span><span class="detail-value" style="color:var(--green);">Listed ✓</span></div>
+      </div>
+    </div>
+  `).join('');
+
+  grid.querySelectorAll('.track-card').forEach(card => {
+    card.addEventListener('click', () => card.classList.toggle('expanded'));
+  });
+}
+
+// ── Crawl Map ──
+function renderCrawlMap() {
+  document.getElementById('sitemapTree').innerHTML = sitemapPages.map(p => `
+    <div class="crawl-node">
+      <div class="status-dot allowed"></div>
+      <span class="path">${p.path}</span>
+      <span class="priority">P ${p.priority}</span>
+      <span class="rule">${p.label}</span>
+    </div>
+  `).join('');
+
+  document.getElementById('blockedTree').innerHTML = blockedPaths.map(p => `
+    <div class="crawl-node">
+      <div class="status-dot blocked"></div>
+      <span class="path">${p.path}</span>
+      <span class="rule">${p.rule}</span>
+    </div>
+  `).join('');
+}
+
+// ── Structured Data ──
+function renderStructuredData() {
+  const webApp = {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Code from Dream",
+    "url": "https://jrod.dev/",
+    "description": "Original music pulled apart into stems and fed to a 3D world that listens back. Each instrument reshapes the landscape in real time. By DeytaDreams.",
+    "applicationCategory": "MultimediaApplication",
+    "operatingSystem": "Web Browser",
+    "author": { "@type": "Person", "name": "DeytaDreams", "url": "https://jrod.dev/" },
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+  };
+
+  const musicGroup = {
+    "@context": "https://schema.org",
+    "@type": "MusicGroup",
+    "name": "DeytaDreams",
+    "url": "https://jrod.dev/",
+    "genre": ["Electronic", "Experimental"],
+    "track": tracks.map(t => ({ "@type": "MusicRecording", "name": t.name, "byArtist": { "@type": "MusicGroup", "name": "DeytaDreams" }, "url": "https://jrod.dev/" }))
+  };
+
+  function syntaxHL(json) {
+    return JSON.stringify(json, null, 2)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"([^"]+)":/g, '<span class="prop">"$1"</span>:')
+      .replace(/: "([^"]+)"/g, ': <span class="str">"$1"</span>')
+      .replace(/: (\d+)/g, ': <span class="num">$1</span>')
+      .replace(/"(@\w+)"/g, '<span class="kw">"$1"</span>');
+  }
+
+  document.getElementById('structuredDataViewer').innerHTML = `
+    ${codeBlock('WebApplication Schema', 'application/ld+json', syntaxHL(webApp))}
+    ${codeBlock('MusicGroup Schema', 'application/ld+json', syntaxHL(musicGroup))}
+  `;
+  initCodeBlocks();
+}
+
+function codeBlock(title, type, content) {
+  return `<div class="code-block">
+    <div class="code-header" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open');">
+      <span class="arrow">▶</span>
+      <span class="filename">${title}</span>
+      <span style="margin-left:auto;font-size:10px;color:var(--text-dim)">${type}</span>
+    </div>
+    <div class="code-body"><pre>${content}</pre></div>
+  </div>`;
+}
+
+function initCodeBlocks() {
+  document.querySelectorAll('.code-header').forEach(h => {
+    h.onclick = () => { h.classList.toggle('open'); h.nextElementSibling.classList.toggle('open'); };
+  });
+}
+
+// ── Analytics ──
+function renderAnalytics() {
+  const stats = [
+    { value: '819', label: 'Messages', color: '' },
+    { value: '142', label: 'Sessions', color: 'cyan' },
+    { value: '9', label: 'Days', color: 'amber' },
+    { value: '746', label: 'Files Changed', color: 'purple' },
+    { value: '+92.9K', label: 'Lines Added', color: '' },
+    { value: '80%', label: 'Satisfaction', color: 'cyan' },
+  ];
+
+  document.getElementById('devStats').innerHTML = stats.map(s =>
+    `<div class="stat-card"><div class="stat-value ${s.color}">${s.value}</div><div class="stat-label">${s.label}</div></div>`
+  ).join('');
+
+  const langs = [
+    { name: 'JavaScript', count: 1997, color: 'var(--amber)' },
+    { name: 'JSON', count: 964, color: 'var(--cyan)' },
+    { name: 'HTML', count: 434, color: 'var(--red)' },
+    { name: 'CSS', count: 190, color: 'var(--purple)' },
+    { name: 'TypeScript', count: 106, color: 'var(--green)' },
+  ];
+  const maxCount = langs[0].count;
+
+  document.getElementById('langBars').innerHTML = langs.map(l => `
+    <div class="lang-bar-row">
+      <span class="lang-bar-label">${l.name}</span>
+      <div class="lang-bar-track"><div class="lang-bar-fill" style="width:0%;background:${l.color}" data-target="${(l.count/maxCount*100).toFixed(1)}"></div></div>
+      <span class="lang-bar-value">${l.count}</span>
+    </div>
+  `).join('');
+
+  // Animate bars
+  setTimeout(() => {
+    document.querySelectorAll('.lang-bar-fill').forEach(bar => { bar.style.width = bar.dataset.target + '%'; });
+  }, 500);
+
+  // Session timeline
+  document.getElementById('sessionTimeline').innerHTML = sessions.map((s, i) => `
+    <div class="session-entry">
+      <span class="session-num">${String(i + 1).padStart(2, '0')}</span>
+      <div class="session-dot ${s.type}"></div>
+      <span class="session-text">${s.text}</span>
+      <span class="session-type ${s.type}">${s.type}</span>
+    </div>
+  `).join('');
+}
+
+// ── Action Items ──
+function renderActions() {
+  const list = document.getElementById('actionsList');
+  list.innerHTML = actions.map(a => {
+    const checked = savedState[a.id] || false;
+    return `<div class="action-item ${checked ? 'checked' : ''}" data-id="${a.id}">
+      <div class="action-check">✓</div>
+      <span class="action-priority ${a.priority}">${a.priority}</span>
+      <span class="action-text">${a.text}</span>
+    </div>`;
+  }).join('');
+
+  list.querySelectorAll('.action-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const id = el.dataset.id;
+      savedState[id] = !savedState[id];
+      saveState();
+      renderActions();
+    });
+  });
+
+  const remaining = actions.filter(a => !savedState[a.id]).length;
+  document.getElementById('actionsTag').textContent = `${remaining} remaining`;
+}
+
+// ── Server Config ──
+function renderServerConfig() {
+  const conf = `<span class="kw">server</span> {
+    <span class="kw">listen</span> <span class="num">\${PORT}</span> default_server;
+    <span class="kw">server_name</span> _;
+    <span class="kw">root</span> <span class="str">/usr/share/nginx/html</span>;
+
+    <span class="cm"># ── Security headers ──</span>
+    <span class="kw">add_header</span> X-Content-Type-Options <span class="str">"nosniff"</span> always;
+    <span class="kw">add_header</span> X-Frame-Options <span class="str">"SAMEORIGIN"</span> always;
+    <span class="kw">add_header</span> Referrer-Policy <span class="str">"strict-origin-when-cross-origin"</span> always;
+    <span class="kw">add_header</span> Permissions-Policy <span class="str">"camera=(), microphone=(), geolocation=()"</span> always;
+
+    <span class="cm"># ── SEO headers ──</span>
+    <span class="kw">add_header</span> X-Robots-Tag <span class="str">"index, follow"</span> always;
+
+    <span class="kw">location</span> / {
+        <span class="kw">try_files</span> <span class="str">$uri $uri/ /index.html</span>;
+    }
+
+    <span class="cm"># Cache static assets (1 year, immutable)</span>
+    <span class="kw">location</span> ~* \\.(js|css|png|jpg|jpeg|gif|ico|svg|mp3|wav|mid)$ {
+        <span class="kw">expires</span> <span class="num">1y</span>;
+        <span class="kw">add_header</span> Cache-Control <span class="str">"public, immutable"</span>;
+    }
+
+    <span class="cm"># PWA manifest MIME type</span>
+    <span class="kw">location</span> = /site.webmanifest {
+        <span class="kw">default_type</span> <span class="str">application/manifest+json</span>;
+    }
+
+    <span class="cm"># Sitemap MIME type</span>
+    <span class="kw">location</span> = /sitemap.xml {
+        <span class="kw">default_type</span> <span class="str">application/xml</span>;
+    }
+
+    <span class="cm"># Gzip all text formats</span>
+    <span class="kw">gzip</span> on;
+    <span class="kw">gzip_types</span> text/plain text/css application/json application/javascript
+               text/xml application/xml application/manifest+json;
+}`;
+
+  document.getElementById('serverConfig').innerHTML = `
+    <div class="code-block">
+      <div class="code-header open">
+        <span class="arrow">▶</span>
+        <span class="filename">nginx.conf</span>
+        <span style="margin-left:auto;font-size:10px;color:var(--text-dim)">Railway / Docker</span>
+      </div>
+      <div class="code-body open"><pre>${conf}</pre></div>
+    </div>`;
+  initCodeBlocks();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   NAVIGATION
+   ═══════════════════════════════════════════════════════════════ */
+
+document.querySelectorAll('.nav-link').forEach(link => {
+  link.addEventListener('click', () => {
+    const target = link.dataset.target;
+    document.getElementById(target)?.scrollIntoView({ behavior: 'smooth' });
+    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+    link.classList.add('active');
+  });
+});
+
+// Update active nav on scroll
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+      const link = document.querySelector(`.nav-link[data-target="${entry.target.id}"]`);
+      if (link) link.classList.add('active');
+    }
+  });
+}, { threshold: 0.3 });
+
+document.querySelectorAll('.section').forEach(s => observer.observe(s));
+
+/* ═══════════════════════════════════════════════════════════════
+   INIT
+   ═══════════════════════════════════════════════════════════════ */
+
+renderChecklist();
+renderGauge();
+renderSocialPreview();
+renderTracks();
+renderCrawlMap();
+renderStructuredData();
+renderAnalytics();
+renderActions();
+renderServerConfig();
+</script>
+</body>
+</html>
