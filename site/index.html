@@ -15,7 +15,7 @@
     </script>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="alternate icon" href="./favicon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=19" />
+    <link rel="stylesheet" href="./styles.css?v=21" />
     <script type="importmap">
       {
         "imports": {
@@ -133,6 +133,22 @@
 
     <!-- Screen reader announcements -->
     <div class="sr-only" role="status" aria-live="polite" id="ariaStatus"></div>
+
+    <!-- Keyboard hints overlay -->
+    <div class="keyboard-hints" aria-hidden="true">
+      <div class="keyboard-hint">
+        <span class="keyboard-hint__keys">
+          <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>
+        </span>
+        <span class="keyboard-hint__label">Flight</span>
+      </div>
+      <div class="keyboard-hint">
+        <span class="keyboard-hint__keys">
+          <kbd>F</kbd>
+        </span>
+        <span class="keyboard-hint__label">Metrics</span>
+      </div>
+    </div>
 
     <main id="app" class="immersive-app" aria-label="Audio Player">
 

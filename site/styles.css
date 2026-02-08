@@ -3452,18 +3452,13 @@ input[type="range"]:active::-moz-range-thumb {
 }
 
 .lyric-word.is-active {
-  color: transparent;
-  background: linear-gradient(
-    90deg,
-    #00ff88 0%,
-    #00ff88 calc(var(--word-progress, 0) * 1%),
-    rgba(255, 255, 255, 0.4) calc(var(--word-progress, 0) * 1%),
-    rgba(255, 255, 255, 0.4) 100%
-  );
-  -webkit-background-clip: text;
-  background-clip: text;
-  text-shadow: none;
-  filter: drop-shadow(0 0 8px rgba(0, 255, 136, 0.5));
+  color: #00ffaa;
+  text-shadow:
+    0 0 4px #00ffaa,
+    0 0 12px rgba(0, 255, 170, 0.8),
+    0 0 24px rgba(0, 255, 170, 0.5),
+    0 0 40px rgba(0, 255, 170, 0.3);
+  transform: scale(1.05);
 }
 
 /* Mobile adjustments */
@@ -4102,4 +4097,78 @@ input[type="range"]:active::-moz-range-thumb {
   color: rgba(255, 255, 255, 0.5);
   width: 24px;
   text-align: right;
+}
+
+/* ===== Keyboard Hints Overlay ===== */
+.keyboard-hints {
+  position: fixed;
+  bottom: 140px;
+  left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 50;
+  pointer-events: none;
+  opacity: 0.4;
+  transition: opacity 0.3s ease;
+}
+
+.keyboard-hints:hover {
+  opacity: 0.8;
+  pointer-events: auto;
+}
+
+.keyboard-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--wa-ui);
+  font-size: 11px;
+}
+
+.keyboard-hint__keys {
+  display: flex;
+  gap: 3px;
+}
+
+.keyboard-hint__keys kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.7);
+  font-family: var(--wa-mono);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
+}
+
+.keyboard-hint__label {
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+@media (max-width: 768px) {
+  .keyboard-hints {
+    bottom: 180px;
+    left: 12px;
+  }
+
+  .keyboard-hint__keys kbd {
+    min-width: 18px;
+    height: 18px;
+    font-size: 9px;
+    padding: 0 4px;
+  }
+
+  .keyboard-hint {
+    font-size: 10px;
+  }
 }
