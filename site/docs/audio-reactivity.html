@@ -1,0 +1,1572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Audio-Reactivity System Architecture</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&family=Outfit:wght@200;300;400;500;600;700;800&display=swap');
+
+:root {
+  --bass: #ff4466;
+  --mid: #44ff88;
+  --treble: #4488ff;
+  --energy: #ffaa44;
+  --beat: #ff44ff;
+  --bg: #060a14;
+  --bg2: #0a1020;
+  --card: #0d1528;
+  --border: #1a2540;
+  --text: #c8d4e8;
+  --dim: #5a6a88;
+  --node: #1a2a44;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html {
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: #1a2540 #060a14;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  overflow-x: hidden;
+  line-height: 1.5;
+}
+
+/* Sticky nav */
+nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  display: flex;
+  gap: 2px;
+  padding: 8px 12px;
+  background: rgba(6,10,20,0.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  overflow-x: auto;
+}
+
+nav a {
+  color: var(--dim);
+  text-decoration: none;
+  padding: 6px 14px;
+  border-radius: 4px;
+  white-space: nowrap;
+  transition: all 0.3s;
+  border: 1px solid transparent;
+}
+nav a:hover, nav a.active {
+  color: #fff;
+  background: rgba(68,136,255,0.12);
+  border-color: rgba(68,136,255,0.3);
+}
+
+/* Sections */
+section {
+  min-height: 100vh;
+  padding: 80px 40px 60px;
+  position: relative;
+  border-bottom: 1px solid var(--border);
+}
+
+.section-label {
+  font-family: 'Outfit', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-bottom: 8px;
+}
+
+.section-title {
+  font-family: 'Outfit', sans-serif;
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 40px;
+  background: linear-gradient(135deg, #fff 40%, var(--treble));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Canvas diagrams */
+canvas.diagram {
+  display: block;
+  margin: 0 auto;
+  border-radius: 8px;
+}
+
+/* Animated spectrum bars */
+.spectrum-container {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  height: 120px;
+  padding: 0 20px;
+}
+
+.spectrum-bar {
+  width: 6px;
+  border-radius: 3px 3px 0 0;
+  transition: height 0.08s ease;
+  animation: spectrumPulse 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes spectrumPulse {
+  from { opacity: 0.7; }
+  to { opacity: 1; }
+}
+
+/* Node styling */
+.node-box {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 20px;
+  font-size: 12px;
+  position: relative;
+  transition: all 0.3s;
+}
+.node-box:hover {
+  border-color: var(--treble);
+  box-shadow: 0 0 20px rgba(68,136,255,0.15);
+}
+
+/* Routing matrix */
+.routing-grid {
+  display: grid;
+  gap: 0;
+  margin: 30px auto;
+  max-width: 900px;
+}
+
+.route-cell {
+  padding: 10px;
+  border: 1px solid var(--border);
+  font-size: 11px;
+  text-align: center;
+  transition: all 0.3s;
+  cursor: default;
+  position: relative;
+}
+
+.route-cell.header {
+  background: var(--card);
+  font-weight: 600;
+  color: #fff;
+}
+
+.route-cell.active-route {
+  cursor: pointer;
+}
+
+.route-cell.active-route:hover {
+  z-index: 2;
+  transform: scale(1.05);
+}
+
+/* Flow lines animation */
+@keyframes flowDash {
+  to { stroke-dashoffset: -20; }
+}
+
+@keyframes flowParticle {
+  0% { offset-distance: 0%; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { offset-distance: 100%; opacity: 0; }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.95); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+
+@keyframes beatPulse {
+  0% { transform: scale(1); }
+  15% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+@keyframes glowPulse {
+  0%, 100% { filter: drop-shadow(0 0 2px currentColor); }
+  50% { filter: drop-shadow(0 0 8px currentColor); }
+}
+
+.glow-text {
+  animation: glowPulse 2s ease-in-out infinite;
+}
+
+/* SVG diagram containers */
+.svg-diagram {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  display: block;
+}
+
+/* Legend */
+.legend {
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+  margin: 20px 0;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--dim);
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+/* Consumer cards */
+.consumer-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  max-width: 1100px;
+  margin: 30px auto;
+}
+
+@media (max-width: 900px) {
+  .consumer-grid { grid-template-columns: 1fr; }
+  section { padding: 80px 20px 40px; }
+}
+
+.consumer-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.consumer-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+}
+
+.consumer-card h3 {
+  font-family: 'Outfit', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.param-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  font-size: 11px;
+  border-bottom: 1px solid rgba(26,37,64,0.5);
+}
+
+.param-band {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.param-arrow {
+  color: var(--dim);
+  flex-shrink: 0;
+}
+
+/* Shader code display */
+.shader-block {
+  background: #080e1a;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 20px;
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-x: auto;
+  max-width: 700px;
+  margin: 16px auto;
+}
+
+.shader-block .kw { color: var(--treble); }
+.shader-block .fn { color: var(--mid); }
+.shader-block .num { color: var(--energy); }
+.shader-block .cm { color: var(--dim); }
+.shader-block .str { color: var(--bass); }
+
+/* Animated background grid */
+.bg-grid {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.03;
+  background-image:
+    linear-gradient(rgba(68,136,255,0.3) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(68,136,255,0.3) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+/* Formula display */
+.formula {
+  background: #080e1a;
+  border-left: 3px solid var(--energy);
+  padding: 10px 16px;
+  font-size: 12px;
+  margin: 8px 0;
+  border-radius: 0 6px 6px 0;
+}
+
+.formula .var-bass { color: var(--bass); }
+.formula .var-mid { color: var(--mid); }
+.formula .var-treble { color: var(--treble); }
+.formula .var-energy { color: var(--energy); }
+.formula .var-beat { color: var(--beat); }
+.formula .op { color: var(--dim); }
+.formula .num { color: #aaa; }
+
+/* Stem cards */
+.stem-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  max-width: 1000px;
+  margin: 24px auto;
+}
+
+.stem-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  text-align: center;
+  transition: all 0.3s;
+}
+
+.stem-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+}
+
+.stem-icon {
+  font-size: 28px;
+  margin-bottom: 6px;
+}
+
+.stem-name {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.stem-mini-spectrum {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 1px;
+  height: 30px;
+}
+
+.stem-mini-bar {
+  width: 3px;
+  border-radius: 1px 1px 0 0;
+}
+
+/* Tooltip */
+.tooltip {
+  position: absolute;
+  background: #0d1528;
+  border: 1px solid var(--treble);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 11px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 50;
+  max-width: 250px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+}
+
+/* Stage connector lines between sections */
+.stage-connector {
+  display: flex;
+  justify-content: center;
+  padding: 0;
+  margin: -1px 0;
+  background: var(--bg);
+}
+
+</style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+
+<nav id="nav">
+  <a href="#stage1">1. Audio Input</a>
+  <a href="#stage2">2. FFT Analysis</a>
+  <a href="#stage3">3. Stem Separation</a>
+  <a href="#stage4">4. Visual Routing</a>
+  <a href="#stage5">5. Consumer Systems</a>
+  <a href="#stage6">6. GPU Shaders</a>
+</nav>
+
+<!-- ==================== STAGE 1 ==================== -->
+<section id="stage1">
+  <div class="section-label">Stage 1</div>
+  <div class="section-title">Audio Input &amp; Web Audio Graph</div>
+  <svg id="svg1" class="svg-diagram" viewBox="0 0 1100 520"></svg>
+</section>
+
+<!-- ==================== STAGE 2 ==================== -->
+<section id="stage2">
+  <div class="section-label">Stage 2</div>
+  <div class="section-title">Frequency Band Analysis</div>
+  <svg id="svg2" class="svg-diagram" viewBox="0 0 1100 700"></svg>
+</section>
+
+<!-- ==================== STAGE 3 ==================== -->
+<section id="stage3">
+  <div class="section-label">Stage 3</div>
+  <div class="section-title">Stem Separation &amp; Per-Stem FFT</div>
+  <svg id="svg3" class="svg-diagram" viewBox="0 0 1100 750"></svg>
+</section>
+
+<!-- ==================== STAGE 4 ==================== -->
+<section id="stage4">
+  <div class="section-label">Stage 4</div>
+  <div class="section-title">Stem → Visual Routing Matrix</div>
+  <svg id="svg4" class="svg-diagram" viewBox="0 0 1100 600"></svg>
+</section>
+
+<!-- ==================== STAGE 5 ==================== -->
+<section id="stage5">
+  <div class="section-label">Stage 5</div>
+  <div class="section-title">Three Consumer Systems</div>
+  <svg id="svg5" class="svg-diagram" viewBox="0 0 1100 900"></svg>
+</section>
+
+<!-- ==================== STAGE 6 ==================== -->
+<section id="stage6">
+  <div class="section-label">Stage 6</div>
+  <div class="section-title">GPU Shader Layer</div>
+  <svg id="svg6" class="svg-diagram" viewBox="0 0 1100 750"></svg>
+</section>
+
+<div style="height: 60px; background: var(--bg);"></div>
+
+<script>
+// ============================================================
+// UTILITY FUNCTIONS
+// ============================================================
+const NS = "http://www.w3.org/2000/svg";
+
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
+function text(str, x, y, attrs = {}, parent) {
+  const t = el('text', { x, y, fill: '#c8d4e8', 'font-family': "'JetBrains Mono', monospace", 'font-size': '12', ...attrs }, parent);
+  t.textContent = str;
+  return t;
+}
+
+function roundRect(x, y, w, h, attrs = {}, parent) {
+  return el('rect', { x, y, width: w, height: h, rx: 8, ry: 8, fill: '#0d1528', stroke: '#1a2540', 'stroke-width': 1, ...attrs }, parent);
+}
+
+function flowLine(points, color, parent, dashAnim = true) {
+  const d = points.map((p, i) => (i === 0 ? 'M' : 'L') + p[0] + ',' + p[1]).join(' ');
+  const line = el('path', {
+    d,
+    fill: 'none',
+    stroke: color,
+    'stroke-width': 2,
+    'stroke-dasharray': dashAnim ? '6 4' : 'none',
+    opacity: 0.7
+  }, parent);
+  if (dashAnim) {
+    const anim = el('animate', {
+      attributeName: 'stroke-dashoffset',
+      from: '0', to: '-20',
+      dur: '1s', repeatCount: 'indefinite'
+    }, line);
+  }
+  return line;
+}
+
+function flowArrow(x, y, dir, color, parent) {
+  const sz = 6;
+  let pts;
+  if (dir === 'down') pts = `${x-sz},${y-sz} ${x},${y} ${x+sz},${y-sz}`;
+  else if (dir === 'right') pts = `${x-sz},${y-sz} ${x},${y} ${x-sz},${y+sz}`;
+  else if (dir === 'left') pts = `${x+sz},${y-sz} ${x},${y} ${x+sz},${y+sz}`;
+  else pts = `${x-sz},${y+sz} ${x},${y} ${x+sz},${y+sz}`;
+  el('polygon', { points: pts, fill: color, opacity: 0.8 }, parent);
+}
+
+function pulsingCircle(cx, cy, r, color, parent) {
+  const g = el('g', {}, parent);
+  el('circle', { cx, cy, r: r + 4, fill: 'none', stroke: color, 'stroke-width': 1, opacity: 0.3 }, g);
+  const outer = el('circle', { cx, cy, r: r + 8, fill: 'none', stroke: color, 'stroke-width': 1, opacity: 0 }, g);
+  el('animate', { attributeName: 'r', from: r, to: r + 16, dur: '2s', repeatCount: 'indefinite' }, outer);
+  el('animate', { attributeName: 'opacity', from: '0.4', to: '0', dur: '2s', repeatCount: 'indefinite' }, outer);
+  el('circle', { cx, cy, r, fill: color, opacity: 0.9 }, g);
+  return g;
+}
+
+function nodeBox(x, y, w, h, label, parent, opts = {}) {
+  const g = el('g', {}, parent);
+  const borderColor = opts.borderColor || '#1a2540';
+  const fillColor = opts.fill || '#0d1528';
+  roundRect(x, y, w, h, { fill: fillColor, stroke: borderColor, 'stroke-width': opts.strokeWidth || 1 }, g);
+  if (opts.topAccent) {
+    el('rect', { x: x + 1, y: y + 1, width: w - 2, height: 3, rx: 2, fill: opts.topAccent, opacity: 0.8 }, g);
+  }
+  if (label) {
+    const fontSize = opts.fontSize || 12;
+    text(label, x + w / 2, y + h / 2 + fontSize * 0.35, {
+      'text-anchor': 'middle',
+      'font-size': fontSize,
+      fill: opts.textColor || '#c8d4e8',
+      'font-weight': opts.fontWeight || '400'
+    }, g);
+  }
+  return g;
+}
+
+function badge(x, y, label, color, parent) {
+  const g = el('g', {}, parent);
+  const tw = label.length * 6.5 + 16;
+  el('rect', { x: x - tw/2, y: y - 10, width: tw, height: 20, rx: 10, fill: color, opacity: 0.15 }, g);
+  el('rect', { x: x - tw/2, y: y - 10, width: tw, height: 20, rx: 10, fill: 'none', stroke: color, 'stroke-width': 1, opacity: 0.5 }, g);
+  text(label, x, y + 4, { 'text-anchor': 'middle', 'font-size': '10', fill: color, 'font-weight': '600' }, g);
+  return g;
+}
+
+// Animated dot traveling along a path
+function travelDot(pathData, color, parent, dur = '3s', delay = '0s') {
+  const path = el('path', { d: pathData, fill: 'none', stroke: 'none' }, parent);
+  const dot = el('circle', { r: 3, fill: color, opacity: 0.9 }, parent);
+  const aMotion = el('animateMotion', {
+    dur, repeatCount: 'indefinite', begin: delay
+  }, dot);
+  const mpath = el('mpath', {}, aMotion);
+  // Use inline path
+  aMotion.setAttribute('path', pathData);
+  el('animate', { attributeName: 'opacity', values: '0;1;1;0', keyTimes: '0;0.1;0.9;1', dur, repeatCount: 'indefinite', begin: delay }, dot);
+  return dot;
+}
+
+
+// ============================================================
+// STAGE 1: Audio Input
+// ============================================================
+(function drawStage1() {
+  const svg = document.getElementById('svg1');
+
+  // Defs for gradients and filters
+  const defs = el('defs', {}, svg);
+
+  // Glow filter
+  const filter = el('filter', { id: 'glow', x: '-50%', y: '-50%', width: '200%', height: '200%' }, defs);
+  el('feGaussianBlur', { stdDeviation: '3', result: 'blur' }, filter);
+  const merge = el('feMerge', {}, filter);
+  el('feMergeNode', { in: 'blur' }, merge);
+  el('feMergeNode', { in: 'SourceGraphic' }, merge);
+
+  // HTMLAudioElement node
+  nodeBox(80, 60, 200, 60, '', svg, { borderColor: '#4488ff', topAccent: '#4488ff' });
+  text('HTMLAudioElement', 180, 85, { 'text-anchor': 'middle', 'font-size': '13', fill: '#fff', 'font-weight': '600' }, svg);
+  text('<audio> tag', 180, 103, { 'text-anchor': 'middle', 'font-size': '10', fill: '#5a6a88' }, svg);
+
+  // OR label
+  text('OR', 180, 155, { 'text-anchor': 'middle', 'font-size': '11', fill: '#5a6a88', 'font-weight': '600' }, svg);
+
+  // StemPlayer node
+  nodeBox(80, 175, 200, 60, '', svg, { borderColor: '#44ff88', topAccent: '#44ff88' });
+  text('StemPlayer', 180, 200, { 'text-anchor': 'middle', 'font-size': '13', fill: '#fff', 'font-weight': '600' }, svg);
+  text('Multi-stem buffers', 180, 218, { 'text-anchor': 'middle', 'font-size': '10', fill: '#5a6a88' }, svg);
+
+  // Arrow to MediaElementSource
+  flowLine([[280, 90], [380, 165]], '#4488ff', svg);
+  flowLine([[280, 205], [380, 185]], '#44ff88', svg);
+  flowArrow(380, 175, 'right', '#888', svg);
+
+  // MediaElementSource
+  nodeBox(390, 140, 220, 70, '', svg, { borderColor: '#888' });
+  text('createMediaElement', 500, 165, { 'text-anchor': 'middle', 'font-size': '12', fill: '#fff', 'font-weight': '500' }, svg);
+  text('Source(audio)', 500, 182, { 'text-anchor': 'middle', 'font-size': '12', fill: '#fff', 'font-weight': '500' }, svg);
+  text('Web Audio API', 500, 200, { 'text-anchor': 'middle', 'font-size': '10', fill: '#5a6a88' }, svg);
+
+  // Arrow to AnalyserNode
+  flowLine([[610, 175], [690, 175]], '#ffaa44', svg);
+  flowArrow(690, 175, 'right', '#ffaa44', svg);
+
+  // AnalyserNode (main box, prominent)
+  nodeBox(700, 100, 260, 150, '', svg, { borderColor: '#ffaa44', topAccent: '#ffaa44', strokeWidth: 2 });
+  text('AnalyserNode', 830, 130, { 'text-anchor': 'middle', 'font-size': '16', fill: '#fff', 'font-weight': '700' }, svg);
+
+  // Settings inside analyser
+  const settingsY = 155;
+  text('fftSize', 730, settingsY, { 'font-size': '11', fill: '#5a6a88' }, svg);
+  text('256', 830, settingsY, { 'font-size': '11', fill: '#ffaa44', 'font-weight': '600' }, svg);
+
+  text('bins', 730, settingsY + 18, { 'font-size': '11', fill: '#5a6a88' }, svg);
+  text('128', 830, settingsY + 18, { 'font-size': '11', fill: '#ffaa44', 'font-weight': '600' }, svg);
+  text('(fftSize / 2)', 880, settingsY + 18, { 'font-size': '9', fill: '#5a6a88' }, svg);
+
+  text('smoothing', 730, settingsY + 36, { 'font-size': '11', fill: '#5a6a88' }, svg);
+  text('0.15–0.8', 830, settingsY + 36, { 'font-size': '11', fill: '#ffaa44', 'font-weight': '600' }, svg);
+
+  // Draw mini spectrum inside analyser
+  const specX = 730, specY = 210, specW = 210, specH = 30;
+  for (let i = 0; i < 32; i++) {
+    const bh = Math.random() * specH * 0.8 + specH * 0.1;
+    const hue = (i / 32) * 200 + 340;
+    const barEl = el('rect', {
+      x: specX + i * (specW / 32),
+      y: specY + specH - bh,
+      width: specW / 32 - 1,
+      height: bh,
+      rx: 1,
+      fill: i < 4 ? '#ff4466' : i < 13 ? '#44ff88' : '#4488ff',
+      opacity: 0.6
+    }, svg);
+    // Animate each bar
+    const heights = [];
+    for (let f = 0; f < 4; f++) heights.push(specY + specH - (Math.random() * specH * 0.8 + specH * 0.1));
+    heights.push(parseFloat(barEl.getAttribute('y')));
+    el('animate', {
+      attributeName: 'y',
+      values: heights.join(';'),
+      dur: (1.5 + Math.random()).toFixed(2) + 's',
+      repeatCount: 'indefinite'
+    }, barEl);
+    const hVals = heights.map(yy => (specY + specH - yy).toFixed(1)).join(';');
+    el('animate', {
+      attributeName: 'height',
+      values: hVals,
+      dur: (1.5 + Math.random()).toFixed(2) + 's',
+      repeatCount: 'indefinite'
+    }, barEl);
+  }
+
+  // Arrow from analyser down
+  flowLine([[830, 250], [830, 300]], '#ffaa44', svg);
+  flowArrow(830, 300, 'down', '#ffaa44', svg);
+
+  // Output: Uint8Array
+  nodeBox(720, 310, 220, 50, '', svg, { borderColor: '#ffaa44' });
+  text('Uint8Array[128]', 830, 335, { 'text-anchor': 'middle', 'font-size': '13', fill: '#ffaa44', 'font-weight': '600' }, svg);
+  text('getByteFrequencyData()', 830, 350, { 'text-anchor': 'middle', 'font-size': '10', fill: '#5a6a88' }, svg);
+
+  // Also connect analyser to destination
+  flowLine([[960, 175], [1020, 175]], '#555', svg);
+  flowArrow(1020, 175, 'right', '#555', svg);
+  nodeBox(1020, 155, 60, 40, '', svg, { fill: '#111', borderColor: '#333' });
+  // Speaker icon as unicode
+  text('🔊', 1042, 180, { 'text-anchor': 'middle', 'font-size': '16' }, svg);
+  text('dest', 1050, 210, { 'text-anchor': 'middle', 'font-size': '9', fill: '#5a6a88' }, svg);
+
+  // AudioContext label
+  el('rect', { x: 70, y: 40, width: 930, height: 340, rx: 12, fill: 'none', stroke: '#1a2540', 'stroke-width': 1, 'stroke-dasharray': '4 4' }, svg);
+  text('AudioContext', 85, 32, { 'font-size': '10', fill: '#5a6a88', 'font-weight': '600', 'letter-spacing': '2' }, svg);
+
+  // Traveling dots along main path
+  travelDot('M280,90 L380,165 L610,175 L700,175', '#4488ff', svg, '3s', '0s');
+  travelDot('M280,205 L380,185 L610,175 L700,175', '#44ff88', svg, '3s', '1.5s');
+  travelDot('M830,250 L830,310', '#ffaa44', svg, '1.5s', '0.5s');
+
+  // Down arrow to stage 2
+  flowLine([[830, 360], [830, 420]], '#ffaa44', svg);
+  flowArrow(830, 420, 'down', '#ffaa44', svg);
+  badge(830, 480, 'TO STAGE 2: FREQUENCY ANALYSIS', '#ffaa44', svg);
+
+})();
+
+
+// ============================================================
+// STAGE 2: Frequency Band Analysis
+// ============================================================
+(function drawStage2() {
+  const svg = document.getElementById('svg2');
+
+  const defs = el('defs', {}, svg);
+  const filter = el('filter', { id: 'glow2', x: '-50%', y: '-50%', width: '200%', height: '200%' }, defs);
+  el('feGaussianBlur', { stdDeviation: '4', result: 'blur' }, filter);
+  const merge = el('feMerge', {}, filter);
+  el('feMergeNode', { in: 'blur' }, merge);
+  el('feMergeNode', { in: 'SourceGraphic' }, merge);
+
+  // Full spectrum bar chart with band regions
+  const specX = 100, specY = 30, specW = 900, specH = 150;
+  const numBars = 128;
+  const barW = specW / numBars - 0.5;
+
+  // Band boundaries
+  const bassEnd = Math.floor(numBars * 0.10);   // 0-10%
+  const midStart = Math.floor(numBars * 0.10);
+  const midEnd = Math.floor(numBars * 0.40);     // 10-40%
+  const trebStart = Math.floor(numBars * 0.40);
+  const trebEnd = Math.floor(numBars * 0.92);    // 40-92%
+
+  // Background regions
+  el('rect', { x: specX, y: specY, width: bassEnd * (specW / numBars), height: specH, fill: '#ff4466', opacity: 0.06 }, svg);
+  el('rect', { x: specX + midStart * (specW / numBars), y: specY, width: (midEnd - midStart) * (specW / numBars), height: specH, fill: '#44ff88', opacity: 0.06 }, svg);
+  el('rect', { x: specX + trebStart * (specW / numBars), y: specY, width: (trebEnd - trebStart) * (specW / numBars), height: specH, fill: '#4488ff', opacity: 0.06 }, svg);
+
+  // Band labels at top
+  text('BASS', specX + bassEnd * (specW / numBars) / 2, specY - 8, { 'text-anchor': 'middle', 'font-size': '10', fill: '#ff4466', 'font-weight': '700', 'letter-spacing': '2' }, svg);
+  text('bins 0–12', specX + bassEnd * (specW / numBars) / 2, specY - 20, { 'text-anchor': 'middle', 'font-size': '8', fill: '#5a6a88' }, svg);
+
+  const midCx = specX + (midStart + midEnd) / 2 * (specW / numBars);
+  text('MID', midCx, specY - 8, { 'text-anchor': 'middle', 'font-size': '10', fill: '#44ff88', 'font-weight': '700', 'letter-spacing': '2' }, svg);
+  text('bins 13–51', midCx, specY - 20, { 'text-anchor': 'middle', 'font-size': '8', fill: '#5a6a88' }, svg);
+
+  const trebCx = specX + (trebStart + trebEnd) / 2 * (specW / numBars);
+  text('TREBLE', trebCx, specY - 8, { 'text-anchor': 'middle', 'font-size': '10', fill: '#4488ff', 'font-weight': '700', 'letter-spacing': '2' }, svg);
+  text('bins 52–117', trebCx, specY - 20, { 'text-anchor': 'middle', 'font-size': '8', fill: '#5a6a88' }, svg);
+
+  // Frequency labels
+  text('20Hz', specX - 5, specY + specH + 16, { 'font-size': '9', fill: '#5a6a88', 'text-anchor': 'end' }, svg);
+  text('250Hz', specX + bassEnd * (specW / numBars), specY + specH + 16, { 'font-size': '9', fill: '#5a6a88', 'text-anchor': 'middle' }, svg);
+  text('2kHz', specX + midEnd * (specW / numBars), specY + specH + 16, { 'font-size': '9', fill: '#5a6a88', 'text-anchor': 'middle' }, svg);
+  text('20kHz', specX + specW + 5, specY + specH + 16, { 'font-size': '9', fill: '#5a6a88' }, svg);
+
+  // Animated bars
+  for (let i = 0; i < numBars; i++) {
+    let color;
+    if (i < bassEnd) color = '#ff4466';
+    else if (i < midEnd) color = '#44ff88';
+    else if (i < trebEnd) color = '#4488ff';
+    else color = '#2a3a5a';
+
+    // Simulate frequency distribution
+    let baseH;
+    if (i < bassEnd) baseH = 0.5 + Math.random() * 0.5;
+    else if (i < midEnd) baseH = 0.3 + Math.random() * 0.4;
+    else baseH = 0.1 + Math.random() * 0.3;
+
+    const bh = baseH * specH;
+    const bx = specX + i * (specW / numBars);
+
+    const bar = el('rect', {
+      x: bx, y: specY + specH - bh,
+      width: barW, height: bh,
+      rx: 1, fill: color, opacity: i >= trebEnd ? 0.2 : 0.7
+    }, svg);
+
+    // Animate
+    const vals = [];
+    for (let f = 0; f < 5; f++) {
+      let h;
+      if (i < bassEnd) h = (0.3 + Math.random() * 0.7) * specH;
+      else if (i < midEnd) h = (0.15 + Math.random() * 0.5) * specH;
+      else h = (0.05 + Math.random() * 0.35) * specH;
+      vals.push(h.toFixed(1));
+    }
+    vals.push(vals[0]);
+
+    el('animate', {
+      attributeName: 'height',
+      values: vals.join(';'),
+      dur: (2 + Math.random() * 2).toFixed(2) + 's',
+      repeatCount: 'indefinite'
+    }, bar);
+    el('animate', {
+      attributeName: 'y',
+      values: vals.map(h => (specY + specH - parseFloat(h)).toFixed(1)).join(';'),
+      dur: (2 + Math.random() * 2).toFixed(2) + 's',
+      repeatCount: 'indefinite'
+    }, bar);
+  }
+
+  // ---- Band extraction arrows flowing down ----
+  const outY = specY + specH + 40;
+
+  // Flow arrows from each band region down to output nodes
+  // Bass
+  const bx1 = specX + bassEnd * (specW / numBars) / 2;
+  flowLine([[bx1, specY + specH], [bx1, outY + 30], [200, outY + 60]], '#ff4466', svg);
+  flowArrow(200, outY + 60, 'down', '#ff4466', svg);
+
+  // Mid
+  flowLine([[midCx, specY + specH], [midCx, outY + 30], [400, outY + 60]], '#44ff88', svg);
+  flowArrow(400, outY + 60, 'down', '#44ff88', svg);
+
+  // Treble
+  flowLine([[trebCx, specY + specH], [trebCx, outY + 30], [600, outY + 60]], '#4488ff', svg);
+  flowArrow(600, outY + 60, 'down', '#4488ff', svg);
+
+  // Energy (full width)
+  flowLine([[specX + specW / 2, specY + specH], [specX + specW / 2, outY + 15], [800, outY + 60]], '#ffaa44', svg);
+  flowArrow(800, outY + 60, 'down', '#ffaa44', svg);
+
+  // Band output nodes
+  const bandY = outY + 70;
+
+  // Bass node
+  const bassG = el('g', {}, svg);
+  nodeBox(130, bandY, 140, 55, '', bassG, { borderColor: '#ff4466', topAccent: '#ff4466' });
+  pulsingCircle(156, bandY + 28, 6, '#ff4466', bassG);
+  text('bass', 200, bandY + 22, { 'font-size': '14', fill: '#ff4466', 'font-weight': '700' }, bassG);
+  text('0.0 → 1.0', 200, bandY + 40, { 'font-size': '10', fill: '#5a6a88' }, bassG);
+
+  // Mid node
+  const midG = el('g', {}, svg);
+  nodeBox(330, bandY, 140, 55, '', midG, { borderColor: '#44ff88', topAccent: '#44ff88' });
+  pulsingCircle(356, bandY + 28, 6, '#44ff88', midG);
+  text('mid', 400, bandY + 22, { 'font-size': '14', fill: '#44ff88', 'font-weight': '700' }, midG);
+  text('0.0 → 1.0', 400, bandY + 40, { 'font-size': '10', fill: '#5a6a88' }, midG);
+
+  // Treble node
+  const trebG = el('g', {}, svg);
+  nodeBox(530, bandY, 140, 55, '', trebG, { borderColor: '#4488ff', topAccent: '#4488ff' });
+  pulsingCircle(556, bandY + 28, 6, '#4488ff', trebG);
+  text('treble', 600, bandY + 22, { 'font-size': '14', fill: '#4488ff', 'font-weight': '700' }, trebG);
+  text('0.0 → 1.0', 600, bandY + 40, { 'font-size': '10', fill: '#5a6a88' }, trebG);
+
+  // Energy node
+  const enG = el('g', {}, svg);
+  nodeBox(730, bandY, 140, 55, '', enG, { borderColor: '#ffaa44', topAccent: '#ffaa44' });
+  pulsingCircle(756, bandY + 28, 6, '#ffaa44', enG);
+  text('energy', 800, bandY + 22, { 'font-size': '14', fill: '#ffaa44', 'font-weight': '700' }, enG);
+  text('avg(all bins)', 800, bandY + 40, { 'font-size': '10', fill: '#5a6a88' }, enG);
+
+  // ---- Derived values section ----
+  const derY = bandY + 85;
+
+  // Section divider
+  el('line', { x1: 100, y1: derY, x2: 1000, y2: derY, stroke: '#1a2540', 'stroke-width': 1, 'stroke-dasharray': '4 4' }, svg);
+  text('DERIVED VALUES', 550, derY - 8, { 'text-anchor': 'middle', 'font-size': '10', fill: '#5a6a88', 'font-weight': '600', 'letter-spacing': '2' }, svg);
+
+  // Beat detection diagram
+  const beatX = 120, beatY = derY + 30, beatW = 400, beatH = 120;
+
+  nodeBox(beatX - 10, beatY - 10, beatW + 20, beatH + 50, '', svg, { borderColor: '#ff44ff', fill: '#0a0818' });
+  text('Beat Detection', beatX + 10, beatY + 8, { 'font-size': '13', fill: '#ff44ff', 'font-weight': '700' }, svg);
+
+  // Draw bass signal line
+  const bassLine = [];
+  for (let i = 0; i < 50; i++) {
+    const x = beatX + 10 + i * (beatW - 20) / 50;
+    const base = Math.sin(i * 0.4) * 0.3 + 0.35;
+    const spike = (i === 12 || i === 28 || i === 42) ? 0.35 : 0;
+    const y = beatY + beatH - (base + spike) * (beatH - 30);
+    bassLine.push([x, y]);
+  }
+
+  // Draw the bass waveform
+  let pathD = bassLine.map((p, i) => (i === 0 ? 'M' : 'L') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+  el('path', { d: pathD, fill: 'none', stroke: '#ff4466', 'stroke-width': 1.5, opacity: 0.8 }, svg);
+
+  // Threshold line
+  const threshY = beatY + beatH - 0.5 * (beatH - 30);
+  el('line', { x1: beatX + 10, y1: threshY, x2: beatX + beatW - 10, y2: threshY, stroke: '#ff44ff', 'stroke-width': 1, 'stroke-dasharray': '4 2', opacity: 0.6 }, svg);
+  text('threshold: 0.5', beatX + beatW - 10, threshY - 6, { 'text-anchor': 'end', 'font-size': '9', fill: '#ff44ff' }, svg);
+
+  // Beat hit markers
+  [12, 28, 42].forEach(i => {
+    const x = beatX + 10 + i * (beatW - 20) / 50;
+    const circ = el('circle', { cx: x, cy: bassLine[i][1], r: 5, fill: '#ff44ff', opacity: 0.8 }, svg);
+    el('animate', { attributeName: 'r', values: '4;8;4', dur: '1s', repeatCount: 'indefinite' }, circ);
+    el('animate', { attributeName: 'opacity', values: '0.8;0.3;0.8', dur: '1s', repeatCount: 'indefinite' }, circ);
+    text('HIT', x, bassLine[i][1] - 12, { 'text-anchor': 'middle', 'font-size': '8', fill: '#ff44ff', 'font-weight': '700' }, svg);
+  });
+
+  // Beat pulse decay curve
+  text('bass > 0.5 && bass > prev + 0.1', beatX + 20, beatY + beatH + 22, { 'font-size': '10', fill: '#ff44ff' }, svg);
+  text('decay: pulse *= 0.93', beatX + 20, beatY + beatH + 36, { 'font-size': '10', fill: '#5a6a88' }, svg);
+
+  // Spectral flux diagram
+  const fluxX = 580, fluxY = derY + 30;
+  nodeBox(fluxX - 10, fluxY - 10, 440, beatH + 50, '', svg, { borderColor: '#ffaa44', fill: '#0a0818' });
+  text('Spectral Flux & Speed', fluxX + 10, fluxY + 8, { 'font-size': '13', fill: '#ffaa44', 'font-weight': '700' }, svg);
+
+  // Speed formula breakdown
+  const fY = fluxY + 30;
+  text('flux = flux × 0.88 + |Δenergy| × 0.12', fluxX + 15, fY, { 'font-size': '10', fill: '#ffaa44' }, svg);
+
+  text('speed =', fluxX + 15, fY + 28, { 'font-size': '11', fill: '#fff', 'font-weight': '600' }, svg);
+  text('energySpeed', fluxX + 95, fY + 28, { 'font-size': '10', fill: '#ffaa44' }, svg);
+  text('+', fluxX + 185, fY + 28, { 'font-size': '10', fill: '#5a6a88' }, svg);
+  text('beatBoost', fluxX + 205, fY + 28, { 'font-size': '10', fill: '#ff44ff' }, svg);
+
+  text('+', fluxX + 95, fY + 46, { 'font-size': '10', fill: '#5a6a88' }, svg);
+  text('fluxBoost', fluxX + 115, fY + 46, { 'font-size': '10', fill: '#ffaa44' }, svg);
+  text('+', fluxX + 195, fY + 46, { 'font-size': '10', fill: '#5a6a88' }, svg);
+  text('harmonyBoost', fluxX + 215, fY + 46, { 'font-size': '10', fill: '#44ff88' }, svg);
+
+  // Clamp range
+  el('rect', { x: fluxX + 10, y: fY + 58, width: 400, height: 24, rx: 4, fill: '#ffaa44', opacity: 0.08 }, svg);
+  text('clamp( 0.25 ... 1.80 )', fluxX + 210, fY + 74, { 'text-anchor': 'middle', 'font-size': '11', fill: '#ffaa44', 'font-weight': '500' }, svg);
+
+  // Smoothing explanation
+  text('attack: 0.18 (fast)', fluxX + 15, fY + 100, { 'font-size': '10', fill: '#44ff88' }, svg);
+  text('release: 0.025 (slow)', fluxX + 200, fY + 100, { 'font-size': '10', fill: '#ff4466' }, svg);
+
+  // Output arrow
+  flowLine([[550, bandY + 55], [550, 680]], '#fff', svg);
+  flowArrow(550, 680, 'down', '#fff', svg);
+  badge(550, 695, 'TO STAGE 3 & STAGE 5', '#fff', svg);
+
+})();
+
+
+// ============================================================
+// STAGE 3: Stem Separation
+// ============================================================
+(function drawStage3() {
+  const svg = document.getElementById('svg3');
+
+  // Input node at top
+  nodeBox(420, 10, 260, 50, '', svg, { borderColor: '#44ff88', topAccent: '#44ff88' });
+  text('StemPlayer', 550, 30, { 'text-anchor': 'middle', 'font-size': '14', fill: '#fff', 'font-weight': '700' }, svg);
+  text('stem-player.js', 550, 48, { 'text-anchor': 'middle', 'font-size': '10', fill: '#5a6a88' }, svg);
+
+  // Stems with their own mini analyzers
+  const stems = [
+    { id: 'drums', icon: '🥁', color: '#ff4466', x: 60 },
+    { id: 'bass', icon: '🎸', color: '#ff8844', x: 240 },
+    { id: 'vocals', icon: '🎤', color: '#ff44ff', x: 420 },
+    { id: 'guitar', icon: '🎵', color: '#44ff88', x: 600 },
+    { id: 'synth', icon: '🎹', color: '#4488ff', x: 780 },
+    { id: 'FX', icon: '✨', color: '#ffaa44', x: 950 }
+  ];
+
+  // Lines from StemPlayer to each stem
+  stems.forEach(s => {
+    flowLine([[550, 60], [s.x + 65, 120]], s.color, svg);
+    flowArrow(s.x + 65, 120, 'down', s.color, svg);
+  });
+
+  // Each stem card
+  stems.forEach(s => {
+    const g = el('g', {}, svg);
+    nodeBox(s.x, 130, 130, 160, '', g, { borderColor: s.color, topAccent: s.color });
+
+    text(s.icon, s.x + 65, 158, { 'text-anchor': 'middle', 'font-size': '22' }, g);
+    text(s.id, s.x + 65, 180, { 'text-anchor': 'middle', 'font-size': '13', fill: '#fff', 'font-weight': '700' }, g);
+
+    // Mini AnalyserNode
+    el('rect', { x: s.x + 10, y: 192, width: 110, height: 14, rx: 3, fill: '#080e1a' }, g);
+    text('AnalyserNode', s.x + 65, 203, { 'text-anchor': 'middle', 'font-size': '8', fill: '#5a6a88' }, g);
+
+    // Mini spectrum
+    for (let i = 0; i < 16; i++) {
+      const bh = Math.random() * 30 + 5;
+      const bar = el('rect', {
+        x: s.x + 12 + i * 6.5,
+        y: 250 - bh,
+        width: 5, height: bh,
+        rx: 1, fill: s.color, opacity: 0.6
+      }, g);
+      el('animate', {
+        attributeName: 'height',
+        values: [bh, Math.random() * 30 + 5, Math.random() * 30 + 5, bh].map(v => v.toFixed(1)).join(';'),
+        dur: (1.5 + Math.random()).toFixed(2) + 's',
+        repeatCount: 'indefinite'
+      }, bar);
+    }
+
+    // Output params
+    text('→ energy, bass, mid, treble, peak', s.x + 65, 272, { 'text-anchor': 'middle', 'font-size': '8', fill: '#5a6a88' }, g);
+  });
+
+  // ---- Weighted combination section ----
+  const combY = 330;
+  el('line', { x1: 50, y1: combY, x2: 1050, y2: combY, stroke: '#1a2540', 'stroke-width': 1, 'stroke-dasharray': '4 4' }, svg);
+  text('WEIGHTED COMBINATION', 550, combY - 8, { 'text-anchor': 'middle', 'font-size': '10', fill: '#5a6a88', 'font-weight': '600', 'letter-spacing': '2' }, svg);
+
+  // Flow lines from stems down to combination
+  stems.slice(0, 5).forEach(s => {
+    flowLine([[s.x + 65, 290], [s.x + 65, combY + 20]], s.color, svg);
+  });
+
+  // Combination formulas as visual diagrams
+  const formulas = [
+    {
+      name: 'Combined Bass',
+      color: '#ff4466',
+      y: combY + 40,
+      parts: [
+        { stem: 'drums.bass', weight: 0.4, color: '#ff4466' },
+        { stem: 'bass.bass', weight: 0.5, color: '#ff8844' },
+        { stem: 'synth.bass', weight: 0.1, color: '#4488ff' }
+      ]
+    },
+    {
+      name: 'Combined Mid',
+      color: '#44ff88',
+      y: combY + 110,
+      parts: [
+        { stem: 'guitar.mid', weight: 0.3, color: '#44ff88' },
+        { stem: 'vocals.mid', weight: 0.4, color: '#ff44ff' },
+        { stem: 'synth.mid', weight: 0.3, color: '#4488ff' }
+      ]
+    },
+    {
+      name: 'Combined Treble',
+      color: '#4488ff',
+      y: combY + 180,
+      parts: [
+        { stem: 'guitar.treble', weight: 0.3, color: '#44ff88' },
+        { stem: 'vocals.treble', weight: 0.3, color: '#ff44ff' },
+        { stem: 'synth.treble', weight: 0.4, color: '#4488ff' }
+      ]
+    },
+    {
+      name: 'Combined Energy',
+      color: '#ffaa44',
+      y: combY + 250,
+      parts: [
+        { stem: 'drums', weight: 0.3, color: '#ff4466' },
+        { stem: 'bass', weight: 0.2, color: '#ff8844' },
+        { stem: 'guitar', weight: 0.2, color: '#44ff88' },
+        { stem: 'vocals', weight: 0.2, color: '#ff44ff' },
+        { stem: 'synth', weight: 0.1, color: '#4488ff' }
+      ]
+    }
+  ];
+
+  formulas.forEach(f => {
+    // Output label
+    nodeBox(60, f.y, 130, 36, '', svg, { borderColor: f.color, topAccent: f.color });
+    text(f.name, 125, f.y + 22, { 'text-anchor': 'middle', 'font-size': '11', fill: f.color, 'font-weight': '600' }, svg);
+
+    // = sign
+    text('=', 210, f.y + 22, { 'font-size': '16', fill: '#5a6a88', 'font-weight': '700' }, svg);
+
+    // Weight bars (visual representation)
+    let barX = 240;
+    const totalW = 600;
+
+    f.parts.forEach((p, i) => {
+      const partW = p.weight * totalW;
+
+      // Weight bar
+      el('rect', { x: barX, y: f.y + 4, width: partW - 4, height: 28, rx: 4, fill: p.color, opacity: 0.2 }, svg);
+      el('rect', { x: barX, y: f.y + 4, width: partW - 4, height: 28, rx: 4, fill: 'none', stroke: p.color, 'stroke-width': 1, opacity: 0.5 }, svg);
+
+      // Label inside
+      if (partW > 60) {
+        text(p.stem, barX + partW / 2, f.y + 17, { 'text-anchor': 'middle', 'font-size': '9', fill: p.color, 'font-weight': '500' }, svg);
+        text('×' + p.weight, barX + partW / 2, f.y + 28, { 'text-anchor': 'middle', 'font-size': '9', fill: '#5a6a88' }, svg);
+      } else {
+        text('×' + p.weight, barX + partW / 2, f.y + 22, { 'text-anchor': 'middle', 'font-size': '9', fill: p.color }, svg);
+      }
+
+      barX += partW;
+    });
+  });
+
+  // Down arrow
+  flowLine([[550, combY + 300], [550, combY + 340]], '#fff', svg);
+  flowArrow(550, combY + 340, 'down', '#fff', svg);
+  badge(550, combY + 370, 'TO STAGE 4 & STAGE 5', '#fff', svg);
+
+})();
+
+
+// ============================================================
+// STAGE 4: Stem→Visual Routing Matrix
+// ============================================================
+(function drawStage4() {
+  const svg = document.getElementById('svg4');
+
+  const stems = [
+    { id: 'drums', color: '#ff4466', icon: '🥁' },
+    { id: 'bass', color: '#ff8844', icon: '🎸' },
+    { id: 'vocals', color: '#ff44ff', icon: '🎤' },
+    { id: 'synth', color: '#4488ff', icon: '🎹' },
+    { id: 'guitar', color: '#44ff88', icon: '🎵' },
+    { id: 'FX', color: '#ffaa44', icon: '✨' }
+  ];
+
+  const targets = [
+    { id: 'terrain', label: 'Terrain' },
+    { id: 'atmosphere', label: 'Atmosphere' },
+    { id: 'background', label: 'Background' },
+    { id: 'particles', label: 'Particles' }
+  ];
+
+  const routes = [
+    { stem: 'drums', target: 'terrain', effect: 'impact', desc: 'Ripples on hits' },
+    { stem: 'bass', target: 'terrain', effect: 'deformation', desc: 'Continuous warping' },
+    { stem: 'vocals', target: 'atmosphere', effect: 'fog', desc: 'Fog density' },
+    { stem: 'synth', target: 'background', effect: 'pulse', desc: 'Brightness pulse' },
+    { stem: 'guitar', target: 'particles', effect: 'trails', desc: 'Trail intensity' },
+    { stem: 'FX', target: 'particles', effect: 'burst', desc: 'Explosions' }
+  ];
+
+  // Layout
+  const stemX = 80, stemStartY = 60, stemGap = 75;
+  const targetX = 800, targetStartY = 90, targetGap = 110;
+  const midX = 480;
+
+  // Draw stems on left
+  text('STEMS', stemX + 60, 30, { 'text-anchor': 'middle', 'font-size': '10', fill: '#5a6a88', 'font-weight': '600', 'letter-spacing': '3' }, svg);
+  text('(from manifest.json)', stemX + 60, 44, { 'text-anchor': 'middle', 'font-size': '9', fill: '#333' }, svg);
+
+  stems.forEach((s, i) => {
+    const y = stemStartY + i * stemGap;
+    nodeBox(stemX, y, 160, 50, '', svg, { borderColor: s.color, topAccent: s.color });
+    text(s.icon + ' ' + s.id, stemX + 80, y + 30, { 'text-anchor': 'middle', 'font-size': '13', fill: '#fff', 'font-weight': '600' }, svg);
+  });
+
+  // Draw targets on right
+  text('VISUAL TARGETS', targetX + 80, 30, { 'text-anchor': 'middle', 'font-size': '10', fill: '#5a6a88', 'font-weight': '600', 'letter-spacing': '3' }, svg);
+
+  targets.forEach((t, i) => {
+    const y = targetStartY + i * targetGap;
+    nodeBox(targetX, y, 200, 65, '', svg, { borderColor: '#666', fill: '#0a1020' });
+    text(t.label, targetX + 100, y + 28, { 'text-anchor': 'middle', 'font-size': '14', fill: '#fff', 'font-weight': '600' }, svg);
+  });
+
+  // Draw routing connections
+  routes.forEach((r, ri) => {
+    const si = stems.findIndex(s => s.id === r.stem);
+    const ti = targets.findIndex(t => t.id === r.target);
+    const stemColor = stems[si].color;
+
+    const sy = stemStartY + si * stemGap + 25;
+    const ty = targetStartY + ti * targetGap + 32;
+
+    // Curved connection
+    const path = `M${stemX + 160},${sy} C${midX},${sy} ${midX},${ty} ${targetX},${ty}`;
+
+    el('path', {
+      d: path,
+      fill: 'none',
+      stroke: stemColor,
+      'stroke-width': 2.5,
+      opacity: 0.4,
+      'stroke-dasharray': '6 4'
+    }, svg);
+
+    // Animate dashoffset
+    const line = el('path', {
+      d: path,
+      fill: 'none',
+      stroke: stemColor,
+      'stroke-width': 2.5,
+      opacity: 0.4,
+      'stroke-dasharray': '6 4'
+    }, svg);
+    el('animate', {
+      attributeName: 'stroke-dashoffset',
+      from: '0', to: '-20',
+      dur: '1.5s', repeatCount: 'indefinite'
+    }, line);
+
+    // Effect label on the path
+    const labelX = midX;
+    const labelY = (sy + ty) / 2 + (ri % 2 === 0 ? -8 : 8);
+
+    // Effect badge
+    const badgeW = r.effect.length * 7 + 20;
+    el('rect', { x: labelX - badgeW / 2, y: labelY - 11, width: badgeW, height: 22, rx: 11, fill: '#0d1528', stroke: stemColor, 'stroke-width': 1 }, svg);
+    text(r.effect, labelX, labelY + 4, { 'text-anchor': 'middle', 'font-size': '10', fill: stemColor, 'font-weight': '600' }, svg);
+
+    // Traveling dots
+    travelDot(path, stemColor, svg, (2 + ri * 0.5).toFixed(1) + 's', (ri * 0.3).toFixed(1) + 's');
+
+    // Description under target
+    const descY = targetStartY + ti * targetGap + 50;
+    text(r.desc, targetX + 100, descY, { 'text-anchor': 'middle', 'font-size': '9', fill: '#5a6a88' }, svg);
+  });
+
+  // Energy threshold note for FX
+  text('trigger: energy > 0.3', targetX + 100, targetStartY + 3 * targetGap + 62, { 'text-anchor': 'middle', 'font-size': '9', fill: '#ffaa44' }, svg);
+
+  // Down arrow
+  flowLine([[550, 530], [550, 560]], '#fff', svg);
+  flowArrow(550, 560, 'down', '#fff', svg);
+  badge(550, 580, 'TO STAGE 5: CONSUMER SYSTEMS', '#fff', svg);
+
+})();
+
+
+// ============================================================
+// STAGE 5: Three Consumer Systems
+// ============================================================
+(function drawStage5() {
+  const svg = document.getElementById('svg5');
+
+  // Top: data flow distribution node
+  nodeBox(380, 10, 340, 50, '', svg, { borderColor: '#fff', fill: '#0d1528' });
+  text('drawVizThree()  —  Main Animation Loop', 550, 40, { 'text-anchor': 'middle', 'font-size': '12', fill: '#fff', 'font-weight': '600' }, svg);
+
+  // Three branches
+  const branches = [
+    { label: 'EnvironmentMode', file: 'environments.js', x: 50, color: '#44ff88', width: 320 },
+    { label: 'EffectsManager', file: 'effects-manager.js', x: 400, color: '#4488ff', width: 300 },
+    { label: 'TrackScenes', file: 'track-scenes.js', x: 730, color: '#ff44ff', width: 320 }
+  ];
+
+  // Flow lines from distribution to each branch
+  branches.forEach(b => {
+    const cx = b.x + b.width / 2;
+    flowLine([[550, 60], [cx, 110]], b.color, svg);
+    flowArrow(cx, 110, 'down', b.color, svg);
+  });
+
+  // ---- Branch A: EnvironmentMode ----
+  const envX = 50, envY = 120, envW = 320;
+  nodeBox(envX, envY, envW, 36, '', svg, { borderColor: '#44ff88', topAccent: '#44ff88', strokeWidth: 2 });
+  text('EnvironmentMode', envX + envW / 2, envY + 22, { 'text-anchor': 'middle', 'font-size': '14', fill: '#44ff88', 'font-weight': '700' }, svg);
+
+  // Input badge
+  badge(envX + envW / 2, envY + 56, 'bass  mid  treble  energy  beatPulse  beatHit', '#44ff88', svg);
+
+  const envParams = [
+    { label: 'Ship Speed', formula: 'base + (max-base) × energy × mult', band: 'energy', color: '#ffaa44', y: envY + 80 },
+    { label: 'Fog Density', formula: 'energy + vocal fog', band: 'energy', color: '#ffaa44', y: envY + 130 },
+    { label: 'Particles', formula: 'speed & opacity ← energy', band: 'energy', color: '#ffaa44', y: envY + 180 },
+    { label: 'Speed Lines', formula: 'opacity ← speedRatio × energy', band: 'energy', color: '#ffaa44', y: envY + 230 },
+    { label: 'Lighting', formula: 'pulse intensity ← bass', band: 'bass', color: '#ff4466', y: envY + 280 },
+    { label: 'Camera Shake', formula: 'offset ← bassHit', band: 'bass', color: '#ff4466', y: envY + 330 }
+  ];
+
+  envParams.forEach(p => {
+    const g = el('g', {}, svg);
+    nodeBox(envX + 10, p.y, envW - 20, 40, '', g, { fill: '#080e1a' });
+
+    // Band dot
+    el('circle', { cx: envX + 26, cy: p.y + 20, r: 5, fill: p.color }, g);
+
+    // Label
+    text(p.label, envX + 42, p.y + 17, { 'font-size': '11', fill: '#fff', 'font-weight': '500' }, g);
+    text(p.formula, envX + 42, p.y + 32, { 'font-size': '9', fill: '#5a6a88' }, g);
+
+    // Arrow indicator
+    flowLine([[envX + envW - 25, p.y + 20], [envX + envW - 15, p.y + 20]], p.color, svg, false);
+  });
+
+  // ---- Branch B: EffectsManager ----
+  const efxX = 400, efxY = 120, efxW = 300;
+  nodeBox(efxX, efxY, efxW, 36, '', svg, { borderColor: '#4488ff', topAccent: '#4488ff', strokeWidth: 2 });
+  text('EffectsManager', efxX + efxW / 2, efxY + 22, { 'text-anchor': 'middle', 'font-size': '14', fill: '#4488ff', 'font-weight': '700' }, svg);
+
+  badge(efxX + efxW / 2, efxY + 56, 'audioData + stemVizData', '#4488ff', svg);
+
+  const efxParams = [
+    { label: 'Lightning', config: 'band: bass', thresh: '> threshold', band: 'bass', color: '#ff4466', y: efxY + 80 },
+    { label: 'Aurora', config: 'band: mid', thresh: 'amplitude & opacity', band: 'mid', color: '#44ff88', y: efxY + 130 },
+    { label: 'Grid', config: 'band: energy', thresh: 'floor opacity', band: 'energy', color: '#ffaa44', y: efxY + 180 },
+    { label: 'GodRays', config: 'band: bass', thresh: 'intensity & angle', band: 'bass', color: '#ff4466', y: efxY + 230 },
+    { label: 'Particles', config: 'band: energy', thresh: 'speed × size', band: 'energy', color: '#ffaa44', y: efxY + 280 },
+    { label: 'Screen Shake', config: 'energy > 0.7', thresh: 'camera offset', band: 'energy', color: '#ffaa44', y: efxY + 330 }
+  ];
+
+  efxParams.forEach(p => {
+    const g = el('g', {}, svg);
+    nodeBox(efxX + 10, p.y, efxW - 20, 40, '', g, { fill: '#080e1a' });
+
+    el('circle', { cx: efxX + 26, cy: p.y + 20, r: 5, fill: p.color }, g);
+
+    text(p.label, efxX + 42, p.y + 17, { 'font-size': '11', fill: '#fff', 'font-weight': '500' }, g);
+    text(p.config + ' → ' + p.thresh, efxX + 42, p.y + 32, { 'font-size': '9', fill: '#5a6a88' }, g);
+  });
+
+  // Stem effects sub-section
+  const stemEfxY = efxY + 390;
+  nodeBox(efxX + 10, stemEfxY, efxW - 20, 130, '', svg, { borderColor: '#4488ff', fill: '#080e1a' });
+  text('Stem Effects Router', efxX + efxW / 2, stemEfxY + 18, { 'text-anchor': 'middle', 'font-size': '11', fill: '#4488ff', 'font-weight': '600' }, svg);
+
+  const stemRoutes = [
+    'terrain:impact → ripples',
+    'terrain:deform → warping',
+    'atmo:fog → density',
+    'atmo:glow → emission',
+    'bg:pulse → brightness',
+    'particles:burst → explode'
+  ];
+  stemRoutes.forEach((r, i) => {
+    text(r, efxX + 30, stemEfxY + 38 + i * 15, { 'font-size': '9', fill: '#5a6a88' }, svg);
+  });
+
+  // ---- Branch C: TrackScenes ----
+  const tsX = 730, tsY = 120, tsW = 320;
+  nodeBox(tsX, tsY, tsW, 36, '', svg, { borderColor: '#ff44ff', topAccent: '#ff44ff', strokeWidth: 2 });
+  text('TrackScenes', tsX + tsW / 2, tsY + 22, { 'text-anchor': 'middle', 'font-size': '14', fill: '#ff44ff', 'font-weight': '700' }, svg);
+
+  badge(tsX + tsW / 2, tsY + 56, 'raw freq[] + audioExtra', '#ff44ff', svg);
+
+  // Direct bin access diagram
+  const binY = tsY + 80;
+  nodeBox(tsX + 10, binY, tsW - 20, 115, '', svg, { fill: '#080e1a', borderColor: '#ff44ff' });
+  text('Direct Bin Access', tsX + tsW / 2, binY + 18, { 'text-anchor': 'middle', 'font-size': '11', fill: '#ff44ff', 'font-weight': '600' }, svg);
+
+  const binAccess = [
+    { label: 'bassEnergy', bins: 'freq[0]+[1]+[2] / 3 / 255', color: '#ff4466' },
+    { label: 'midEnergy', bins: 'freq[10]+[20]+[30] / 3 / 255', color: '#44ff88' },
+    { label: 'highEnergy', bins: 'freq[60]+[80]+[100] / 3 / 255', color: '#4488ff' },
+    { label: 'drumPulse', bins: 'audioExtra.drumPulse', color: '#ff44ff' }
+  ];
+
+  binAccess.forEach((b, i) => {
+    const by = binY + 32 + i * 20;
+    el('circle', { cx: tsX + 26, cy: by, r: 4, fill: b.color }, svg);
+    text(b.label, tsX + 40, by + 4, { 'font-size': '10', fill: b.color, 'font-weight': '500' }, svg);
+    text(b.bins, tsX + 130, by + 4, { 'font-size': '9', fill: '#5a6a88' }, svg);
+  });
+
+  // Scene types
+  const sceneY = binY + 130;
+  nodeBox(tsX + 10, sceneY, tsW - 20, 180, '', svg, { fill: '#080e1a' });
+  text('Scene-Specific Behaviors', tsX + tsW / 2, sceneY + 18, { 'text-anchor': 'middle', 'font-size': '11', fill: '#ff44ff', 'font-weight': '600' }, svg);
+
+  const scenes = [
+    { name: 'Data Tide', effects: 'Coral glow, bioluminescence' },
+    { name: 'Beast Mode', effects: 'Lightning, camera shake' },
+    { name: 'Soft Systems', effects: 'Particles, ambient glow' },
+    { name: 'Custom', effects: 'Per-track unique elements' }
+  ];
+
+  scenes.forEach((sc, i) => {
+    const sy = sceneY + 36 + i * 34;
+    el('rect', { x: tsX + 20, y: sy, width: tsW - 40, height: 28, rx: 4, fill: '#0d1528', stroke: '#1a2540' }, svg);
+    text(sc.name, tsX + 34, sy + 13, { 'font-size': '11', fill: '#fff', 'font-weight': '500' }, svg);
+    text(sc.effects, tsX + 34, sy + 24, { 'font-size': '9', fill: '#5a6a88' }, svg);
+  });
+
+  // Bottom: All three converge to renderer
+  const rendY = 730;
+  branches.forEach(b => {
+    const cx = b.x + b.width / 2;
+    flowLine([[cx, rendY - 80], [cx, rendY - 20], [550, rendY]], b.color, svg);
+  });
+  flowArrow(550, rendY, 'down', '#fff', svg);
+
+  nodeBox(350, rendY + 10, 400, 50, '', svg, { borderColor: '#fff', fill: '#111', strokeWidth: 2 });
+  text('THREE.JS Renderer  →  Post-Processing  →  Screen', 550, rendY + 40, { 'text-anchor': 'middle', 'font-size': '12', fill: '#fff', 'font-weight': '600' }, svg);
+
+  // Arrow to GPU
+  flowLine([[550, rendY + 60], [550, rendY + 90]], '#fff', svg);
+  flowArrow(550, rendY + 90, 'down', '#fff', svg);
+  badge(550, rendY + 110, 'STAGE 6: GPU SHADER LAYER', '#fff', svg);
+
+})();
+
+
+// ============================================================
+// STAGE 6: GPU Shader Layer
+// ============================================================
+(function drawStage6() {
+  const svg = document.getElementById('svg6');
+
+  // AnimatedBackground box
+  nodeBox(200, 10, 700, 40, '', svg, { borderColor: '#4488ff', topAccent: '#4488ff', strokeWidth: 2 });
+  text('AnimatedBackground  (backgrounds.js)  —  GPU Shader Pipeline', 550, 35, { 'text-anchor': 'middle', 'font-size': '13', fill: '#fff', 'font-weight': '700' }, svg);
+
+  // Uniforms section
+  const uniY = 70;
+  nodeBox(100, uniY, 900, 90, '', svg, { fill: '#080e1a', borderColor: '#4488ff' });
+  text('SHADER UNIFORMS (CPU → GPU)', 550, uniY + 18, { 'text-anchor': 'middle', 'font-size': '11', fill: '#4488ff', 'font-weight': '600', 'letter-spacing': '2' }, svg);
+
+  const uniforms = [
+    { name: 'uAudioBass', color: '#ff4466' },
+    { name: 'uAudioMid', color: '#44ff88' },
+    { name: 'uAudioTreble', color: '#4488ff' },
+    { name: 'uAudioEnergy', color: '#ffaa44' },
+    { name: 'uBeatPulse', color: '#ff44ff' },
+    { name: 'uAudioReactivity', color: '#aaa' }
+  ];
+
+  const uniStartX = 120;
+  const uniGap = 150;
+  uniforms.forEach((u, i) => {
+    const ux = uniStartX + (i % 6) * uniGap;
+    const uy = uniY + 38 + Math.floor(i / 6) * 30;
+
+    el('rect', { x: ux, y: uy, width: 135, height: 24, rx: 4, fill: u.color, opacity: 0.1 }, svg);
+    el('rect', { x: ux, y: uy, width: 135, height: 24, rx: 4, fill: 'none', stroke: u.color, opacity: 0.4 }, svg);
+
+    const dot = el('circle', { cx: ux + 12, cy: uy + 12, r: 4, fill: u.color }, svg);
+    el('animate', { attributeName: 'opacity', values: '0.5;1;0.5', dur: (1 + i * 0.3).toFixed(1) + 's', repeatCount: 'indefinite' }, dot);
+
+    text(u.name, ux + 24, uy + 16, { 'font-size': '10', fill: u.color, 'font-weight': '500' }, svg);
+  });
+
+  // Shader helper functions
+  const helpY = 185;
+  nodeBox(100, helpY, 440, 200, '', svg, { fill: '#080e1a', borderColor: '#44ff88' });
+  text('SHADER HELPERS (GLSL)', 320, helpY + 18, { 'text-anchor': 'middle', 'font-size': '11', fill: '#44ff88', 'font-weight': '600', 'letter-spacing': '2' }, svg);
+
+  const helpers = [
+    { sig: 'aEnergy()', ret: 'uAudioEnergy × uAudioReactivity', color: '#ffaa44' },
+    { sig: 'aBass()', ret: 'uAudioBass × uAudioReactivity', color: '#ff4466' },
+    { sig: 'aMid()', ret: 'uAudioMid × uAudioReactivity', color: '#44ff88' },
+    { sig: 'aTreble()', ret: 'uAudioTreble × uAudioReactivity', color: '#4488ff' },
+    { sig: 'aBeat()', ret: 'uBeatPulse × uAudioReactivity', color: '#ff44ff' }
+  ];
+
+  helpers.forEach((h, i) => {
+    const hy = helpY + 38 + i * 30;
+    text(h.sig, 130, hy + 4, { 'font-size': '12', fill: h.color, 'font-weight': '600' }, svg);
+    text('→', 240, hy + 4, { 'font-size': '12', fill: '#5a6a88' }, svg);
+    text(h.ret, 260, hy + 4, { 'font-size': '11', fill: '#5a6a88' }, svg);
+  });
+
+  // Audio-reactive shader functions
+  const funcY = 185;
+  nodeBox(560, funcY, 440, 200, '', svg, { fill: '#080e1a', borderColor: '#ff44ff' });
+  text('AUDIO-REACTIVE FUNCTIONS', 780, funcY + 18, { 'text-anchor': 'middle', 'font-size': '11', fill: '#ff44ff', 'font-weight': '600', 'letter-spacing': '2' }, svg);
+
+  // audioScale
+  const asY = funcY + 36;
+  text('audioScale(uv)', 590, asY + 4, { 'font-size': '12', fill: '#ff44ff', 'font-weight': '600' }, svg);
+  text('pulse = 1.0', 590, asY + 22, { 'font-size': '10', fill: '#aaa' }, svg);
+  text('- aBass() × 0.20', 670, asY + 22, { 'font-size': '10', fill: '#ff4466' }, svg);
+  text('- aBeat() × 0.15', 810, asY + 22, { 'font-size': '10', fill: '#ff44ff' }, svg);
+
+  // Visual: zoom effect diagram
+  const zoomCx = 630, zoomCy = asY + 55, zoomR = 18;
+  el('circle', { cx: zoomCx, cy: zoomCy, r: zoomR, fill: 'none', stroke: '#ff44ff', 'stroke-width': 1, 'stroke-dasharray': '2 2', opacity: 0.5 }, svg);
+  const innerC = el('circle', { cx: zoomCx, cy: zoomCy, r: zoomR - 5, fill: 'none', stroke: '#ff44ff', 'stroke-width': 1.5 }, svg);
+  el('animate', { attributeName: 'r', values: `${zoomR-2};${zoomR-8};${zoomR-2}`, dur: '2s', repeatCount: 'indefinite' }, innerC);
+  text('zoom', zoomCx + 28, zoomCy + 4, { 'font-size': '9', fill: '#5a6a88' }, svg);
+
+  // audioBrightness
+  const abY = asY + 85;
+  text('audioBrightness()', 590, abY + 4, { 'font-size': '12', fill: '#ffaa44', 'font-weight': '600' }, svg);
+  text('1.0 + aBeat() × 0.5 + aEnergy() × 0.4', 590, abY + 22, { 'font-size': '10', fill: '#aaa' }, svg);
+
+  // Visual: brightness pulse
+  const bCx = 630, bCy = abY + 48;
+  const bCirc = el('circle', { cx: bCx, cy: bCy, r: 12, fill: '#ffaa44', opacity: 0.3 }, svg);
+  el('animate', { attributeName: 'opacity', values: '0.1;0.6;0.1', dur: '1.5s', repeatCount: 'indefinite' }, bCirc);
+  el('animate', { attributeName: 'r', values: '10;18;10', dur: '1.5s', repeatCount: 'indefinite' }, bCirc);
+  el('circle', { cx: bCx, cy: bCy, r: 6, fill: '#ffaa44', opacity: 0.8 }, svg);
+  text('glow', bCx + 28, bCy + 4, { 'font-size': '9', fill: '#5a6a88' }, svg);
+
+  // ---- Terrain Shader Section ----
+  const terrY = 410;
+  nodeBox(100, terrY, 900, 120, '', svg, { fill: '#080e1a', borderColor: '#ff4466' });
+  text('TERRAIN SHADER (terrain.js)', 550, terrY + 18, { 'text-anchor': 'middle', 'font-size': '11', fill: '#ff4466', 'font-weight': '600', 'letter-spacing': '2' }, svg);
+
+  // Terrain uniforms
+  const terrUnis = [
+    { name: 'uBassDeform', color: '#ff4466', desc: 'vertex displacement' },
+    { name: 'uDrumImpact', color: '#ff8844', desc: 'impulse ripples' }
+  ];
+
+  terrUnis.forEach((u, i) => {
+    const tx = 150 + i * 350;
+    el('rect', { x: tx, y: terrY + 35, width: 280, height: 30, rx: 4, fill: u.color, opacity: 0.08 }, svg);
+    el('circle', { cx: tx + 14, cy: terrY + 50, r: 5, fill: u.color }, svg);
+    text(u.name, tx + 28, terrY + 54, { 'font-size': '12', fill: u.color, 'font-weight': '600' }, svg);
+    text('→ ' + u.desc, tx + 160, terrY + 54, { 'font-size': '10', fill: '#5a6a88' }, svg);
+  });
+
+  // Color output diagram
+  text('Output Color Mixing:', 150, terrY + 88, { 'font-size': '11', fill: '#fff', 'font-weight': '500' }, svg);
+
+  // Color swatches
+  const swatches = [
+    { label: 'base color', color: '#666', x: 340 },
+    { label: '+ bass blue', color: '#3366ff', x: 460 },
+    { label: '+ drum warm', color: '#ff8833', x: 590 },
+    { label: '= final', color: '#ffffff', x: 720 }
+  ];
+
+  swatches.forEach((s, i) => {
+    el('rect', { x: s.x, y: terrY + 78, width: 90, height: 22, rx: 4, fill: s.color, opacity: 0.3 }, svg);
+    text(s.label, s.x + 45, terrY + 93, { 'text-anchor': 'middle', 'font-size': '9', fill: s.color === '#ffffff' ? '#fff' : s.color }, svg);
+    if (i < swatches.length - 1) {
+      text(i < swatches.length - 2 ? '+' : '=', s.x + 105, terrY + 93, { 'font-size': '14', fill: '#5a6a88', 'font-weight': '700' }, svg);
+    }
+  });
+
+  // ---- Background types at bottom ----
+  const bgY = 560;
+  nodeBox(100, bgY, 900, 140, '', svg, { fill: '#080e1a', borderColor: '#4488ff' });
+  text('BACKGROUND TYPES — Each with unique audio reactions', 550, bgY + 18, { 'text-anchor': 'middle', 'font-size': '11', fill: '#4488ff', 'font-weight': '600', 'letter-spacing': '1' }, svg);
+
+  const bgTypes = [
+    { name: 'ocean', bass: 'wave amplitude', treble: 'caustics', color: '#0088ff' },
+    { name: 'nebula', bass: 'spiral distort', treble: 'star twinkle', color: '#8844ff' },
+    { name: 'matrix', energy: 'rain speed', bass: 'trail length', color: '#44ff44' },
+    { name: 'aurora', bass: 'ribbon wave', energy: 'brightness', color: '#44ffaa' },
+    { name: 'forge', bass: 'heat distort', energy: 'spark density', color: '#ff6622' },
+    { name: 'topo', energy: 'line density', beat: 'brightness', color: '#ff4466' },
+    { name: 'sakura', bass: 'petal drift', treble: 'sparkle', color: '#ff88cc' },
+    { name: 'glacier', bass: 'crystal sharp', treble: 'shimmer', color: '#88ddff' },
+    { name: 'circuit', energy: 'trace density', bass: 'pulse speed', color: '#44ff88' },
+    { name: 'savanna', bass: 'heat shimmer', energy: 'dust amount', color: '#ddaa44' }
+  ];
+
+  bgTypes.forEach((bg, i) => {
+    const col = i % 5;
+    const row = Math.floor(i / 5);
+    const bx = 120 + col * 175;
+    const by = bgY + 35 + row * 50;
+
+    el('rect', { x: bx, y: by, width: 160, height: 40, rx: 6, fill: bg.color, opacity: 0.08 }, svg);
+    el('rect', { x: bx, y: by, width: 160, height: 40, rx: 6, fill: 'none', stroke: bg.color, opacity: 0.3 }, svg);
+
+    text(bg.name, bx + 80, by + 16, { 'text-anchor': 'middle', 'font-size': '11', fill: bg.color, 'font-weight': '700' }, svg);
+
+    const desc = bg.bass ? `bass→${bg.bass}` : `energy→${bg.energy || ''}`;
+    const desc2 = bg.treble ? `treble→${bg.treble}` : (bg.energy ? `energy→${bg.energy}` : (bg.beat ? `beat→${bg.beat}` : ''));
+    text(desc, bx + 80, by + 32, { 'text-anchor': 'middle', 'font-size': '8', fill: '#5a6a88' }, svg);
+  });
+
+  // Final render output
+  const finalY = 715;
+  el('rect', { x: 300, y: finalY, width: 500, height: 30, rx: 6, fill: '#44ff88', opacity: 0.08 }, svg);
+  el('rect', { x: 300, y: finalY, width: 500, height: 30, rx: 6, fill: 'none', stroke: '#44ff88', opacity: 0.5, 'stroke-width': 2 }, svg);
+  text('→  SCREEN OUTPUT  ←', 550, finalY + 20, { 'text-anchor': 'middle', 'font-size': '14', fill: '#44ff88', 'font-weight': '700', 'letter-spacing': '3' }, svg);
+
+})();
+
+
+// ============================================================
+// NAV HIGHLIGHT ON SCROLL
+// ============================================================
+const sections = document.querySelectorAll('section');
+const navLinks = document.querySelectorAll('nav a');
+
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      navLinks.forEach(l => l.classList.remove('active'));
+      const link = document.querySelector(`nav a[href="#${entry.target.id}"]`);
+      if (link) link.classList.add('active');
+    }
+  });
+}, { threshold: 0.3 });
+
+sections.forEach(s => observer.observe(s));
+
+</script>
+</body>
+</html>

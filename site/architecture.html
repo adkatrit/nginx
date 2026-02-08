@@ -1,0 +1,1399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Audio Environments - Architecture</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-primary: #0a0a12;
+      --bg-secondary: #12121f;
+      --bg-tertiary: #1a1a2e;
+      --border: #2a2a4a;
+      --text-primary: #e8e8f0;
+      --text-secondary: #a0a0b8;
+      --accent-cyan: #00d4ff;
+      --accent-magenta: #ff00aa;
+      --accent-green: #00ff88;
+      --accent-orange: #ff8844;
+      --accent-purple: #aa66ff;
+      --accent-blue: #4488ff;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    .container {
+      display: grid;
+      grid-template-columns: 280px 1fr 320px;
+      min-height: 100vh;
+    }
+
+    /* Navigation Panel */
+    .nav-panel {
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border);
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    .nav-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 16px;
+    }
+
+    .nav-section {
+      margin-bottom: 24px;
+    }
+
+    .nav-section-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+      padding-left: 8px;
+    }
+
+    .nav-item {
+      padding: 10px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.15s;
+      font-size: 14px;
+    }
+
+    .nav-item:hover {
+      background: var(--bg-tertiary);
+    }
+
+    .nav-item.active {
+      background: linear-gradient(90deg, rgba(0,212,255,0.15), transparent);
+      border-left: 2px solid var(--accent-cyan);
+    }
+
+    .nav-icon {
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+    }
+
+    /* Main Content */
+    .main-content {
+      padding: 40px;
+      overflow-y: auto;
+    }
+
+    .header {
+      margin-bottom: 40px;
+    }
+
+    .header h1 {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-magenta));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .header p {
+      color: var(--text-secondary);
+      font-size: 16px;
+    }
+
+    /* Architecture Diagram */
+    .diagram-container {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 32px;
+      margin-bottom: 32px;
+    }
+
+    .diagram-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .diagram {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .layer {
+      display: flex;
+      gap: 16px;
+      align-items: stretch;
+    }
+
+    .layer-label {
+      width: 100px;
+      flex-shrink: 0;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+    }
+
+    .layer-content {
+      flex: 1;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .module {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px 20px;
+      cursor: pointer;
+      transition: all 0.2s;
+      min-width: 140px;
+      flex: 1;
+    }
+
+    .module:hover {
+      border-color: var(--accent-cyan);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 20px rgba(0,212,255,0.15);
+    }
+
+    .module.selected {
+      border-color: var(--accent-cyan);
+      background: linear-gradient(135deg, rgba(0,212,255,0.1), rgba(255,0,170,0.05));
+    }
+
+    .module-name {
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
+
+    .module-file {
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .module[data-color="cyan"] { border-left: 3px solid var(--accent-cyan); }
+    .module[data-color="magenta"] { border-left: 3px solid var(--accent-magenta); }
+    .module[data-color="green"] { border-left: 3px solid var(--accent-green); }
+    .module[data-color="orange"] { border-left: 3px solid var(--accent-orange); }
+    .module[data-color="purple"] { border-left: 3px solid var(--accent-purple); }
+    .module[data-color="blue"] { border-left: 3px solid var(--accent-blue); }
+
+    /* Connections */
+    .connections {
+      display: flex;
+      justify-content: center;
+      padding: 8px 0;
+    }
+
+    .arrow-down {
+      width: 2px;
+      height: 24px;
+      background: var(--border);
+      position: relative;
+    }
+
+    .arrow-down::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 8px solid var(--border);
+    }
+
+    /* Detail Panel */
+    .detail-panel {
+      background: var(--bg-secondary);
+      border-left: 1px solid var(--border);
+      padding: 24px;
+      overflow-y: auto;
+    }
+
+    .detail-header {
+      margin-bottom: 24px;
+    }
+
+    .detail-title {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .detail-subtitle {
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 12px;
+      color: var(--accent-cyan);
+    }
+
+    .detail-section {
+      margin-bottom: 24px;
+    }
+
+    .detail-section-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+    }
+
+    .detail-description {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.7;
+    }
+
+    .feature-list {
+      list-style: none;
+    }
+
+    .feature-list li {
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .feature-list li:last-child {
+      border-bottom: none;
+    }
+
+    .feature-icon {
+      color: var(--accent-green);
+      flex-shrink: 0;
+    }
+
+    .code-block {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 16px;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 12px;
+      overflow-x: auto;
+      white-space: pre;
+      color: var(--text-secondary);
+    }
+
+    .code-block .keyword { color: var(--accent-magenta); }
+    .code-block .string { color: var(--accent-green); }
+    .code-block .comment { color: #666; }
+    .code-block .function { color: var(--accent-cyan); }
+    .code-block .property { color: var(--accent-orange); }
+
+    /* Data Flow Section */
+    .data-flow {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 32px;
+      margin-bottom: 32px;
+    }
+
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .flow-node {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px 24px;
+      text-align: center;
+      flex: 1;
+      min-width: 120px;
+    }
+
+    .flow-node-title {
+      font-weight: 600;
+      font-size: 13px;
+      margin-bottom: 4px;
+    }
+
+    .flow-node-subtitle {
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .flow-arrow {
+      color: var(--accent-cyan);
+      font-size: 20px;
+    }
+
+    /* Track Themes Grid */
+    .tracks-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+      margin-top: 24px;
+    }
+
+    .track-card {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .track-card:hover {
+      border-color: var(--accent-cyan);
+      transform: translateY(-2px);
+    }
+
+    .track-card.selected {
+      border-color: var(--accent-magenta);
+    }
+
+    .track-name {
+      font-weight: 600;
+      font-size: 15px;
+      margin-bottom: 8px;
+    }
+
+    .track-meta {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .track-tag {
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      background: var(--bg-secondary);
+    }
+
+    .track-tag.model { color: var(--accent-cyan); }
+    .track-tag.env { color: var(--accent-green); }
+    .track-tag.particles { color: var(--accent-orange); }
+
+    /* Interactive Controls */
+    .controls-section {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 32px;
+    }
+
+    .control-group {
+      margin-bottom: 20px;
+    }
+
+    .control-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    .control-buttons {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .control-btn {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.15s;
+    }
+
+    .control-btn:hover {
+      border-color: var(--accent-cyan);
+    }
+
+    .control-btn.active {
+      background: linear-gradient(135deg, rgba(0,212,255,0.2), rgba(255,0,170,0.1));
+      border-color: var(--accent-cyan);
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+
+    .stat-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-magenta));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    /* Section visibility */
+    .section {
+      display: none;
+    }
+
+    .section.active {
+      display: block;
+    }
+
+    /* Responsive */
+    @media (max-width: 1200px) {
+      .container {
+        grid-template-columns: 1fr;
+      }
+      .nav-panel, .detail-panel {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Navigation -->
+    <nav class="nav-panel">
+      <div class="nav-title">Architecture Explorer</div>
+
+      <div class="nav-section">
+        <div class="nav-section-title">Overview</div>
+        <div class="nav-item active" data-section="overview">
+          <span class="nav-icon">&#9632;</span>
+          System Overview
+        </div>
+        <div class="nav-item" data-section="dataflow">
+          <span class="nav-icon">&#8594;</span>
+          Data Flow
+        </div>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-section-title">Core Systems</div>
+        <div class="nav-item" data-section="audio">
+          <span class="nav-icon">&#9835;</span>
+          Audio Engine
+        </div>
+        <div class="nav-item" data-section="visuals">
+          <span class="nav-icon">&#9733;</span>
+          Visual Pipeline
+        </div>
+        <div class="nav-item" data-section="terrain">
+          <span class="nav-icon">&#9650;</span>
+          Terrain System
+        </div>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-section-title">Configuration</div>
+        <div class="nav-item" data-section="themes">
+          <span class="nav-icon">&#9790;</span>
+          Track Themes
+        </div>
+        <div class="nav-item" data-section="scenes">
+          <span class="nav-icon">&#9670;</span>
+          Custom Scenes
+        </div>
+        <div class="nav-item" data-section="models">
+          <span class="nav-icon">&#9651;</span>
+          3D Models
+        </div>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-section-title">File Reference</div>
+        <div class="nav-item" data-section="files">
+          <span class="nav-icon">&#128193;</span>
+          All Files
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Overview Section -->
+      <section class="section active" id="section-overview">
+        <div class="header">
+          <h1>Audio Environments</h1>
+          <p>Interactive 3D music visualization with per-stem audio analysis and procedural terrain</p>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-value">10</div>
+            <div class="stat-label">Tracks</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">8</div>
+            <div class="stat-label">Stems/Track</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">12</div>
+            <div class="stat-label">Core Modules</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">15+</div>
+            <div class="stat-label">3D Models</div>
+          </div>
+        </div>
+
+        <div class="diagram-container">
+          <div class="diagram-title">
+            <span>&#9632;</span> System Architecture
+          </div>
+          <div class="diagram">
+            <!-- Presentation Layer -->
+            <div class="layer">
+              <div class="layer-label">UI Layer</div>
+              <div class="layer-content">
+                <div class="module" data-color="cyan" data-module="index">
+                  <div class="module-name">index.html</div>
+                  <div class="module-file">Controls, Modals, HUD</div>
+                </div>
+                <div class="module" data-color="cyan" data-module="styles">
+                  <div class="module-name">styles.css</div>
+                  <div class="module-file">Theme System</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="connections"><div class="arrow-down"></div></div>
+
+            <!-- Application Layer -->
+            <div class="layer">
+              <div class="layer-label">Application</div>
+              <div class="layer-content">
+                <div class="module" data-color="magenta" data-module="app">
+                  <div class="module-name">app.js</div>
+                  <div class="module-file">Main Controller</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="connections"><div class="arrow-down"></div></div>
+
+            <!-- Audio Layer -->
+            <div class="layer">
+              <div class="layer-label">Audio</div>
+              <div class="layer-content">
+                <div class="module" data-color="green" data-module="stem-player">
+                  <div class="module-name">StemPlayer</div>
+                  <div class="module-file">stem-player.js</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="connections"><div class="arrow-down"></div></div>
+
+            <!-- Visualization Layer -->
+            <div class="layer">
+              <div class="layer-label">Visuals</div>
+              <div class="layer-content">
+                <div class="module" data-color="orange" data-module="effects">
+                  <div class="module-name">EffectsManager</div>
+                  <div class="module-file">effects-manager.js</div>
+                </div>
+                <div class="module" data-color="orange" data-module="track-scenes">
+                  <div class="module-name">TrackScenes</div>
+                  <div class="module-file">track-scenes.js</div>
+                </div>
+                <div class="module" data-color="orange" data-module="backgrounds">
+                  <div class="module-name">AnimatedBackground</div>
+                  <div class="module-file">backgrounds.js</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="connections"><div class="arrow-down"></div></div>
+
+            <!-- World Layer -->
+            <div class="layer">
+              <div class="layer-label">World</div>
+              <div class="layer-content">
+                <div class="module" data-color="purple" data-module="terrain">
+                  <div class="module-name">TerrainSystem</div>
+                  <div class="module-file">terrain.js</div>
+                </div>
+                <div class="module" data-color="purple" data-module="environments">
+                  <div class="module-name">Environments</div>
+                  <div class="module-file">environments.js</div>
+                </div>
+                <div class="module" data-color="purple" data-module="noise">
+                  <div class="module-name">NoiseGenerator</div>
+                  <div class="module-file">noise.js</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="connections"><div class="arrow-down"></div></div>
+
+            <!-- Config Layer -->
+            <div class="layer">
+              <div class="layer-label">Config</div>
+              <div class="layer-content">
+                <div class="module" data-color="blue" data-module="themes">
+                  <div class="module-name">TRACK_THEMES</div>
+                  <div class="module-file">themes.js</div>
+                </div>
+                <div class="module" data-color="blue" data-module="tracks">
+                  <div class="module-name">TRACKS</div>
+                  <div class="module-file">tracks.js</div>
+                </div>
+                <div class="module" data-color="blue" data-module="models">
+                  <div class="module-name">MODELS</div>
+                  <div class="module-file">models.js</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Data Flow Section -->
+      <section class="section" id="section-dataflow">
+        <div class="header">
+          <h1>Data Flow</h1>
+          <p>How audio data flows through the visualization pipeline</p>
+        </div>
+
+        <div class="data-flow">
+          <div class="diagram-title">Audio to Visual Pipeline</div>
+          <div class="flow-diagram">
+            <div class="flow-node">
+              <div class="flow-node-title">Audio Files</div>
+              <div class="flow-node-subtitle">MP3 stems per track</div>
+            </div>
+            <div class="flow-arrow">&#8594;</div>
+            <div class="flow-node">
+              <div class="flow-node-title">AudioBuffer</div>
+              <div class="flow-node-subtitle">Decoded to buffers</div>
+            </div>
+            <div class="flow-arrow">&#8594;</div>
+            <div class="flow-node">
+              <div class="flow-node-title">AnalyserNode</div>
+              <div class="flow-node-subtitle">Per-stem FFT analysis</div>
+            </div>
+            <div class="flow-arrow">&#8594;</div>
+            <div class="flow-node">
+              <div class="flow-node-title">Audio Data</div>
+              <div class="flow-node-subtitle">bass, mid, treble, energy</div>
+            </div>
+            <div class="flow-arrow">&#8594;</div>
+            <div class="flow-node">
+              <div class="flow-node-title">Visual Effects</div>
+              <div class="flow-node-subtitle">Real-time updates</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="data-flow">
+          <div class="diagram-title">Stem-to-Effect Mapping</div>
+          <div class="tracks-grid">
+            <div class="track-card">
+              <div class="track-name">Drums</div>
+              <div class="track-meta">
+                <span class="track-tag env">terrain: impact</span>
+              </div>
+            </div>
+            <div class="track-card">
+              <div class="track-name">Bass</div>
+              <div class="track-meta">
+                <span class="track-tag env">terrain: deformation</span>
+              </div>
+            </div>
+            <div class="track-card">
+              <div class="track-name">Vocals</div>
+              <div class="track-meta">
+                <span class="track-tag particles">atmosphere: fog</span>
+              </div>
+            </div>
+            <div class="track-card">
+              <div class="track-name">Guitar/Synth</div>
+              <div class="track-meta">
+                <span class="track-tag model">particles: trails</span>
+              </div>
+            </div>
+            <div class="track-card">
+              <div class="track-name">FX</div>
+              <div class="track-meta">
+                <span class="track-tag model">particles: burst</span>
+              </div>
+            </div>
+            <div class="track-card">
+              <div class="track-name">Backing Vocals</div>
+              <div class="track-meta">
+                <span class="track-tag particles">atmosphere: glow</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Audio Section -->
+      <section class="section" id="section-audio">
+        <div class="header">
+          <h1>Audio Engine</h1>
+          <p>Sample-accurate synchronized multi-stem playback with per-stem analysis</p>
+        </div>
+
+        <div class="diagram-container">
+          <div class="diagram-title">StemPlayer Architecture</div>
+          <div class="code-block"><span class="keyword">class</span> <span class="function">StemPlayer</span> {
+  <span class="comment">// Core audio nodes</span>
+  audioContext: AudioContext
+  stems: Map&lt;stemId, {
+    <span class="property">buffer</span>: AudioBuffer,      <span class="comment">// Decoded audio data</span>
+    <span class="property">sourceNode</span>: AudioBufferSourceNode,
+    <span class="property">analyser</span>: AnalyserNode,   <span class="comment">// Per-stem FFT</span>
+    <span class="property">gainNode</span>: GainNode        <span class="comment">// Volume control</span>
+  }&gt;
+  masterGain: GainNode
+
+  <span class="comment">// Synchronization</span>
+  <span class="property">startTime</span>: number  <span class="comment">// AudioContext time when playback started</span>
+
+  <span class="comment">// All stems start at exact same time</span>
+  <span class="function">_createAndStartSources</span>(offset) {
+    <span class="keyword">const</span> startAt = <span class="keyword">this</span>.audioContext.currentTime + 0.05;
+    <span class="keyword">for</span> (<span class="keyword">const</span> stem <span class="keyword">of</span> <span class="keyword">this</span>.stems.values()) {
+      stem.sourceNode.<span class="function">start</span>(startAt, offset);
+    }
+  }
+}</div>
+        </div>
+
+        <div class="controls-section">
+          <div class="diagram-title">Key Features</div>
+          <ul class="feature-list">
+            <li><span class="feature-icon">&#10003;</span> Sample-accurate sync using AudioBufferSourceNode scheduled starts</li>
+            <li><span class="feature-icon">&#10003;</span> Pre-decoding all stems before playback eliminates load-time drift</li>
+            <li><span class="feature-icon">&#10003;</span> Per-stem AnalyserNodes for independent frequency analysis</li>
+            <li><span class="feature-icon">&#10003;</span> Real-time extraction of bass (20-200Hz), mid (200-2000Hz), treble (2000Hz+)</li>
+            <li><span class="feature-icon">&#10003;</span> MIDI event scheduling for note-accurate visualization triggers</li>
+            <li><span class="feature-icon">&#10003;</span> Individual stem mute/volume controls</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Visuals Section -->
+      <section class="section" id="section-visuals">
+        <div class="header">
+          <h1>Visual Pipeline</h1>
+          <p>Three.js-powered real-time 3D visualization</p>
+        </div>
+
+        <div class="diagram-container">
+          <div class="diagram-title">EffectsManager Components</div>
+          <div class="tracks-grid">
+            <div class="track-card">
+              <div class="track-name">Lightning</div>
+              <div class="track-meta">
+                <span class="track-tag model">Audio-triggered bolts</span>
+              </div>
+            </div>
+            <div class="track-card">
+              <div class="track-name">Aurora</div>
+              <div class="track-meta">
+                <span class="track-tag env">Flowing ribbons</span>
+              </div>
+            </div>
+            <div class="track-card">
+              <div class="track-name">Grid</div>
+              <div class="track-meta">
+                <span class="track-tag particles">Floor + perspective lines</span>
+              </div>
+            </div>
+            <div class="track-card">
+              <div class="track-name">God Rays</div>
+              <div class="track-meta">
+                <span class="track-tag model">Volumetric light beams</span>
+              </div>
+            </div>
+            <div class="track-card">
+              <div class="track-name">Particles</div>
+              <div class="track-meta">
+                <span class="track-tag particles">dust, sparks, bubbles, embers, snow, rain</span>
+              </div>
+            </div>
+            <div class="track-card">
+              <div class="track-name">Screen Effects</div>
+              <div class="track-meta">
+                <span class="track-tag env">Color shift, shake</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="diagram-container">
+          <div class="diagram-title">AnimatedBackground Shaders</div>
+          <div class="tracks-grid">
+            <div class="track-card"><div class="track-name">topo</div><div class="track-meta"><span class="track-tag">Topographic contours</span></div></div>
+            <div class="track-card"><div class="track-name">ocean</div><div class="track-meta"><span class="track-tag">Flowing waves</span></div></div>
+            <div class="track-card"><div class="track-name">nebula</div><div class="track-meta"><span class="track-tag">Cosmic clouds</span></div></div>
+            <div class="track-card"><div class="track-name">matrix</div><div class="track-meta"><span class="track-tag">Digital rain</span></div></div>
+            <div class="track-card"><div class="track-name">aurora</div><div class="track-meta"><span class="track-tag">Northern lights</span></div></div>
+            <div class="track-card"><div class="track-name">forge</div><div class="track-meta"><span class="track-tag">Industrial heat</span></div></div>
+            <div class="track-card"><div class="track-name">sakura</div><div class="track-meta"><span class="track-tag">Floating petals</span></div></div>
+            <div class="track-card"><div class="track-name">circuit</div><div class="track-meta"><span class="track-tag">PCB traces</span></div></div>
+            <div class="track-card"><div class="track-name">glacier</div><div class="track-meta"><span class="track-tag">Ice crystals</span></div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Terrain Section -->
+      <section class="section" id="section-terrain">
+        <div class="header">
+          <h1>Terrain System</h1>
+          <p>Procedural noise-based terrain with infinite scrolling</p>
+        </div>
+
+        <div class="diagram-container">
+          <div class="diagram-title">Terrain Generation Pipeline</div>
+          <div class="flow-diagram">
+            <div class="flow-node">
+              <div class="flow-node-title">NoiseGenerator</div>
+              <div class="flow-node-subtitle">Simplex noise</div>
+            </div>
+            <div class="flow-arrow">&#8594;</div>
+            <div class="flow-node">
+              <div class="flow-node-title">Heightmap</div>
+              <div class="flow-node-subtitle">32x32 samples/chunk</div>
+            </div>
+            <div class="flow-arrow">&#8594;</div>
+            <div class="flow-node">
+              <div class="flow-node-title">TerrainChunk</div>
+              <div class="flow-node-subtitle">PlaneGeometry mesh</div>
+            </div>
+            <div class="flow-arrow">&#8594;</div>
+            <div class="flow-node">
+              <div class="flow-node-title">ChunkPool</div>
+              <div class="flow-node-subtitle">Recycle old chunks</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="controls-section">
+          <div class="diagram-title">Terrain Parameters</div>
+          <div class="code-block"><span class="comment">// Per-track terrain configuration</span>
+terrain: {
+  <span class="property">enabled</span>: <span class="keyword">true</span>,
+  <span class="property">scale</span>: 0.015,        <span class="comment">// Noise frequency</span>
+  <span class="property">octaves</span>: 5,          <span class="comment">// Detail layers</span>
+  <span class="property">persistence</span>: 0.6,    <span class="comment">// Octave falloff</span>
+  <span class="property">amplitude</span>: 4.0,      <span class="comment">// Height multiplier</span>
+  <span class="property">baseHeight</span>: -3.0,    <span class="comment">// Ground level</span>
+  <span class="property">ridged</span>: <span class="keyword">false</span>,        <span class="comment">// Mountain ridges</span>
+  <span class="property">wireframe</span>: <span class="keyword">false</span>,     <span class="comment">// Render style</span>
+  <span class="property">colorByHeight</span>: <span class="keyword">true</span>, <span class="comment">// Gradient coloring</span>
+  <span class="property">lowColor</span>: 0x001a2c,   <span class="comment">// Valley color</span>
+  <span class="property">highColor</span>: 0x00bfff   <span class="comment">// Peak color</span>
+}</div>
+        </div>
+      </section>
+
+      <!-- Themes Section -->
+      <section class="section" id="section-themes">
+        <div class="header">
+          <h1>Track Themes</h1>
+          <p>Each track has a completely custom visual experience</p>
+        </div>
+
+        <div class="tracks-grid" id="themesGrid">
+          <!-- Populated by JS -->
+        </div>
+      </section>
+
+      <!-- Scenes Section -->
+      <section class="section" id="section-scenes">
+        <div class="header">
+          <h1>Custom Scenes</h1>
+          <p>Bespoke Three.js scenes built for specific tracks</p>
+        </div>
+
+        <div class="tracks-grid">
+          <div class="track-card">
+            <div class="track-name">Data Tide</div>
+            <div class="track-meta">
+              <span class="track-tag env">Underwater bioluminescent ocean</span>
+              <span class="track-tag particles">Coral towers, god rays, 3000 particles</span>
+            </div>
+          </div>
+          <div class="track-card">
+            <div class="track-name">Trade You My Hands</div>
+            <div class="track-meta">
+              <span class="track-tag env">Cherry blossom forest</span>
+              <span class="track-tag particles">Bamboo stalks, paper lanterns, petals</span>
+            </div>
+          </div>
+          <div class="track-card">
+            <div class="track-name">The Last Dragon</div>
+            <div class="track-meta">
+              <span class="track-tag env">Ancient temple ruins</span>
+              <span class="track-tag particles">Stone towers, ember particles, torches</span>
+            </div>
+          </div>
+          <div class="track-card">
+            <div class="track-name">Terms & Conditions</div>
+            <div class="track-meta">
+              <span class="track-tag env">Corporate glass towers</span>
+              <span class="track-tag particles">Holographic panels, digital rain</span>
+            </div>
+          </div>
+          <div class="track-card">
+            <div class="track-name">Turn Your Phone Face Down</div>
+            <div class="track-meta">
+              <span class="track-tag env">Lamp posts, warm orbs</span>
+              <span class="track-tag particles">Flipping phones, fireflies</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="diagram-container" style="margin-top: 24px;">
+          <div class="diagram-title">Continuous Generation Pattern</div>
+          <div class="code-block"><span class="comment">// Structures spawn ahead and cleanup behind the camera</span>
+<span class="keyword">const</span> SPACING = 8;
+<span class="keyword">const</span> AHEAD = 25;
+<span class="keyword">const</span> BEHIND = 8;
+<span class="keyword">let</span> nextSpawnZ = -50;
+
+<span class="comment">// In update loop:</span>
+<span class="keyword">while</span> (nextSpawnZ < shipZ + AHEAD * SPACING) {
+  <span class="function">spawnStructure</span>(nextSpawnZ);
+  nextSpawnZ += SPACING;
+}
+
+<span class="comment">// Cleanup old structures</span>
+structures = structures.<span class="function">filter</span>(s => {
+  <span class="keyword">if</span> (s.userData.spawnZ < shipZ - BEHIND * SPACING) {
+    scene.<span class="function">remove</span>(s);
+    <span class="keyword">return false</span>;
+  }
+  <span class="keyword">return true</span>;
+});</div>
+        </div>
+      </section>
+
+      <!-- Models Section -->
+      <section class="section" id="section-models">
+        <div class="header">
+          <h1>3D Models</h1>
+          <p>GLTF/GLB models for the player character</p>
+        </div>
+
+        <div class="tracks-grid">
+          <div class="track-card">
+            <div class="track-name">Ocean Creatures</div>
+            <div class="track-meta">
+              <span class="track-tag model">Blue Whale</span>
+              <span class="track-tag model">Jellyfish</span>
+              <span class="track-tag model">Loggerhead Turtle</span>
+            </div>
+          </div>
+          <div class="track-card">
+            <div class="track-name">Flying Creatures</div>
+            <div class="track-meta">
+              <span class="track-tag model">Butterfly</span>
+              <span class="track-tag model">White Eagle</span>
+              <span class="track-tag model">Ice Dragon</span>
+            </div>
+          </div>
+          <div class="track-card">
+            <div class="track-name">Powerful Beasts</div>
+            <div class="track-meta">
+              <span class="track-tag model">Godzilla</span>
+              <span class="track-tag model">Gorilla</span>
+            </div>
+          </div>
+          <div class="track-card">
+            <div class="track-name">Tech / Robots</div>
+            <div class="track-meta">
+              <span class="track-tag model">Biped Robot</span>
+              <span class="track-tag model">Mech Walker</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="diagram-container" style="margin-top: 24px;">
+          <div class="diagram-title">Model Configuration</div>
+          <div class="code-block">{
+  <span class="property">id</span>: <span class="string">"jellyfish"</span>,
+  <span class="property">name</span>: <span class="string">"Jellyfish"</span>,
+  <span class="property">url</span>: <span class="string">"./models/jellyfish/scene.gltf"</span>,
+  <span class="property">scale</span>: 2.0,
+  <span class="property">position</span>: [0, 0.5, 0],
+  <span class="property">rotation</span>: [0, 0, 0],
+  <span class="property">animationSpeed</span>: 0.6
+}</div>
+        </div>
+      </section>
+
+      <!-- Files Section -->
+      <section class="section" id="section-files">
+        <div class="header">
+          <h1>File Reference</h1>
+          <p>Complete list of source files</p>
+        </div>
+
+        <div class="tracks-grid">
+          <div class="track-card">
+            <div class="track-name">app.js</div>
+            <div class="track-meta"><span class="track-tag">Main application controller</span></div>
+          </div>
+          <div class="track-card">
+            <div class="track-name">stem-player.js</div>
+            <div class="track-meta"><span class="track-tag">Multi-stem audio engine</span></div>
+          </div>
+          <div class="track-card">
+            <div class="track-name">effects-manager.js</div>
+            <div class="track-meta"><span class="track-tag">Visual effects orchestration</span></div>
+          </div>
+          <div class="track-card">
+            <div class="track-name">track-scenes.js</div>
+            <div class="track-meta"><span class="track-tag">Custom Three.js scenes per track</span></div>
+          </div>
+          <div class="track-card">
+            <div class="track-name">backgrounds.js</div>
+            <div class="track-meta"><span class="track-tag">Shader-based animated backgrounds</span></div>
+          </div>
+          <div class="track-card">
+            <div class="track-name">terrain.js</div>
+            <div class="track-meta"><span class="track-tag">Procedural terrain chunks</span></div>
+          </div>
+          <div class="track-card">
+            <div class="track-name">noise.js</div>
+            <div class="track-meta"><span class="track-tag">Simplex noise generator</span></div>
+          </div>
+          <div class="track-card">
+            <div class="track-name">environments.js</div>
+            <div class="track-meta"><span class="track-tag">Environment type mapping</span></div>
+          </div>
+          <div class="track-card">
+            <div class="track-name">themes.js</div>
+            <div class="track-meta"><span class="track-tag">Per-track visual configuration</span></div>
+          </div>
+          <div class="track-card">
+            <div class="track-name">tracks.js</div>
+            <div class="track-meta"><span class="track-tag">Track catalog/manifest paths</span></div>
+          </div>
+          <div class="track-card">
+            <div class="track-name">models.js</div>
+            <div class="track-meta"><span class="track-tag">3D model configuration</span></div>
+          </div>
+          <div class="track-card">
+            <div class="track-name">ios-viz.js</div>
+            <div class="track-meta"><span class="track-tag">iOS-specific visualization</span></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Detail Panel -->
+    <aside class="detail-panel" id="detailPanel">
+      <div class="detail-header">
+        <div class="detail-title" id="detailTitle">Select a Module</div>
+        <div class="detail-subtitle" id="detailSubtitle">Click any module to see details</div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">Description</div>
+        <div class="detail-description" id="detailDescription">
+          Click on any module in the architecture diagram to view its details, dependencies, and code examples.
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">Key Features</div>
+        <ul class="feature-list" id="detailFeatures">
+          <li><span class="feature-icon">&#8226;</span> Interactive architecture explorer</li>
+          <li><span class="feature-icon">&#8226;</span> Data flow visualization</li>
+          <li><span class="feature-icon">&#8226;</span> Per-module documentation</li>
+        </ul>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    const state = {
+      activeSection: 'overview',
+      selectedModule: null
+    };
+
+    const moduleDetails = {
+      'app': {
+        title: 'app.js',
+        subtitle: 'Main Application Controller',
+        description: 'The central orchestrator that initializes all subsystems, handles user input, manages playback state, and coordinates between audio and visual components.',
+        features: [
+          'Initializes Three.js scene, camera, and renderer',
+          'Sets up StemPlayer audio engine',
+          'Handles keyboard/mouse/touch input',
+          'Manages playback controls (play/pause/seek)',
+          'Coordinates track loading and switching',
+          'Updates HUD and score display'
+        ]
+      },
+      'stem-player': {
+        title: 'StemPlayer',
+        subtitle: 'stem-player.js',
+        description: 'Multi-track audio engine using Web Audio API. Provides sample-accurate synchronized playback of all stems with per-stem FFT analysis for visualization.',
+        features: [
+          'AudioBufferSourceNode for drift-free sync',
+          'Pre-decodes all stems before playback',
+          'Per-stem AnalyserNode for frequency analysis',
+          'Real-time bass/mid/treble/energy extraction',
+          'Individual stem volume and mute controls',
+          'MIDI event scheduling support'
+        ]
+      },
+      'effects': {
+        title: 'EffectsManager',
+        subtitle: 'effects-manager.js',
+        description: 'Manages all visual effects including lightning, aurora, grid, particles, and screen effects. Effects react to audio data in real-time.',
+        features: [
+          'Lightning bolts triggered by audio peaks',
+          'Aurora ribbons that flow with mid frequencies',
+          'Pulsing floor grid synced to beat',
+          'Multiple particle types (dust, sparks, bubbles)',
+          'God rays with adjustable intensity',
+          'Screen shake and color shift effects'
+        ]
+      },
+      'track-scenes': {
+        title: 'TrackScenes',
+        subtitle: 'track-scenes.js',
+        description: 'Custom Three.js scene builders for each track. Creates bespoke visual environments with unique geometry, materials, and behaviors.',
+        features: [
+          'Per-track custom scene initialization',
+          'Continuous structure generation',
+          'Audio-reactive material updates',
+          'Drum pulse propagation to 3D objects',
+          'Automatic cleanup of off-screen objects',
+          'MeshStandardMaterial with emissive glow'
+        ]
+      },
+      'backgrounds': {
+        title: 'AnimatedBackground',
+        subtitle: 'backgrounds.js',
+        description: 'Shader-based animated backgrounds rendered to a separate scene. Multiple effect types with audio-reactive uniforms.',
+        features: [
+          '10 shader effect types (topo, ocean, nebula...)',
+          'Custom GLSL fragment shaders',
+          'Audio energy passed to uniforms',
+          'Beat pulse visualization',
+          'Configurable colors and speed',
+          'Resolution-independent rendering'
+        ]
+      },
+      'terrain': {
+        title: 'TerrainSystem',
+        subtitle: 'terrain.js',
+        description: 'Procedural terrain generation using simplex noise. Creates infinite scrolling landscapes with per-track styling.',
+        features: [
+          '32x32 vertex heightmap per chunk',
+          'Configurable noise parameters',
+          'Height-based vertex coloring',
+          'Wireframe or solid rendering',
+          'Chunk pooling for performance',
+          'Seamless chunk boundaries'
+        ]
+      },
+      'noise': {
+        title: 'NoiseGenerator',
+        subtitle: 'noise.js',
+        description: 'Self-contained simplex noise implementation for procedural generation. Seeded for reproducible terrain.',
+        features: [
+          'Simplex 2D noise',
+          'Seeded random for reproducibility',
+          'Multi-octave fractal brownian motion',
+          'Ridged noise variant',
+          'Configurable persistence',
+          'Height sampling function'
+        ]
+      },
+      'environments': {
+        title: 'Environments',
+        subtitle: 'environments.js',
+        description: 'Maps track themes to environment configurations. Converts theme data into terrain, scenery, and atmospheric settings.',
+        features: [
+          'Type inference from track name',
+          'Theme-to-environment conversion',
+          'Scenery type mapping',
+          'Fog and lighting defaults',
+          'Particle type selection',
+          'Wall and floor style mapping'
+        ]
+      },
+      'themes': {
+        title: 'TRACK_THEMES',
+        subtitle: 'themes.js',
+        description: 'Central configuration for all track visual themes. Defines colors, models, backgrounds, terrain, and effects per track.',
+        features: [
+          'Complete color palette per track',
+          '3D model assignment',
+          'Background shader selection',
+          'Terrain noise parameters',
+          'Visual effect toggles',
+          'Particle type and density'
+        ]
+      },
+      'tracks': {
+        title: 'TRACKS',
+        subtitle: 'tracks.js',
+        description: 'Track catalog defining available tracks and their manifest file locations.',
+        features: [
+          'Track title and artist',
+          'Manifest path reference',
+          'Stem audio file paths',
+          'Lyrics JSON reference',
+          'MIDI file references'
+        ]
+      },
+      'models': {
+        title: 'MODELS',
+        subtitle: 'models.js',
+        description: 'Configuration for all 3D models available as player characters. GLTF/GLB files from Sketchfab.',
+        features: [
+          'Model URL paths',
+          'Scale and position offsets',
+          'Rotation adjustments',
+          'Animation speed multipliers',
+          'Organized by category'
+        ]
+      }
+    };
+
+    const themes = [
+      { name: 'Data Tide', model: 'jellyfish', env: 'ocean', particles: 'bubbles' },
+      { name: 'Soft Systems', model: 'butterfly', env: 'meadow', particles: 'dust' },
+      { name: 'The Last Dragon', model: 'icy-dragon', env: 'ancient', particles: 'embers' },
+      { name: 'Signal Integrity', model: 'white-eagle', env: 'ice', particles: 'snow' },
+      { name: 'Trade You My Hands', model: 'butterfly', env: 'blossom', particles: 'dust' },
+      { name: 'Dreams Bleed Into Dashboards', model: 'biped-robot', env: 'cyber', particles: 'sparks' },
+      { name: 'Terms & Conditions', model: 'biped-robot', env: 'cyber', particles: 'rain' },
+      { name: 'Turn Your Phone Face Down', model: 'white-eagle', env: 'meadow', particles: 'dust' }
+    ];
+
+    function updateAll() {
+      // Update nav
+      document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.toggle('active', item.dataset.section === state.activeSection);
+      });
+
+      // Update sections
+      document.querySelectorAll('.section').forEach(section => {
+        section.classList.toggle('active', section.id === `section-${state.activeSection}`);
+      });
+
+      // Update modules
+      document.querySelectorAll('.module').forEach(mod => {
+        mod.classList.toggle('selected', mod.dataset.module === state.selectedModule);
+      });
+
+      // Update detail panel
+      if (state.selectedModule && moduleDetails[state.selectedModule]) {
+        const detail = moduleDetails[state.selectedModule];
+        document.getElementById('detailTitle').textContent = detail.title;
+        document.getElementById('detailSubtitle').textContent = detail.subtitle;
+        document.getElementById('detailDescription').textContent = detail.description;
+
+        const featuresList = document.getElementById('detailFeatures');
+        featuresList.innerHTML = detail.features.map(f =>
+          `<li><span class="feature-icon">&#10003;</span> ${f}</li>`
+        ).join('');
+      }
+    }
+
+    function populateThemes() {
+      const grid = document.getElementById('themesGrid');
+      grid.innerHTML = themes.map(t => `
+        <div class="track-card">
+          <div class="track-name">${t.name}</div>
+          <div class="track-meta">
+            <span class="track-tag model">${t.model}</span>
+            <span class="track-tag env">${t.env}</span>
+            <span class="track-tag particles">${t.particles}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Event listeners
+    document.querySelectorAll('.nav-item').forEach(item => {
+      item.addEventListener('click', () => {
+        state.activeSection = item.dataset.section;
+        updateAll();
+      });
+    });
+
+    document.querySelectorAll('.module').forEach(mod => {
+      mod.addEventListener('click', () => {
+        state.selectedModule = mod.dataset.module;
+        updateAll();
+      });
+    });
+
+    // Initialize
+    populateThemes();
+    updateAll();
+  </script>
+</body>
+</html>

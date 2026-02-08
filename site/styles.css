@@ -1639,29 +1639,60 @@ input[type="range"]:active::-moz-range-thumb {
    Control Bar - Glass-morphism
    ============================================ */
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   CONTROL BAR - Bold 2-Row Design with Stem Mixer & Waveform
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Stem-specific colors */
+.control-bar {
+  --stem-drums: #ff4466;
+  --stem-bass: #ff8800;
+  --stem-vocals: #00ddff;
+  --stem-synth: #aa44ff;
+  --stem-guitar: #44ff88;
+}
+
 .control-bar {
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
-  height: 90px;
-  padding: 0 20px;
-  padding-bottom: env(safe-area-inset-bottom, 0);
+  padding: 12px 20px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0));
 
   display: flex;
-  align-items: center;
-  gap: 24px;
+  flex-direction: column;
+  gap: 10px;
 
-  background: rgba(10, 12, 20, 0.72);
-  backdrop-filter: blur(24px) saturate(1.5);
-  -webkit-backdrop-filter: blur(24px) saturate(1.5);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.4);
+  background: linear-gradient(180deg, rgba(10, 12, 20, 0.85) 0%, rgba(5, 6, 12, 0.92) 100%);
+  backdrop-filter: blur(32px) saturate(1.8);
+  -webkit-backdrop-filter: blur(32px) saturate(1.8);
+  border-top: 1px solid rgba(var(--wa-accent-rgb), 0.25);
+  box-shadow:
+    0 -4px 40px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
 
   z-index: 100;
-
   transform: translateY(0);
   transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+}
+
+/* Audio-reactive top border glow */
+.control-bar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(var(--wa-accent-rgb), 0.6) 50%,
+    transparent 100%
+  );
+  filter: blur(1px);
+  opacity: var(--audio-energy, 0.4);
 }
 
 .control-bar.is-hidden {
@@ -1670,28 +1701,44 @@ input[type="range"]:active::-moz-range-thumb {
   pointer-events: none;
 }
 
+/* Row layout */
+.control-bar__row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.control-bar__row--top {
+  justify-content: space-between;
+}
+
+.control-bar__row--bottom {
+  gap: 16px;
+}
+
 /* Track info section */
 .control-bar__track {
   display: flex;
   align-items: center;
-  gap: 14px;
-  width: 280px;
+  gap: 12px;
+  min-width: 180px;
+  max-width: 240px;
   flex-shrink: 0;
 }
 
 .control-bar__cover {
-  width: 48px;
-  height: 48px;
-  border-radius: 6px;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
   background: linear-gradient(135deg,
-    rgba(var(--wa-accent-rgb), 0.2),
-    rgba(var(--wa-accent-rgb), 0.05)
+    rgba(var(--wa-accent-rgb), 0.25),
+    rgba(var(--wa-accent-rgb), 0.08)
   );
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   background-size: cover;
   background-position: center;
   flex-shrink: 0;
-  transition: transform 0.2s ease-out;
+  transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
 }
 
 .control-bar__cover.has-cover {
@@ -1699,7 +1746,8 @@ input[type="range"]:active::-moz-range-thumb {
 }
 
 .control-bar__cover:hover {
-  transform: scale(1.05);
+  transform: scale(1.08);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
 .control-bar__info {
@@ -1708,7 +1756,7 @@ input[type="range"]:active::-moz-range-thumb {
 }
 
 .control-bar__title {
-  font: 600 14px/1.3 var(--wa-ui);
+  font: 600 13px/1.3 var(--wa-ui);
   color: #fff;
   white-space: nowrap;
   overflow: hidden;
@@ -1716,127 +1764,280 @@ input[type="range"]:active::-moz-range-thumb {
 }
 
 .control-bar__artist {
-  font: 500 12px/1.3 var(--wa-ui);
-  color: rgba(255, 255, 255, 0.6);
+  font: 500 11px/1.3 var(--wa-ui);
+  color: rgba(255, 255, 255, 0.55);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   margin-top: 2px;
 }
 
-/* Main controls section */
-.control-bar__main {
-  flex: 1;
+/* ═══════════════════════════════════════════════════════════════════════════
+   STEM MIXER - Quick access stem toggles with level indicators
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.stem-mixer {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.stem-btn {
+  position: relative;
+  width: 40px;
+  height: 48px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  max-width: 600px;
-  margin: 0 auto;
+  justify-content: center;
+  padding: 0;
+  overflow: hidden;
+  transition: all 0.2s ease-out;
 }
+
+.stem-btn[data-stem="drums"] { --stem-color: var(--stem-drums); }
+.stem-btn[data-stem="bass"] { --stem-color: var(--stem-bass); }
+.stem-btn[data-stem="vocals"] { --stem-color: var(--stem-vocals); }
+.stem-btn[data-stem="synth"] { --stem-color: var(--stem-synth); }
+.stem-btn[data-stem="guitar"] { --stem-color: var(--stem-guitar); }
+
+.stem-btn[aria-pressed="true"] {
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 0 20px color-mix(in srgb, var(--stem-color) 30%, transparent),
+    inset 0 0 15px color-mix(in srgb, var(--stem-color) 15%, transparent);
+}
+
+.stem-btn[aria-pressed="true"]::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--stem-color);
+  box-shadow: 0 0 8px var(--stem-color);
+}
+
+.stem-btn[aria-pressed="false"] {
+  opacity: 0.4;
+  filter: grayscale(0.7);
+}
+
+.stem-btn:hover {
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.stem-btn:active {
+  transform: scale(0.95);
+}
+
+.stem-btn__icon {
+  font: bold 14px/1 var(--wa-ui);
+  color: var(--stem-color, #fff);
+  text-shadow: 0 0 10px var(--stem-color, transparent);
+  z-index: 2;
+}
+
+/* Level indicator - animated bar showing current stem energy */
+.stem-btn__level {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: calc(var(--level, 0) * 100%);
+  max-height: 100%;
+  background: linear-gradient(180deg, var(--stem-color) 0%, transparent 100%);
+  opacity: 0.35;
+  transition: height 0.08s ease-out;
+  pointer-events: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PLAYBACK CONTROLS - Hex-pill buttons with bold styling
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 .control-bar__buttons {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
-/* Control buttons - icon only style */
+/* Hex-pill button shape */
 .ctrl-btn {
-  width: 36px;
-  height: 36px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 12px;
   border: none;
-  border-radius: 50%;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.7);
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%);
+  color: rgba(255, 255, 255, 0.75);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 18px;
-  transition: all 0.15s ease-out;
+  transition:
+    transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1),
+    background 0.2s ease-out,
+    box-shadow 0.2s ease-out,
+    color 0.15s ease-out;
 }
 
 .ctrl-btn:hover {
   color: #fff;
-  transform: scale(1.15);
+  background: linear-gradient(135deg, rgba(var(--wa-accent-rgb), 0.2) 0%, rgba(var(--wa-accent-rgb), 0.08) 100%);
+  text-shadow: 0 0 12px rgba(var(--wa-accent-rgb), 0.8);
+  transform: scale(1.08) translateY(-2px);
 }
 
 .ctrl-btn:active {
-  transform: scale(0.9);
+  transform: scale(0.92);
+  filter: brightness(0.85);
+  transition-duration: 0.05s;
 }
 
 .ctrl-btn:focus-visible {
-  outline: 2px solid rgba(var(--wa-accent-rgb), 0.6);
-  outline-offset: 2px;
+  outline: 2px solid var(--wa-accent);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 4px rgba(var(--wa-accent-rgb), 0.3);
 }
 
 .ctrl-btn--sm {
-  width: 28px;
-  height: 28px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0 8px;
   font-size: 14px;
   color: rgba(255, 255, 255, 0.5);
 }
 
 .ctrl-btn--sm:hover {
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(255, 255, 255, 0.95);
 }
 
-/* Play button - keeps circular background */
+/* Play button - "Power Core" design */
 .ctrl-btn--play {
-  width: 52px;
-  height: 52px;
-  background: linear-gradient(135deg, var(--wa-accent), var(--wa-accent-dim));
+  min-width: 56px;
+  min-height: 56px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--wa-accent) 0%, var(--wa-accent-dim) 100%);
   color: #000;
-  font-size: 20px;
-  box-shadow: 0 4px 20px rgba(var(--wa-accent-rgb), 0.35);
+  font-size: 22px;
+  font-weight: bold;
+  box-shadow:
+    0 4px 24px rgba(var(--wa-accent-rgb), 0.45),
+    0 8px 40px rgba(var(--wa-accent-rgb), 0.2),
+    inset 0 2px 0 rgba(255, 255, 255, 0.2);
 }
 
 .ctrl-btn--play:hover {
-  background: linear-gradient(135deg, var(--wa-accent-hi), var(--wa-accent));
-  box-shadow: 0 6px 28px rgba(var(--wa-accent-rgb), 0.5);
-  transform: scale(1.1);
+  background: linear-gradient(135deg, var(--wa-accent-hi) 0%, var(--wa-accent) 100%);
+  box-shadow:
+    0 6px 32px rgba(var(--wa-accent-rgb), 0.6),
+    0 12px 50px rgba(var(--wa-accent-rgb), 0.3),
+    inset 0 2px 0 rgba(255, 255, 255, 0.3);
+  transform: scale(1.08);
+  text-shadow: none;
 }
 
+/* Pulsing glow when playing */
 .ctrl-btn--play.is-playing {
-  animation: none;
+  animation: playPulse 2s ease-in-out infinite;
+}
+
+@keyframes playPulse {
+  0%, 100% { box-shadow: 0 4px 24px rgba(var(--wa-accent-rgb), 0.45), 0 8px 40px rgba(var(--wa-accent-rgb), 0.2); }
+  50% { box-shadow: 0 4px 35px rgba(var(--wa-accent-rgb), 0.7), 0 8px 50px rgba(var(--wa-accent-rgb), 0.35); }
 }
 
 .ctrl-btn[aria-pressed="true"] {
   color: var(--wa-accent);
+  text-shadow: 0 0 8px rgba(var(--wa-accent-rgb), 0.6);
 }
 
-/* Seek slider row */
-.control-bar__seek {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  max-width: 500px;
-}
+/* ═══════════════════════════════════════════════════════════════════════════
+   WAVEFORM PROGRESS - Canvas visualization with playhead
+   ═══════════════════════════════════════════════════════════════════════════ */
 
-.control-bar__time {
-  font: 500 11px/1 var(--wa-mono);
-  color: rgba(255, 255, 255, 0.5);
-  min-width: 40px;
-  text-align: center;
-}
-
-.control-bar__seek input[type="range"] {
+.control-bar__waveform {
   flex: 1;
-  height: 6px;
-  padding: 8px 0;
-}
-
-/* Right section */
-.control-bar__right {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
+}
+
+.control-bar__time {
+  font: 600 11px/1 var(--wa-mono);
+  color: rgba(255, 255, 255, 0.5);
+  min-width: 38px;
+  text-align: center;
   flex-shrink: 0;
 }
 
-/* Volume control */
+.waveform-container {
+  position: relative;
+  flex: 1;
+  height: 36px;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.waveform-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.waveform-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 10;
+  margin: 0;
+}
+
+.waveform-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--wa-accent);
+  box-shadow: 0 0 12px rgba(var(--wa-accent-rgb), 0.9), 0 0 4px rgba(var(--wa-accent-rgb), 1);
+  pointer-events: none;
+  z-index: 5;
+  left: calc(var(--progress, 0) * 100%);
+  transition: left 0.05s linear;
+}
+
+.waveform-container:hover .waveform-playhead {
+  box-shadow: 0 0 16px rgba(var(--wa-accent-rgb), 1), 0 0 6px rgba(var(--wa-accent-rgb), 1);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RIGHT SECTION - Volume & Playlist
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.control-bar__right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
 .control-bar__volume {
   display: flex;
   align-items: center;
@@ -1849,41 +2050,30 @@ input[type="range"]:active::-moz-range-thumb {
   transition: width 0.2s ease-out, opacity 0.2s ease-out;
 }
 
-/* Selects in control bar */
-.control-bar .select-mini {
-  height: 28px;
-  padding: 0 24px 0 10px;
-  font: 500 11px/1 var(--wa-ui);
-  color: rgba(255, 255, 255, 0.8);
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  cursor: pointer;
-  appearance: none;
-  -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.5)' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 8px center;
-  transition: background-color 0.15s ease-out;
-}
-
-.control-bar .select-mini:hover {
-  background-color: rgba(255, 255, 255, 0.12);
-}
-
-.control-bar .select-mini:focus {
-  outline: 2px solid rgba(var(--wa-accent-rgb), 0.5);
-  outline-offset: 1px;
-}
-
-.control-bar .select-mini option {
-  color: #0b0b0b;
-  background: #f7f7f7;
-}
-
-/* Playlist button */
 .ctrl-btn--playlist {
   display: flex;
+}
+
+.ctrl-btn--docs {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  transition: all 0.15s ease;
+}
+
+.ctrl-btn--docs:hover {
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
 /* ============================================
@@ -2125,34 +2315,100 @@ input[type="range"]:active::-moz-range-thumb {
    Immersive Responsive
    ============================================ */
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   CONTROL BAR RESPONSIVE - 2-row layout adaptations
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 @media (max-width: 900px) {
   .control-bar__track {
-    width: 200px;
-  }
-
-  .control-bar__cover {
-    width: 48px;
-    height: 48px;
+    min-width: 140px;
+    max-width: 180px;
   }
 
   .control-bar__volume .volume-slider {
     width: 60px;
   }
+
+  .stem-btn {
+    width: 36px;
+    height: 42px;
+  }
+
+  .stem-btn__icon {
+    font-size: 12px;
+  }
 }
 
 @media (max-width: 768px) {
   .control-bar {
-    height: auto;
-    flex-direction: column;
-    padding: 12px 16px;
-    padding-bottom: calc(24px + env(safe-area-inset-bottom, 0));
+    padding: 10px 14px;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0));
     gap: 8px;
   }
 
-  .control-bar__track {
+  /* Stack rows differently on mobile */
+  .control-bar__row {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  .control-bar__row--top {
+    order: 2;
+  }
+
+  .control-bar__row--bottom {
+    order: 1;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  /* Waveform goes full width on top */
+  .control-bar__waveform {
     width: 100%;
+    order: -1;
+  }
+
+  .waveform-container {
+    height: 32px;
+  }
+
+  /* Playback buttons centered */
+  .control-bar__buttons {
+    justify-content: center;
+  }
+
+  /* Track info centered */
+  .control-bar__track {
+    min-width: auto;
     max-width: none;
     justify-content: center;
+  }
+
+  /* Stem mixer scrollable */
+  .stem-mixer {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 4px 0;
+    margin: 0 -4px;
+    scrollbar-width: none;
+  }
+
+  .stem-mixer::-webkit-scrollbar {
+    display: none;
+  }
+
+  .stem-btn {
+    flex-shrink: 0;
+  }
+
+  /* Right section */
+  .control-bar__right {
+    justify-content: center;
+  }
+
+  .control-bar__volume .volume-slider {
+    width: 80px;
   }
 
   /* Hide settings button on mobile */
@@ -2163,29 +2419,6 @@ input[type="range"]:active::-moz-range-thumb {
   /* Hide score HUD on mobile */
   .score-hud {
     display: none !important;
-  }
-
-  .control-bar__main {
-    width: 100%;
-    max-width: none;
-    gap: 6px;
-  }
-
-  .control-bar__buttons {
-    gap: 4px;
-  }
-
-  .control-bar__seek {
-    max-width: none;
-  }
-
-  .control-bar__right {
-    width: 100%;
-    justify-content: center;
-  }
-
-  .control-bar__volume .volume-slider {
-    width: 100px;
   }
 
   .control-bar .select-mini {
@@ -2217,8 +2450,8 @@ input[type="range"]:active::-moz-range-thumb {
 
 @media (max-width: 480px) {
   .control-bar {
-    padding: 10px 12px;
-    padding-bottom: calc(20px + env(safe-area-inset-bottom, 0));
+    padding: 8px 10px;
+    padding-bottom: calc(14px + env(safe-area-inset-bottom, 0));
     gap: 6px;
   }
 
@@ -2227,39 +2460,60 @@ input[type="range"]:active::-moz-range-thumb {
   }
 
   .control-bar__cover {
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
   }
 
   .control-bar__title {
-    font-size: 13px;
+    font-size: 12px;
   }
 
   .control-bar__artist {
-    font-size: 11px;
+    font-size: 10px;
   }
 
+  /* Maintain touch targets */
   .ctrl-btn {
-    width: 32px;
-    height: 32px;
+    min-width: 40px;
+    min-height: 40px;
     font-size: 16px;
   }
 
   .ctrl-btn--play {
-    width: 44px;
-    height: 44px;
+    min-width: 48px;
+    min-height: 48px;
     font-size: 18px;
   }
 
   .ctrl-btn--sm {
-    width: 26px;
-    height: 26px;
+    min-width: 32px;
+    min-height: 32px;
     font-size: 12px;
+    /* Hide shuffle/repeat on very small screens */
+    display: none;
+  }
+
+  /* Smaller stem buttons but maintain touch target */
+  .stem-btn {
+    width: 36px;
+    height: 40px;
+  }
+
+  .stem-btn__icon {
+    font-size: 11px;
+  }
+
+  .waveform-container {
+    height: 28px;
+  }
+
+  .control-bar__time {
+    font-size: 10px;
+    min-width: 32px;
   }
 
   .control-bar__right {
-    flex-wrap: wrap;
-    gap: 8px;
+    gap: 6px;
   }
 
   /* Hide viz/theme selectors and settings on mobile */
@@ -3182,6 +3436,36 @@ input[type="range"]:active::-moz-range-thumb {
   }
 }
 
+/* ─── Karaoke Word-Level Highlighting ─── */
+.lyric-word {
+  display: inline-block;
+  position: relative;
+  color: rgba(255, 255, 255, 0.4);
+  transition: color 0.1s ease;
+}
+
+.lyric-word.is-sung {
+  color: #fff;
+  text-shadow:
+    0 0 8px rgba(0, 255, 136, 0.6),
+    0 0 16px rgba(0, 255, 136, 0.3);
+}
+
+.lyric-word.is-active {
+  color: transparent;
+  background: linear-gradient(
+    90deg,
+    #00ff88 0%,
+    #00ff88 calc(var(--word-progress, 0) * 1%),
+    rgba(255, 255, 255, 0.4) calc(var(--word-progress, 0) * 1%),
+    rgba(255, 255, 255, 0.4) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  text-shadow: none;
+  filter: drop-shadow(0 0 8px rgba(0, 255, 136, 0.5));
+}
+
 /* Mobile adjustments */
 @media (max-width: 768px) {
   .lyrics-overlay {
@@ -3276,4 +3560,546 @@ input[type="range"]:active::-moz-range-thumb {
   font-size: 0.85rem;
   color: rgba(255, 255, 255, 0.6);
   letter-spacing: 1px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Stem Debug Panel (Effect Key)
+   ═══════════════════════════════════════════════════════════════ */
+
+.stem-debug-panel {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  width: 320px;
+  background: rgba(10, 12, 20, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  backdrop-filter: blur(15px);
+  z-index: 1000;
+  font-family: var(--wa-mono);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.stem-debug-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.stem-debug-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.7);
+  flex: 1;
+}
+
+.stem-debug-docs {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 50%;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  margin-right: 8px;
+  transition: all 0.15s ease;
+}
+
+.stem-debug-docs:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.stem-debug-copy {
+  background: rgba(0, 255, 136, 0.15);
+  border: 1px solid rgba(0, 255, 136, 0.3);
+  color: rgba(0, 255, 136, 0.8);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-right: 10px;
+  transition: all 0.15s ease;
+}
+
+.stem-debug-copy:hover {
+  background: rgba(0, 255, 136, 0.25);
+  border-color: rgba(0, 255, 136, 0.5);
+  color: #00ff88;
+}
+
+.stem-debug-close {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.stem-debug-close:hover {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.stem-debug-content {
+  padding: 0;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.stem-debug-empty {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+  padding: 16px;
+  text-align: center;
+}
+
+.stem-debug-item {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  transition: opacity 0.2s ease;
+}
+
+.stem-debug-item:last-child {
+  border-bottom: none;
+}
+
+.stem-debug-item--disabled {
+  opacity: 0.4;
+}
+
+.stem-debug-item--disabled .stem-debug-meter-fill {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+.stem-debug-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.stem-debug-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 3px;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.stem-debug-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.stem-debug-stem {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.stem-debug-target {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 2px;
+}
+
+.stem-debug-effect {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.4);
+  font-style: italic;
+}
+
+.stem-debug-meter {
+  width: 50px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 6px;
+  flex-shrink: 0;
+}
+
+.stem-debug-meter-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 2px;
+  transition: width 0.08s ease;
+}
+
+/* Toggle Switch */
+.stem-debug-toggle {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.stem-debug-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.stem-debug-toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  transition: 0.2s;
+}
+
+.stem-debug-toggle-slider::before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: rgba(255, 255, 255, 0.6);
+  border-radius: 50%;
+  transition: 0.2s;
+}
+
+.stem-debug-toggle input:checked + .stem-debug-toggle-slider {
+  background-color: rgba(0, 255, 150, 0.4);
+}
+
+.stem-debug-toggle input:checked + .stem-debug-toggle-slider::before {
+  transform: translateX(16px);
+  background-color: #00ff96;
+}
+
+/* Intensity Controls */
+.stem-debug-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding-left: 22px;
+}
+
+.stem-debug-control-label {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  width: 50px;
+  flex-shrink: 0;
+}
+
+.stem-debug-slider {
+  flex: 1;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+  outline: none;
+}
+
+.stem-debug-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.stem-debug-slider::-webkit-slider-thumb:hover {
+  background: #fff;
+}
+
+.stem-debug-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
+
+.stem-debug-intensity-value {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+  width: 32px;
+  text-align: right;
+}
+
+/* Section Headers */
+.stem-debug-section {
+  padding: 8px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.stem-debug-section:last-child {
+  border-bottom: none;
+}
+
+.stem-debug-section-title {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.stem-debug-hint {
+  font-size: 8px;
+  color: rgba(255, 255, 255, 0.35);
+  margin: -6px 0 8px 0;
+  letter-spacing: 0.3px;
+  line-height: 1.4;
+}
+
+/* Audio Band Meters */
+.stem-debug-band {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.stem-debug-band-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  width: 50px;
+  flex-shrink: 0;
+}
+
+.stem-debug-band-meter {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.stem-debug-band-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 3px;
+  transition: width 0.06s ease;
+}
+
+.stem-debug-band-value {
+  font-size: 10px;
+  font-family: var(--wa-mono);
+  color: rgba(255, 255, 255, 0.6);
+  width: 36px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* Stem Effect Rows (slim design) */
+.stem-debug-effect-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 0;
+  transition: opacity 0.2s ease;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.stem-debug-effect-row:last-child {
+  border-bottom: none;
+}
+
+.stem-debug-effect-row--disabled {
+  opacity: 0.35;
+}
+
+.stem-debug-effect-toggle {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.stem-debug-effect-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.stem-debug-effect-check {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 14px;
+  height: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.stem-debug-effect-check::after {
+  content: "";
+  position: absolute;
+  display: none;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid #00ff96;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.stem-debug-effect-toggle input:checked + .stem-debug-effect-check {
+  border-color: #00ff96;
+  background: rgba(0, 255, 150, 0.15);
+}
+
+.stem-debug-effect-toggle input:checked + .stem-debug-effect-check::after {
+  display: block;
+}
+
+.stem-debug-effect-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  width: 50px;
+  flex-shrink: 0;
+}
+
+.stem-debug-effect-target {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.4);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stem-debug-effect-meter {
+  width: 50px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: visible;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.stem-debug-effect-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 2px;
+  transition: width 0.06s ease, opacity 0.1s ease;
+}
+
+.stem-debug-effect-threshold {
+  position: absolute;
+  top: -2px;
+  width: 2px;
+  height: 8px;
+  background: #ff4444;
+  border-radius: 1px;
+  z-index: 1;
+}
+
+/* Stem effect row structure */
+.stem-effect-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.stem-effect-controls {
+  display: flex;
+  gap: 16px;
+  padding: 4px 0 0 22px;
+  opacity: 0.7;
+}
+
+.stem-debug-effect-row:hover .stem-effect-controls {
+  opacity: 1;
+}
+
+.stem-control {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.stem-control-label {
+  font-size: 8px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.4);
+  letter-spacing: 0.5px;
+  width: 24px;
+}
+
+.stem-control-slider {
+  width: 50px;
+  height: 3px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.stem-control-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 8px;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.stem-control-slider::-moz-range-thumb {
+  width: 8px;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
+
+.stem-threshold-value,
+.stem-gain-value {
+  font-size: 8px;
+  font-family: var(--wa-mono);
+  color: rgba(255, 255, 255, 0.5);
+  width: 24px;
+  text-align: right;
 }

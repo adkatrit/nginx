@@ -1,0 +1,5 @@
+- replace the random geometric shapes on sides of the flight area with somethign more compelling
+- improve memory usage
+- leverage the midi data
+- make the playhead/seek area show more information about what proportion of which stem is active in a time segment/perhaps some sort of color coded way to embed the information there cleanly
+- integrate midi into the scene generation/interactivity

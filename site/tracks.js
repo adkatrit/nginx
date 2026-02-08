@@ -13,18 +13,6 @@ window.TRACKS = [
     stemsManifest: "./tracks/terms-and-conditions/manifest.json"
   },
   {
-    title: "Soft Systems",
-    artist: "DeytaDreams",
-    url: null,
-    stemsManifest: "./tracks/soft-systems/manifest.json"
-  },
-  {
-    title: "The Last Dragon",
-    artist: "DeytaDreams",
-    url: null,
-    stemsManifest: "./tracks/the-last-dragon/manifest.json"
-  },
-  {
     title: "Data Tide",
     artist: "DeytaDreams",
     url: null,
@@ -35,12 +23,6 @@ window.TRACKS = [
     artist: "DeytaDreams",
     url: null,
     stemsManifest: "./tracks/signal-integrity/manifest.json"
-  },
-  {
-    title: "Dreams Bleed Into Dashboards",
-    artist: "DeytaDreams",
-    url: null,
-    stemsManifest: "./tracks/dreams-bleed-into-dashboards/manifest.json"
   },
   {
     title: "Trade You My Hands",
@@ -54,4 +36,8 @@ window.TRACKS = [
     url: null,
     stemsManifest: "./tracks/turn-your-phone-face-down/manifest.json"
   },
+  // --- Tracks without stems (mix only) - disabled for now ---
+  // { title: "Soft Systems", artist: "DeytaDreams", stemsManifest: "./tracks/soft-systems/manifest.json" },
+  // { title: "The Last Dragon", artist: "DeytaDreams", stemsManifest: "./tracks/the-last-dragon/manifest.json" },
+  // { title: "Dreams Bleed Into Dashboards", artist: "DeytaDreams", stemsManifest: "./tracks/dreams-bleed-into-dashboards/manifest.json" },
 ];

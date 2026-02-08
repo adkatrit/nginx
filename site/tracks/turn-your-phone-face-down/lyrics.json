@@ -1,234 +1,1649 @@
 {
   "lyrics": [
     {
-      "time": 10,
+      "time": 44,
       "type": "section",
       "text": "[Verse 1]"
     },
     {
-      "time": 12,
-      "text": "You quote headlines like scripture"
+      "time": 45,
+      "text": "You quote the news like it's the truth",
+      "words": [
+        {
+          "word": "You",
+          "start": 45,
+          "end": 45.266
+        },
+        {
+          "word": "quote",
+          "start": 45.312,
+          "end": 45.578
+        },
+        {
+          "word": "the",
+          "start": 45.625,
+          "end": 45.891
+        },
+        {
+          "word": "news",
+          "start": 45.938,
+          "end": 46.203
+        },
+        {
+          "word": "like",
+          "start": 46.25,
+          "end": 46.516
+        },
+        {
+          "word": "it's",
+          "start": 46.562,
+          "end": 46.828
+        },
+        {
+          "word": "the",
+          "start": 46.875,
+          "end": 47.141
+        },
+        {
+          "word": "truth",
+          "start": 47.188,
+          "end": 47.453
+        }
+      ]
     },
     {
-      "time": 15,
-      "text": "Scroll the room with your eyes"
+      "time": 47.8,
+      "text": "Scroll the room with your eyes",
+      "words": [
+        {
+          "word": "Scroll",
+          "start": 47.8,
+          "end": 48.154
+        },
+        {
+          "word": "the",
+          "start": 48.217,
+          "end": 48.571
+        },
+        {
+          "word": "room",
+          "start": 48.633,
+          "end": 48.987
+        },
+        {
+          "word": "with",
+          "start": 49.05,
+          "end": 49.404
+        },
+        {
+          "word": "your",
+          "start": 49.467,
+          "end": 49.821
+        },
+        {
+          "word": "eyes",
+          "start": 49.883,
+          "end": 50.237
+        }
+      ]
     },
     {
-      "time": 18,
-      "text": "All your friends in your pocket"
+      "time": 50.6,
+      "text": "Your friends fit inside your pocket",
+      "words": [
+        {
+          "word": "Your",
+          "start": 50.6,
+          "end": 50.954
+        },
+        {
+          "word": "friends",
+          "start": 51.017,
+          "end": 51.371
+        },
+        {
+          "word": "fit",
+          "start": 51.433,
+          "end": 51.787
+        },
+        {
+          "word": "inside",
+          "start": 51.85,
+          "end": 52.204
+        },
+        {
+          "word": "your",
+          "start": 52.267,
+          "end": 52.621
+        },
+        {
+          "word": "pocket",
+          "start": 52.683,
+          "end": 53.037
+        }
+      ]
     },
     {
-      "time": 21,
-      "text": "But nobody meets your mind"
+      "time": 53.4,
+      "text": "But no one truly knows your thoughts",
+      "words": [
+        {
+          "word": "But",
+          "start": 53.4,
+          "end": 53.704
+        },
+        {
+          "word": "no",
+          "start": 53.757,
+          "end": 54.061
+        },
+        {
+          "word": "one",
+          "start": 54.114,
+          "end": 54.418
+        },
+        {
+          "word": "truly",
+          "start": 54.471,
+          "end": 54.775
+        },
+        {
+          "word": "knows",
+          "start": 54.829,
+          "end": 55.132
+        },
+        {
+          "word": "your",
+          "start": 55.186,
+          "end": 55.489
+        },
+        {
+          "word": "thoughts",
+          "start": 55.543,
+          "end": 55.846
+        }
+      ]
     },
     {
-      "time": 24,
-      "text": "You say"
+      "time": 56.2,
+      "text": "You mention",
+      "words": [
+        {
+          "word": "You",
+          "start": 56.2,
+          "end": 57.263
+        },
+        {
+          "word": "mention",
+          "start": 57.45,
+          "end": 58.513
+        }
+      ]
     },
     {
-      "time": 25,
-      "text": "\"Can you believe it?"
+      "time": 59.0,
+      "text": "\"Can you believe it?",
+      "words": [
+        {
+          "word": "\"Can",
+          "start": 59.0,
+          "end": 59.531
+        },
+        {
+          "word": "you",
+          "start": 59.625,
+          "end": 60.156
+        },
+        {
+          "word": "believe",
+          "start": 60.25,
+          "end": 60.781
+        },
+        {
+          "word": "it?",
+          "start": 60.875,
+          "end": 61.406
+        }
+      ]
     },
     {
-      "time": 27,
-      "text": "Everything's on fire\""
+      "time": 61.8,
+      "text": "Everything's on fire\"",
+      "words": [
+        {
+          "word": "Everything's",
+          "start": 61.8,
+          "end": 62.508
+        },
+        {
+          "word": "on",
+          "start": 62.633,
+          "end": 63.342
+        },
+        {
+          "word": "fire\"",
+          "start": 63.467,
+          "end": 64.175
+        }
+      ]
     },
     {
-      "time": 58.8,
-      "text": "I'm just trying to ask you"
+      "time": 64.6,
+      "text": "I’m just trying to ask you",
+      "words": [
+        {
+          "word": "I’m",
+          "start": 64.6,
+          "end": 64.954
+        },
+        {
+          "word": "just",
+          "start": 65.017,
+          "end": 65.371
+        },
+        {
+          "word": "trying",
+          "start": 65.433,
+          "end": 65.788
+        },
+        {
+          "word": "to",
+          "start": 65.85,
+          "end": 66.204
+        },
+        {
+          "word": "ask",
+          "start": 66.267,
+          "end": 66.621
+        },
+        {
+          "word": "you",
+          "start": 66.683,
+          "end": 67.038
+        }
+      ]
     },
     {
-      "time": 33,
-      "text": "What sets your heart on fire"
+      "time": 67.4,
+      "text": "What sparks your inner fire",
+      "words": [
+        {
+          "word": "What",
+          "start": 67.4,
+          "end": 67.995
+        },
+        {
+          "word": "sparks",
+          "start": 68.1,
+          "end": 68.695
+        },
+        {
+          "word": "your",
+          "start": 68.8,
+          "end": 69.395
+        },
+        {
+          "word": "inner",
+          "start": 69.5,
+          "end": 70.095
+        },
+        {
+          "word": "fire",
+          "start": 70.2,
+          "end": 70.795
+        }
+      ]
     },
     {
-      "time": 38,
+      "time": 70.2,
       "type": "section",
       "text": "[Chorus]"
     },
     {
-      "time": 139.8,
-      "text": "Turn your phone face down"
+      "time": 71.2,
+      "text": "Turn your phone face down",
+      "words": [
+        {
+          "word": "Turn",
+          "start": 71.2,
+          "end": 71.625
+        },
+        {
+          "word": "your",
+          "start": 71.7,
+          "end": 72.125
+        },
+        {
+          "word": "phone",
+          "start": 72.2,
+          "end": 72.625
+        },
+        {
+          "word": "face",
+          "start": 72.7,
+          "end": 73.125
+        },
+        {
+          "word": "down",
+          "start": 73.2,
+          "end": 73.625
+        }
+      ]
     },
     {
-      "time": 43,
-      "text": "Look at me right now"
+      "time": 74.0,
+      "text": "Look at me right now",
+      "words": [
+        {
+          "word": "Look",
+          "start": 74.0,
+          "end": 74.425
+        },
+        {
+          "word": "at",
+          "start": 74.5,
+          "end": 74.925
+        },
+        {
+          "word": "me",
+          "start": 75.0,
+          "end": 75.425
+        },
+        {
+          "word": "right",
+          "start": 75.5,
+          "end": 75.925
+        },
+        {
+          "word": "now",
+          "start": 76.0,
+          "end": 76.425
+        }
+      ]
     },
     {
-      "time": 46,
-      "text": "I'm tired of arguing the world"
+      "time": 76.8,
+      "text": "I’m tired of debating everything",
+      "words": [
+        {
+          "word": "I’m",
+          "start": 76.8,
+          "end": 77.225
+        },
+        {
+          "word": "tired",
+          "start": 77.3,
+          "end": 77.725
+        },
+        {
+          "word": "of",
+          "start": 77.8,
+          "end": 78.225
+        },
+        {
+          "word": "debating",
+          "start": 78.3,
+          "end": 78.725
+        },
+        {
+          "word": "everything",
+          "start": 78.8,
+          "end": 79.225
+        }
+      ]
     },
     {
-      "time": 49,
-      "text": "And never saying how we're hurt"
+      "time": 79.6,
+      "text": "And never speaking from the heart",
+      "words": [
+        {
+          "word": "And",
+          "start": 79.6,
+          "end": 79.954
+        },
+        {
+          "word": "never",
+          "start": 80.017,
+          "end": 80.371
+        },
+        {
+          "word": "speaking",
+          "start": 80.433,
+          "end": 80.788
+        },
+        {
+          "word": "from",
+          "start": 80.85,
+          "end": 81.204
+        },
+        {
+          "word": "the",
+          "start": 81.267,
+          "end": 81.621
+        },
+        {
+          "word": "heart",
+          "start": 81.683,
+          "end": 82.038
+        }
+      ]
     },
     {
-      "time": 195.8,
-      "text": "I don't need your latest take"
+      "time": 82.4,
+      "text": "I don’t need your latest view",
+      "words": [
+        {
+          "word": "I",
+          "start": 82.4,
+          "end": 82.754
+        },
+        {
+          "word": "don’t",
+          "start": 82.817,
+          "end": 83.171
+        },
+        {
+          "word": "need",
+          "start": 83.233,
+          "end": 83.588
+        },
+        {
+          "word": "your",
+          "start": 83.65,
+          "end": 84.004
+        },
+        {
+          "word": "latest",
+          "start": 84.067,
+          "end": 84.421
+        },
+        {
+          "word": "view",
+          "start": 84.483,
+          "end": 84.838
+        }
+      ]
     },
     {
-      "time": 55,
-      "text": "I just need your honest shake"
+      "time": 85.2,
+      "text": "I just need your honest point",
+      "words": [
+        {
+          "word": "I",
+          "start": 85.2,
+          "end": 85.554
+        },
+        {
+          "word": "just",
+          "start": 85.617,
+          "end": 85.971
+        },
+        {
+          "word": "need",
+          "start": 86.033,
+          "end": 86.388
+        },
+        {
+          "word": "your",
+          "start": 86.45,
+          "end": 86.804
+        },
+        {
+          "word": "honest",
+          "start": 86.867,
+          "end": 87.221
+        },
+        {
+          "word": "point",
+          "start": 87.283,
+          "end": 87.638
+        }
+      ]
     },
     {
-      "time": 58,
-      "text": "Turn your phone face down"
+      "time": 88.0,
+      "text": "Turn your phone face down",
+      "words": [
+        {
+          "word": "Turn",
+          "start": 88.0,
+          "end": 88.425
+        },
+        {
+          "word": "your",
+          "start": 88.5,
+          "end": 88.925
+        },
+        {
+          "word": "phone",
+          "start": 89.0,
+          "end": 89.425
+        },
+        {
+          "word": "face",
+          "start": 89.5,
+          "end": 89.925
+        },
+        {
+          "word": "down",
+          "start": 90.0,
+          "end": 90.425
+        }
+      ]
     },
     {
-      "time": 202.1,
-      "text": "Can we be here now?"
+      "time": 90.8,
+      "text": "Can we be present now?",
+      "words": [
+        {
+          "word": "Can",
+          "start": 90.8,
+          "end": 91.395
+        },
+        {
+          "word": "we",
+          "start": 91.5,
+          "end": 92.095
+        },
+        {
+          "word": "be",
+          "start": 92.2,
+          "end": 92.795
+        },
+        {
+          "word": "present",
+          "start": 92.9,
+          "end": 93.495
+        },
+        {
+          "word": "now?",
+          "start": 93.6,
+          "end": 94.195
+        }
+      ]
     },
     {
-      "time": 68,
+      "time": 93.6,
       "type": "section",
       "text": "[Verse 2]"
     },
     {
-      "time": 70,
-      "text": "You bring charts to the party"
+      "time": 94.6,
+      "text": "You bring stats like party tricks",
+      "words": [
+        {
+          "word": "You",
+          "start": 94.6,
+          "end": 94.954
+        },
+        {
+          "word": "bring",
+          "start": 95.017,
+          "end": 95.371
+        },
+        {
+          "word": "stats",
+          "start": 95.433,
+          "end": 95.788
+        },
+        {
+          "word": "like",
+          "start": 95.85,
+          "end": 96.204
+        },
+        {
+          "word": "party",
+          "start": 96.267,
+          "end": 96.621
+        },
+        {
+          "word": "tricks",
+          "start": 96.683,
+          "end": 97.038
+        }
+      ]
     },
     {
-      "time": 73,
-      "text": "Win a war in every thread"
+      "time": 97.4,
+      "text": "Win debates in every chat",
+      "words": [
+        {
+          "word": "Win",
+          "start": 97.4,
+          "end": 97.825
+        },
+        {
+          "word": "debates",
+          "start": 97.9,
+          "end": 98.325
+        },
+        {
+          "word": "in",
+          "start": 98.4,
+          "end": 98.825
+        },
+        {
+          "word": "every",
+          "start": 98.9,
+          "end": 99.325
+        },
+        {
+          "word": "chat",
+          "start": 99.4,
+          "end": 99.825
+        }
+      ]
     },
     {
-      "time": 76,
-      "text": "But when I ask what you're missing"
+      "time": 100.2,
+      "text": "But when I ask what's in your heart",
+      "words": [
+        {
+          "word": "But",
+          "start": 100.2,
+          "end": 100.466
+        },
+        {
+          "word": "when",
+          "start": 100.513,
+          "end": 100.778
+        },
+        {
+          "word": "I",
+          "start": 100.825,
+          "end": 101.091
+        },
+        {
+          "word": "ask",
+          "start": 101.138,
+          "end": 101.403
+        },
+        {
+          "word": "what's",
+          "start": 101.45,
+          "end": 101.716
+        },
+        {
+          "word": "in",
+          "start": 101.763,
+          "end": 102.028
+        },
+        {
+          "word": "your",
+          "start": 102.075,
+          "end": 102.341
+        },
+        {
+          "word": "heart",
+          "start": 102.388,
+          "end": 102.653
+        }
+      ]
     },
     {
-      "time": 79,
-      "text": "You just laugh and dodge instead"
+      "time": 103.0,
+      "text": "You just smile and brush me off",
+      "words": [
+        {
+          "word": "You",
+          "start": 103.0,
+          "end": 103.304
+        },
+        {
+          "word": "just",
+          "start": 103.357,
+          "end": 103.661
+        },
+        {
+          "word": "smile",
+          "start": 103.714,
+          "end": 104.018
+        },
+        {
+          "word": "and",
+          "start": 104.071,
+          "end": 104.375
+        },
+        {
+          "word": "brush",
+          "start": 104.429,
+          "end": 104.732
+        },
+        {
+          "word": "me",
+          "start": 104.786,
+          "end": 105.089
+        },
+        {
+          "word": "off",
+          "start": 105.143,
+          "end": 105.446
+        }
+      ]
     },
     {
-      "time": 82,
-      "text": "We trade facts like they're feelings"
+      "time": 105.8,
+      "text": "We swap facts like they're feelings",
+      "words": [
+        {
+          "word": "We",
+          "start": 105.8,
+          "end": 106.154
+        },
+        {
+          "word": "swap",
+          "start": 106.217,
+          "end": 106.571
+        },
+        {
+          "word": "facts",
+          "start": 106.633,
+          "end": 106.988
+        },
+        {
+          "word": "like",
+          "start": 107.05,
+          "end": 107.404
+        },
+        {
+          "word": "they're",
+          "start": 107.467,
+          "end": 107.821
+        },
+        {
+          "word": "feelings",
+          "start": 107.883,
+          "end": 108.238
+        }
+      ]
     },
     {
-      "time": 85,
-      "text": "Trade our names for side and team"
+      "time": 108.6,
+      "text": "Swap our names for sides and teams",
+      "words": [
+        {
+          "word": "Swap",
+          "start": 108.6,
+          "end": 108.904
+        },
+        {
+          "word": "our",
+          "start": 108.957,
+          "end": 109.261
+        },
+        {
+          "word": "names",
+          "start": 109.314,
+          "end": 109.618
+        },
+        {
+          "word": "for",
+          "start": 109.671,
+          "end": 109.975
+        },
+        {
+          "word": "sides",
+          "start": 110.029,
+          "end": 110.332
+        },
+        {
+          "word": "and",
+          "start": 110.386,
+          "end": 110.689
+        },
+        {
+          "word": "teams",
+          "start": 110.743,
+          "end": 111.046
+        }
+      ]
     },
     {
-      "time": 88,
-      "text": "I just want the quiet"
+      "time": 111.4,
+      "text": "I just want a second",
+      "words": [
+        {
+          "word": "I",
+          "start": 111.4,
+          "end": 111.825
+        },
+        {
+          "word": "just",
+          "start": 111.9,
+          "end": 112.325
+        },
+        {
+          "word": "want",
+          "start": 112.4,
+          "end": 112.825
+        },
+        {
+          "word": "a",
+          "start": 112.9,
+          "end": 113.325
+        },
+        {
+          "word": "second",
+          "start": 113.4,
+          "end": 113.825
+        }
+      ]
     },
     {
-      "time": 91,
-      "text": "Where you tell me what you dream"
+      "time": 114.2,
+      "text": "For you to share your dreams",
+      "words": [
+        {
+          "word": "For",
+          "start": 114.2,
+          "end": 114.696
+        },
+        {
+          "word": "you",
+          "start": 114.783,
+          "end": 115.279
+        },
+        {
+          "word": "to",
+          "start": 115.367,
+          "end": 115.862
+        },
+        {
+          "word": "share",
+          "start": 115.95,
+          "end": 116.446
+        },
+        {
+          "word": "your",
+          "start": 116.533,
+          "end": 117.029
+        },
+        {
+          "word": "dreams",
+          "start": 117.117,
+          "end": 117.612
+        }
+      ]
     },
     {
-      "time": 96,
+      "time": 117.0,
       "type": "section",
       "text": "[Chorus]"
     },
     {
-      "time": 98,
-      "text": "Turn your phone face down"
+      "time": 118.0,
+      "text": "Turn your phone face down",
+      "words": [
+        {
+          "word": "Turn",
+          "start": 118.0,
+          "end": 118.425
+        },
+        {
+          "word": "your",
+          "start": 118.5,
+          "end": 118.925
+        },
+        {
+          "word": "phone",
+          "start": 119.0,
+          "end": 119.425
+        },
+        {
+          "word": "face",
+          "start": 119.5,
+          "end": 119.925
+        },
+        {
+          "word": "down",
+          "start": 120.0,
+          "end": 120.425
+        }
+      ]
     },
     {
-      "time": 101,
-      "text": "Look at me right now"
+      "time": 120.8,
+      "text": "Look at me right now",
+      "words": [
+        {
+          "word": "Look",
+          "start": 120.8,
+          "end": 121.225
+        },
+        {
+          "word": "at",
+          "start": 121.3,
+          "end": 121.725
+        },
+        {
+          "word": "me",
+          "start": 121.8,
+          "end": 122.225
+        },
+        {
+          "word": "right",
+          "start": 122.3,
+          "end": 122.725
+        },
+        {
+          "word": "now",
+          "start": 122.8,
+          "end": 123.225
+        }
+      ]
     },
     {
-      "time": 104,
-      "text": "I'm tired of arguing the world"
+      "time": 123.6,
+      "text": "I’m tired of debating everything",
+      "words": [
+        {
+          "word": "I’m",
+          "start": 123.6,
+          "end": 124.025
+        },
+        {
+          "word": "tired",
+          "start": 124.1,
+          "end": 124.525
+        },
+        {
+          "word": "of",
+          "start": 124.6,
+          "end": 125.025
+        },
+        {
+          "word": "debating",
+          "start": 125.1,
+          "end": 125.525
+        },
+        {
+          "word": "everything",
+          "start": 125.6,
+          "end": 126.025
+        }
+      ]
     },
     {
-      "time": 107,
-      "text": "And never saying how we're hurt"
+      "time": 126.4,
+      "text": "And never speaking from the heart",
+      "words": [
+        {
+          "word": "And",
+          "start": 126.4,
+          "end": 126.754
+        },
+        {
+          "word": "never",
+          "start": 126.817,
+          "end": 127.171
+        },
+        {
+          "word": "speaking",
+          "start": 127.233,
+          "end": 127.587
+        },
+        {
+          "word": "from",
+          "start": 127.65,
+          "end": 128.004
+        },
+        {
+          "word": "the",
+          "start": 128.067,
+          "end": 128.421
+        },
+        {
+          "word": "heart",
+          "start": 128.483,
+          "end": 128.837
+        }
+      ]
     },
     {
-      "time": 110,
-      "text": "I don't need your latest take"
+      "time": 129.2,
+      "text": "I don’t need your latest view",
+      "words": [
+        {
+          "word": "I",
+          "start": 129.2,
+          "end": 129.554
+        },
+        {
+          "word": "don’t",
+          "start": 129.617,
+          "end": 129.971
+        },
+        {
+          "word": "need",
+          "start": 130.033,
+          "end": 130.387
+        },
+        {
+          "word": "your",
+          "start": 130.45,
+          "end": 130.804
+        },
+        {
+          "word": "latest",
+          "start": 130.867,
+          "end": 131.221
+        },
+        {
+          "word": "view",
+          "start": 131.283,
+          "end": 131.637
+        }
+      ]
     },
     {
-      "time": 113,
-      "text": "I just need your honest shake"
+      "time": 132.0,
+      "text": "I just need your honest point",
+      "words": [
+        {
+          "word": "I",
+          "start": 132.0,
+          "end": 132.354
+        },
+        {
+          "word": "just",
+          "start": 132.417,
+          "end": 132.771
+        },
+        {
+          "word": "need",
+          "start": 132.833,
+          "end": 133.187
+        },
+        {
+          "word": "your",
+          "start": 133.25,
+          "end": 133.604
+        },
+        {
+          "word": "honest",
+          "start": 133.667,
+          "end": 134.021
+        },
+        {
+          "word": "point",
+          "start": 134.083,
+          "end": 134.437
+        }
+      ]
     },
     {
-      "time": 116,
-      "text": "Turn your phone face down"
+      "time": 134.8,
+      "text": "Turn your phone face down",
+      "words": [
+        {
+          "word": "Turn",
+          "start": 134.8,
+          "end": 135.225
+        },
+        {
+          "word": "your",
+          "start": 135.3,
+          "end": 135.725
+        },
+        {
+          "word": "phone",
+          "start": 135.8,
+          "end": 136.225
+        },
+        {
+          "word": "face",
+          "start": 136.3,
+          "end": 136.725
+        },
+        {
+          "word": "down",
+          "start": 136.8,
+          "end": 137.225
+        }
+      ]
     },
     {
-      "time": 119,
-      "text": "Can we be here now?"
+      "time": 137.6,
+      "text": "Can we be present now?",
+      "words": [
+        {
+          "word": "Can",
+          "start": 137.6,
+          "end": 138.195
+        },
+        {
+          "word": "we",
+          "start": 138.3,
+          "end": 138.895
+        },
+        {
+          "word": "be",
+          "start": 139.0,
+          "end": 139.595
+        },
+        {
+          "word": "present",
+          "start": 139.7,
+          "end": 140.295
+        },
+        {
+          "word": "now?",
+          "start": 140.4,
+          "end": 140.995
+        }
+      ]
     },
     {
-      "time": 126,
+      "time": 140.4,
       "type": "section",
       "text": "[Bridge]"
     },
     {
-      "time": 128,
-      "text": "What if we ran out of stories to fight?"
+      "time": 141.4,
+      "text": "What if there were no stories left to dispute?",
+      "words": [
+        {
+          "word": "What",
+          "start": 141.4,
+          "end": 141.636
+        },
+        {
+          "word": "if",
+          "start": 141.678,
+          "end": 141.914
+        },
+        {
+          "word": "there",
+          "start": 141.956,
+          "end": 142.192
+        },
+        {
+          "word": "were",
+          "start": 142.233,
+          "end": 142.469
+        },
+        {
+          "word": "no",
+          "start": 142.511,
+          "end": 142.747
+        },
+        {
+          "word": "stories",
+          "start": 142.789,
+          "end": 143.025
+        },
+        {
+          "word": "left",
+          "start": 143.067,
+          "end": 143.303
+        },
+        {
+          "word": "to",
+          "start": 143.344,
+          "end": 143.581
+        },
+        {
+          "word": "dispute?",
+          "start": 143.622,
+          "end": 143.858
+        }
+      ]
     },
     {
-      "time": 132,
-      "text": "What if it's just you and me tonight?"
+      "time": 144.2,
+      "text": "What if it’s just us tonight? (hey)",
+      "words": [
+        {
+          "word": "What",
+          "start": 144.2,
+          "end": 144.504
+        },
+        {
+          "word": "if",
+          "start": 144.557,
+          "end": 144.861
+        },
+        {
+          "word": "it’s",
+          "start": 144.914,
+          "end": 145.218
+        },
+        {
+          "word": "just",
+          "start": 145.271,
+          "end": 145.575
+        },
+        {
+          "word": "us",
+          "start": 145.629,
+          "end": 145.932
+        },
+        {
+          "word": "tonight?",
+          "start": 145.986,
+          "end": 146.289
+        },
+        {
+          "word": "(hey)",
+          "start": 146.343,
+          "end": 146.646
+        }
+      ]
     },
     {
-      "time": 136,
-      "text": "No winners"
+      "time": 147.0,
+      "text": "No winners",
+      "words": [
+        {
+          "word": "No",
+          "start": 147.0,
+          "end": 148.062
+        },
+        {
+          "word": "winners",
+          "start": 148.25,
+          "end": 149.312
+        }
+      ]
     },
     {
-      "time": 137.5,
-      "text": "No spin"
+      "time": 149.8,
+      "text": "No spins",
+      "words": [
+        {
+          "word": "No",
+          "start": 149.8,
+          "end": 150.863
+        },
+        {
+          "word": "spins",
+          "start": 151.05,
+          "end": 152.113
+        }
+      ]
     },
     {
-      "time": 139,
-      "text": "Just breath"
+      "time": 152.6,
+      "text": "Just breaths",
+      "words": [
+        {
+          "word": "Just",
+          "start": 152.6,
+          "end": 153.662
+        },
+        {
+          "word": "breaths",
+          "start": 153.85,
+          "end": 154.912
+        }
+      ]
     },
     {
-      "time": 140.5,
-      "text": "Just skin"
+      "time": 155.4,
+      "text": "Just skin",
+      "words": [
+        {
+          "word": "Just",
+          "start": 155.4,
+          "end": 156.463
+        },
+        {
+          "word": "skin",
+          "start": 156.65,
+          "end": 157.713
+        }
+      ]
     },
     {
-      "time": 142,
-      "text": "Say something that wouldn't trend"
+      "time": 158.2,
+      "text": "Say something that won't go viral",
+      "words": [
+        {
+          "word": "Say",
+          "start": 158.2,
+          "end": 158.554
+        },
+        {
+          "word": "something",
+          "start": 158.617,
+          "end": 158.971
+        },
+        {
+          "word": "that",
+          "start": 159.033,
+          "end": 159.387
+        },
+        {
+          "word": "won't",
+          "start": 159.45,
+          "end": 159.804
+        },
+        {
+          "word": "go",
+          "start": 159.867,
+          "end": 160.221
+        },
+        {
+          "word": "viral",
+          "start": 160.283,
+          "end": 160.637
+        }
+      ]
     },
     {
-      "time": 145,
-      "text": "But might just make us friends"
+      "time": 161.0,
+      "text": "But might just make us friends",
+      "words": [
+        {
+          "word": "But",
+          "start": 161.0,
+          "end": 161.496
+        },
+        {
+          "word": "might",
+          "start": 161.583,
+          "end": 162.079
+        },
+        {
+          "word": "just",
+          "start": 162.167,
+          "end": 162.663
+        },
+        {
+          "word": "make",
+          "start": 162.75,
+          "end": 163.246
+        },
+        {
+          "word": "us",
+          "start": 163.333,
+          "end": 163.829
+        },
+        {
+          "word": "friends",
+          "start": 163.917,
+          "end": 164.413
+        }
+      ]
     },
     {
-      "time": 152,
+      "time": 163.8,
       "type": "section",
       "text": "[Chorus]"
     },
     {
-      "time": 154,
-      "text": "Turn your phone face down"
+      "time": 164.8,
+      "text": "Turn your phone face down",
+      "words": [
+        {
+          "word": "Turn",
+          "start": 164.8,
+          "end": 165.225
+        },
+        {
+          "word": "your",
+          "start": 165.3,
+          "end": 165.725
+        },
+        {
+          "word": "phone",
+          "start": 165.8,
+          "end": 166.225
+        },
+        {
+          "word": "face",
+          "start": 166.3,
+          "end": 166.725
+        },
+        {
+          "word": "down",
+          "start": 166.8,
+          "end": 167.225
+        }
+      ]
     },
     {
-      "time": 157,
-      "text": "Look at me right now"
+      "time": 167.6,
+      "text": "Look at me right now",
+      "words": [
+        {
+          "word": "Look",
+          "start": 167.6,
+          "end": 168.025
+        },
+        {
+          "word": "at",
+          "start": 168.1,
+          "end": 168.525
+        },
+        {
+          "word": "me",
+          "start": 168.6,
+          "end": 169.025
+        },
+        {
+          "word": "right",
+          "start": 169.1,
+          "end": 169.525
+        },
+        {
+          "word": "now",
+          "start": 169.6,
+          "end": 170.025
+        }
+      ]
     },
     {
-      "time": 160,
-      "text": "I'm tired of arguing the world"
+      "time": 170.4,
+      "text": "I’m tired of debating everything",
+      "words": [
+        {
+          "word": "I’m",
+          "start": 170.4,
+          "end": 170.825
+        },
+        {
+          "word": "tired",
+          "start": 170.9,
+          "end": 171.325
+        },
+        {
+          "word": "of",
+          "start": 171.4,
+          "end": 171.825
+        },
+        {
+          "word": "debating",
+          "start": 171.9,
+          "end": 172.325
+        },
+        {
+          "word": "everything",
+          "start": 172.4,
+          "end": 172.825
+        }
+      ]
     },
     {
-      "time": 163,
-      "text": "When I'm sitting right here on your couch"
+      "time": 173.2,
+      "text": "When I’m sitting here with you",
+      "words": [
+        {
+          "word": "When",
+          "start": 173.2,
+          "end": 173.554
+        },
+        {
+          "word": "I’m",
+          "start": 173.617,
+          "end": 173.971
+        },
+        {
+          "word": "sitting",
+          "start": 174.033,
+          "end": 174.387
+        },
+        {
+          "word": "here",
+          "start": 174.45,
+          "end": 174.804
+        },
+        {
+          "word": "with",
+          "start": 174.867,
+          "end": 175.221
+        },
+        {
+          "word": "you",
+          "start": 175.283,
+          "end": 175.637
+        }
+      ]
     },
     {
-      "time": 166,
-      "text": "I don't need your hottest take"
+      "time": 176.0,
+      "text": "I don’t need your hottest view",
+      "words": [
+        {
+          "word": "I",
+          "start": 176.0,
+          "end": 176.354
+        },
+        {
+          "word": "don’t",
+          "start": 176.417,
+          "end": 176.771
+        },
+        {
+          "word": "need",
+          "start": 176.833,
+          "end": 177.187
+        },
+        {
+          "word": "your",
+          "start": 177.25,
+          "end": 177.604
+        },
+        {
+          "word": "hottest",
+          "start": 177.667,
+          "end": 178.021
+        },
+        {
+          "word": "view",
+          "start": 178.083,
+          "end": 178.437
+        }
+      ]
     },
     {
-      "time": 169,
-      "text": "I just need your name"
+      "time": 178.8,
+      "text": "I just need your face",
+      "words": [
+        {
+          "word": "I",
+          "start": 178.8,
+          "end": 179.225
+        },
+        {
+          "word": "just",
+          "start": 179.3,
+          "end": 179.725
+        },
+        {
+          "word": "need",
+          "start": 179.8,
+          "end": 180.225
+        },
+        {
+          "word": "your",
+          "start": 180.3,
+          "end": 180.725
+        },
+        {
+          "word": "face",
+          "start": 180.8,
+          "end": 181.225
+        }
+      ]
     },
     {
-      "time": 171,
-      "text": "Your face"
+      "time": 181.6,
+      "text": "Your truth",
+      "words": [
+        {
+          "word": "Your",
+          "start": 181.6,
+          "end": 182.662
+        },
+        {
+          "word": "truth",
+          "start": 182.85,
+          "end": 183.912
+        }
+      ]
     },
     {
-      "time": 173,
-      "text": "Turn your phone face down"
+      "time": 184.4,
+      "text": "Turn your phone face down",
+      "words": [
+        {
+          "word": "Turn",
+          "start": 184.4,
+          "end": 184.825
+        },
+        {
+          "word": "your",
+          "start": 184.9,
+          "end": 185.325
+        },
+        {
+          "word": "phone",
+          "start": 185.4,
+          "end": 185.825
+        },
+        {
+          "word": "face",
+          "start": 185.9,
+          "end": 186.325
+        },
+        {
+          "word": "down",
+          "start": 186.4,
+          "end": 186.825
+        }
+      ]
     },
     {
-      "time": 176,
-      "text": "Can we be here now?"
+      "time": 187.2,
+      "text": "Can we be present now?",
+      "words": [
+        {
+          "word": "Can",
+          "start": 187.2,
+          "end": 187.625
+        },
+        {
+          "word": "we",
+          "start": 187.7,
+          "end": 188.125
+        },
+        {
+          "word": "be",
+          "start": 188.2,
+          "end": 188.625
+        },
+        {
+          "word": "present",
+          "start": 188.7,
+          "end": 189.125
+        },
+        {
+          "word": "now?",
+          "start": 189.2,
+          "end": 189.625
+        }
+      ]
     }
   ]
 }

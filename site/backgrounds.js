@@ -866,27 +866,23 @@ class AnimatedBackground {
     const targetBass = audioData.bass || 0;
     const targetMid = audioData.mid || 0;
     const targetTreble = audioData.treble || 0;
-    const targetBeatPulse = audioData.beatPulse || 0;
 
-    // Per-stem effects (if available) boost specific aspects
-    const drumEnergy = audioData.drumEnergy || 0;
-    const bassDeform = audioData.bassDeform || 0;
-    const synthPulse = audioData.synthPulse || 0;
+    // Vocals stem drives background pulse EXCLUSIVELY
+    const vocalEnergy = audioData.vocalEnergy || 0;
 
-    // Bass and beat pulse need faster response for punchy effects
+    // Smooth frequency-based values (for legacy compatibility)
     this.audioEnergy += (targetEnergy - this.audioEnergy) * 0.15;
     this.audioBass += (targetBass - this.audioBass) * 0.2;
     this.audioMid += (targetMid - this.audioMid) * 0.15;
     this.audioTreble += (targetTreble - this.audioTreble) * 0.12;
-    // Beat pulse boosted by drums and synth
-    const effectiveBeatPulse = targetBeatPulse + drumEnergy * 0.3 + synthPulse * 0.2;
-    this.beatPulse += (effectiveBeatPulse - this.beatPulse) * 0.25;
 
-    // Apply stem-specific boosts to shader uniforms
-    // Drums add punch to energy, bass adds to bass uniform, synth adds mid brightness
-    this.material.uniforms.uAudioEnergy.value = this.audioEnergy + drumEnergy * 0.2;
-    this.material.uniforms.uAudioBass.value = this.audioBass + bassDeform * 0.3;
-    this.material.uniforms.uAudioMid.value = this.audioMid + synthPulse * 0.2;
+    // Background pulse driven ONLY by VOCALS stem
+    this.beatPulse += (vocalEnergy - this.beatPulse) * 0.2;
+
+    // Apply to shader uniforms
+    this.material.uniforms.uAudioEnergy.value = this.audioEnergy;
+    this.material.uniforms.uAudioBass.value = this.audioBass;
+    this.material.uniforms.uAudioMid.value = this.audioMid;
     this.material.uniforms.uAudioTreble.value = this.audioTreble;
     this.material.uniforms.uBeatPulse.value = this.beatPulse;
   }

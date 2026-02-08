@@ -2003,12 +2003,23 @@
       if (data) {
         let drumEnergy = 0, bassDeform = 0, vocalFog = 0, synthPulse = 0;
 
+        // Helper to apply stem overrides (enabled/threshold/gain)
+        const getEffectiveEnergy = (stemId, rawEnergy) => {
+          if (!window.getStemEffectOverride) return rawEnergy;
+          const override = window.getStemEffectOverride(stemId);
+          if (!override.enabled) return 0;
+          const threshold = override.threshold || 0;
+          if (rawEnergy < threshold) return 0;
+          return ((rawEnergy - threshold) / (1 - threshold)) * (override.gain || 1);
+        };
+
         for (const [stemId, stemData] of Object.entries(data)) {
           const { analysis, viz } = stemData;
           if (!analysis || !viz) continue;
 
-          const e = analysis.energy || 0;
-          const b = analysis.bass || 0;
+          // Apply stem overrides to energy values
+          const e = getEffectiveEnergy(stemId, analysis.energy || 0);
+          const b = getEffectiveEnergy(stemId, analysis.bass || 0);
 
           // Accumulate effects based on target/effect type
           if (viz.target === 'terrain' && viz.effect === 'impact') {
@@ -2696,11 +2707,11 @@
           bass: bass,
           mid: mid,
           treble: treble,
-          beatPulse: this.audioData.beatPulse || 0,
           // Per-stem effects for background
           drumEnergy: drumEnergy,
           bassDeform: bassDeform,
-          synthPulse: synthPulse
+          synthPulse: synthPulse,
+          vocalEnergy: vocalFog  // Vocals drive background pulse/atmosphere
         });
       }
 

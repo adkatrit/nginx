@@ -712,6 +712,140 @@ window.TRACK_THEMES = {
         peakColor: 0x00ff00
       }
     }
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // TERMS & CONDITIONS - Cold corporate digital dystopia
+  // Model: Biped Robot - the worker accepting the terms
+  // Colors: Glass towers, chrome, cold cyans, digital fog
+  // ═══════════════════════════════════════════════════════════════
+  "Terms & Conditions": {
+    name: "Digital Contract",
+    model: "biped-robot",
+    colorTheme: "neo",
+    vizMode: "grid",
+    vizParams: {
+      amplitude: 0.6,
+      speed: 0.9,
+      audioReactivity: 0.8,
+      zoom: 0.4,
+      smoothing: 0.2
+    },
+    spotlightColor: 0x00ddff,
+    trackColors: {
+      floorPrimary: 0x0a1520,
+      floorSecondary: 0x0f2030,
+      wallBase: 0x1a3050,
+      wallAccent: 0x00ddff,
+      obstacle: 0x00aaff,
+      boostPad: 0x00ffff,
+      centerMarker: 0x0088ff,
+      fogColor: 0x0a1020,
+      fogNear: 30,
+      fogFar: 220,
+      ambientLight: 0x101828,
+      ambientIntensity: 0.35
+    },
+    visualStyle: {
+      wallStyle: "glass",
+      floorPattern: "grid",
+      glowIntensity: 0.6,
+      particleType: "dust",
+      particleDensity: 0.3,
+      pulseWithBeat: true,
+      skyGradient: [0x050a15, 0x0a1828],
+      backgroundEffect: {
+        type: "topo",
+        color1: 0x050a15,
+        color2: 0x0a1828,
+        color3: 0x1a3050,
+        accent: 0x00ddff,
+        speed: 0.7,
+        intensity: 0.6,
+        scale: 1.0
+      },
+      terrain: {
+        enabled: true,
+        scale: 0.02,
+        octaves: 3,
+        persistence: 0.4,
+        amplitude: 5.0,
+        baseHeight: -2.0,
+        ridged: false,
+        colorByHeight: true,
+        lowColor: 0x0a1520,
+        midColor: 0x152535,
+        highColor: 0x254555,
+        peakColor: 0x5588aa
+      }
+    }
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // TURN YOUR PHONE FACE DOWN - Warm evening disconnection
+  // Model: Butterfly - gentle, peaceful presence
+  // Colors: Golden hour warmth, amber lamp light, cozy intimacy
+  // ═══════════════════════════════════════════════════════════════
+  "Turn Your Phone Face Down": {
+    name: "Golden Evening",
+    model: "butterfly",
+    colorTheme: "winamp41",
+    vizMode: "voyage",
+    vizParams: {
+      amplitude: 0.5,
+      speed: 0.5,
+      audioReactivity: 0.6,
+      zoom: 0.45,
+      smoothing: 0.7
+    },
+    spotlightColor: 0xffaa55,
+    trackColors: {
+      floorPrimary: 0x1a120c,
+      floorSecondary: 0x251a12,
+      wallBase: 0x352518,
+      wallAccent: 0xffaa55,
+      obstacle: 0xdd8844,
+      boostPad: 0xffcc88,
+      centerMarker: 0xee9955,
+      fogColor: 0x1a0f08,
+      fogNear: 25,
+      fogFar: 200,
+      ambientLight: 0x2a1a10,
+      ambientIntensity: 0.5
+    },
+    visualStyle: {
+      wallStyle: "glow",
+      floorPattern: "waves",
+      glowIntensity: 0.5,
+      particleType: "dust",
+      particleDensity: 0.4,
+      pulseWithBeat: false,
+      skyGradient: [0x150a05, 0x2a1510],
+      backgroundEffect: {
+        type: "savanna",
+        color1: 0x150a05,
+        color2: 0x2a1510,
+        color3: 0x503820,
+        accent: 0xffaa55,
+        speed: 0.5,
+        intensity: 0.6,
+        scale: 1.0
+      },
+      terrain: {
+        enabled: true,
+        scale: 0.025,
+        octaves: 2,
+        persistence: 0.6,
+        amplitude: 2.5,
+        baseHeight: -0.8,
+        ridged: false,
+        colorByHeight: true,
+        lowColor: 0x1a120c,
+        midColor: 0x2a1a12,
+        highColor: 0x4a3020,
+        peakColor: 0x805530
+      }
+    }
   }
 };
 

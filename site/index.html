@@ -15,7 +15,7 @@
     </script>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="alternate icon" href="./favicon.svg" />
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=19" />
     <script type="importmap">
       {
         "imports": {
@@ -78,6 +78,19 @@
     <!-- Hit feedback overlay -->
     <div id="hitFeedback" class="hit-feedback" aria-hidden="true"></div>
 
+    <!-- Audio Reactivity Panel -->
+    <div id="stemDebugPanel" class="stem-debug-panel" hidden>
+      <div class="stem-debug-header">
+        <span class="stem-debug-title">AUDIO REACTIVITY</span>
+        <a class="stem-debug-docs" href="./docs/audio-reactivity.html" target="_blank" title="How it works" aria-label="Documentation">?</a>
+        <button class="stem-debug-copy" id="copyStemSettings" type="button" title="Copy settings to clipboard">COPY</button>
+        <button class="stem-debug-close" id="closeStemDebug" type="button">&times;</button>
+      </div>
+      <div class="stem-debug-content" id="stemDebugContent">
+        <!-- Populated dynamically -->
+      </div>
+    </div>
+
     <!-- End-of-run summary (Chill Ride) -->
     <div id="runSummary" class="run-summary" hidden>
       <div class="run-summary__card" role="status" aria-live="polite">
@@ -130,20 +143,64 @@
         <div class="lyrics-overlay__next" id="lyricsNext"></div>
       </div>
 
-      <!-- Floating Control Bar -->
+      <!-- Floating Control Bar (2-row layout) -->
       <div class="control-bar" id="controlBar" role="region" aria-label="Playback controls">
 
-        <!-- Track Info -->
-        <div class="control-bar__track">
-          <div class="control-bar__cover" id="nowPlayingCover" aria-hidden="true"></div>
-          <div class="control-bar__info">
-            <div class="control-bar__title" id="trackTitle">No tracks loaded</div>
-            <div class="control-bar__artist" id="trackArtist"></div>
+        <!-- Row 1: Track Info | Stem Mixer | Volume/Playlist -->
+        <div class="control-bar__row control-bar__row--top">
+          <!-- Track Info -->
+          <div class="control-bar__track">
+            <div class="control-bar__cover" id="nowPlayingCover" aria-hidden="true"></div>
+            <div class="control-bar__info">
+              <div class="control-bar__title" id="trackTitle">No tracks loaded</div>
+              <div class="control-bar__artist" id="trackArtist"></div>
+            </div>
+          </div>
+
+          <!-- Stem Mixer -->
+          <div class="stem-mixer" id="stemMixer" role="group" aria-label="Stem mixer">
+            <button class="stem-btn" data-stem="drums" aria-pressed="true" title="Drums">
+              <span class="stem-btn__icon">D</span>
+              <div class="stem-btn__level"></div>
+            </button>
+            <button class="stem-btn" data-stem="bass" aria-pressed="true" title="Bass">
+              <span class="stem-btn__icon">B</span>
+              <div class="stem-btn__level"></div>
+            </button>
+            <button class="stem-btn" data-stem="vocals" aria-pressed="true" title="Vocals">
+              <span class="stem-btn__icon">V</span>
+              <div class="stem-btn__level"></div>
+            </button>
+            <button class="stem-btn" data-stem="synth" aria-pressed="true" title="Synth">
+              <span class="stem-btn__icon">S</span>
+              <div class="stem-btn__level"></div>
+            </button>
+            <button class="stem-btn" data-stem="guitar" aria-pressed="true" title="Guitar">
+              <span class="stem-btn__icon">G</span>
+              <div class="stem-btn__level"></div>
+            </button>
+          </div>
+
+          <!-- Right Section -->
+          <div class="control-bar__right">
+            <div class="control-bar__volume">
+              <button class="ctrl-btn ctrl-btn--sm" id="volumeBtn" type="button" aria-label="Mute" title="Volume">
+                &#x1F50A;
+              </button>
+              <input id="volume" type="range" min="0" max="100" value="100" step="1" class="volume-slider" aria-label="Volume" />
+            </div>
+            <button class="ctrl-btn ctrl-btn--playlist" id="playlistBtn" type="button" aria-label="Open playlist" aria-expanded="false" title="Library">
+              &#x2630;
+            </button>
+            <a class="ctrl-btn ctrl-btn--docs" href="./docs/audio-reactivity.html" target="_blank" aria-label="Documentation" title="How it works">
+              ?
+            </a>
           </div>
         </div>
 
-        <!-- Main Controls -->
-        <div class="control-bar__main">
+        <!-- Row 2: Playback Controls | Waveform -->
+        <div class="control-bar__row control-bar__row--bottom">
+          <!-- Playback Buttons -->
           <div class="control-bar__buttons">
             <button class="ctrl-btn ctrl-btn--sm" id="shuffleBtn" type="button" aria-label="Toggle shuffle" aria-pressed="false" title="Shuffle">
               &#x21C4;
@@ -162,478 +219,16 @@
             </button>
           </div>
 
-          <div class="control-bar__seek">
+          <!-- Waveform Progress -->
+          <div class="control-bar__waveform">
             <span class="control-bar__time" id="currentTime">0:00</span>
-            <input id="seek" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek position" />
+            <div class="waveform-container" id="waveformContainer">
+              <canvas id="waveformCanvas" class="waveform-canvas"></canvas>
+              <input id="seek" type="range" min="0" max="1000" value="0" step="1" class="waveform-input" aria-label="Seek position" />
+              <div class="waveform-playhead" id="waveformPlayhead"></div>
+            </div>
             <span class="control-bar__time" id="duration">0:00</span>
           </div>
-        </div>
-
-        <!-- Right Section -->
-        <div class="control-bar__right">
-          <div class="control-bar__volume">
-            <button class="ctrl-btn ctrl-btn--sm" id="volumeBtn" type="button" aria-label="Mute" title="Volume">
-              &#x1F50A;
-            </button>
-            <input id="volume" type="range" min="0" max="100" value="100" step="1" class="volume-slider" aria-label="Volume" />
-          </div>
-
-          <button class="ctrl-btn ctrl-btn--sm" id="vizSettingsBtn" type="button" aria-label="Visualization settings" aria-expanded="false" title="Settings">
-            &#x2699;
-          </button>
-
-          <button class="ctrl-btn ctrl-btn--playlist" id="playlistBtn" type="button" aria-label="Open playlist" aria-expanded="false" title="Library">
-            &#x2630;
-          </button>
-        </div>
-      </div>
-
-      <!-- Visualization Settings Panel -->
-      <div class="viz-settings" id="vizSettings" hidden>
-        <div class="viz-settings__header">
-          <span class="viz-settings__title">Effects Control</span>
-          <button class="viz-settings__close" id="closeVizSettings" type="button" aria-label="Close settings">&#x2715;</button>
-        </div>
-
-        <div class="viz-settings__body">
-          <!-- Audio Reactivity -->
-          <details class="viz-settings__section" open>
-            <summary class="viz-settings__section-header">Audio Reactivity</summary>
-            <div class="viz-settings__section-content">
-              <div class="viz-settings__group">
-                <label class="viz-settings__label">
-                  <span>Reactivity</span>
-                  <span class="viz-settings__value" id="reactivityValue">100%</span>
-                </label>
-                <input type="range" id="vizReactivity" min="0" max="100" value="100" step="5" class="viz-settings__slider" />
-              </div>
-            </div>
-          </details>
-
-          <!-- Lightning Effects -->
-          <details class="viz-settings__section">
-            <summary class="viz-settings__section-header">
-              <span>Lightning</span>
-              <label class="viz-settings__toggle" onclick="event.stopPropagation()">
-                <input type="checkbox" id="lightningEnabled" />
-                <span class="viz-settings__toggle-slider"></span>
-              </label>
-            </summary>
-            <div class="viz-settings__section-content">
-              <div class="viz-settings__group">
-                <label class="viz-settings__label">
-                  <span>Intensity</span>
-                  <span class="viz-settings__value" id="lightningIntensityValue">50%</span>
-                </label>
-                <input type="range" id="lightningIntensity" min="0" max="100" value="50" step="5" class="viz-settings__slider" />
-              </div>
-              <div class="viz-settings__group">
-                <label class="viz-settings__label">
-                  <span>Frequency</span>
-                  <span class="viz-settings__value" id="lightningFrequencyValue">30%</span>
-                </label>
-                <input type="range" id="lightningFrequency" min="0" max="100" value="30" step="5" class="viz-settings__slider" />
-              </div>
-              <div class="viz-settings__group">
-                <label class="viz-settings__label"><span>Audio Band</span></label>
-                <div class="viz-settings__band-select">
-                  <button class="viz-settings__band-btn active" data-effect="lightning" data-band="bass">Bass</button>
-                  <button class="viz-settings__band-btn" data-effect="lightning" data-band="mid">Mid</button>
-                  <button class="viz-settings__band-btn" data-effect="lightning" data-band="treble">Treble</button>
-                  <button class="viz-settings__band-btn" data-effect="lightning" data-band="energy">Energy</button>
-                </div>
-              </div>
-              <div class="viz-settings__group">
-                <label class="viz-settings__label"><span>Color</span></label>
-                <div class="viz-settings__color-row">
-                  <input type="color" id="lightningColor" value="#00ffff" class="viz-settings__color-input" />
-                  <span class="viz-settings__hint">Bolt color</span>
-                </div>
-              </div>
-              <button class="viz-settings__trigger-btn" id="triggerLightning" type="button">⚡ Trigger Lightning</button>
-            </div>
-          </details>
-
-          <!-- Aurora Effects -->
-          <details class="viz-settings__section">
-            <summary class="viz-settings__section-header">
-              <span>Aurora</span>
-              <label class="viz-settings__toggle" onclick="event.stopPropagation()">
-                <input type="checkbox" id="auroraEnabled" />
-                <span class="viz-settings__toggle-slider"></span>
-              </label>
-            </summary>
-            <div class="viz-settings__section-content">
-              <div class="viz-settings__group">
-                <label class="viz-settings__label">
-                  <span>Intensity</span>
-                  <span class="viz-settings__value" id="auroraIntensityValue">50%</span>
-                </label>
-                <input type="range" id="auroraIntensity" min="0" max="100" value="50" step="5" class="viz-settings__slider" />
-              </div>
-              <div class="viz-settings__group">
-                <label class="viz-settings__label">
-                  <span>Wave Speed</span>
-                  <span class="viz-settings__value" id="auroraSpeedValue">50%</span>
-                </label>
-                <input type="range" id="auroraSpeed" min="0" max="100" value="50" step="5" class="viz-settings__slider" />
-              </div>
-              <div class="viz-settings__group">
-                <label class="viz-settings__label">
-                  <span>Ribbons</span>
-                  <span class="viz-settings__value" id="auroraRibbonsValue">5</span>
-                </label>
-                <input type="range" id="auroraRibbons" min="1" max="10" value="5" step="1" class="viz-settings__slider" />
-              </div>
-              <div class="viz-settings__group">
-                <label class="viz-settings__label"><span>Audio Band</span></label>
-                <div class="viz-settings__band-select">
-                  <button class="viz-settings__band-btn" data-effect="aurora" data-band="bass">Bass</button>
-                  <button class="viz-settings__band-btn active" data-effect="aurora" data-band="mid">Mid</button>
-                  <button class="viz-settings__band-btn" data-effect="aurora" data-band="treble">Treble</button>
-                  <button class="viz-settings__band-btn" data-effect="aurora" data-band="energy">Energy</button>
-                </div>
-              </div>
-              <button class="viz-settings__trigger-btn" id="triggerAurora" type="button">🌌 Pulse Aurora</button>
-            </div>
-          </details>
-
-          <!-- Grid Lines -->
-          <details class="viz-settings__section">
-            <summary class="viz-settings__section-header">
-              <span>Grid Lines</span>
-              <label class="viz-settings__toggle" onclick="event.stopPropagation()">
-                <input type="checkbox" id="gridEnabled" />
-                <span class="viz-settings__toggle-slider"></span>
-              </label>
-            </summary>
-            <div class="viz-settings__section-content">
-              <div class="viz-settings__group">
-                <label class="viz-settings__label">
-                  <span>Intensity</span>
-                  <span class="viz-settings__value" id="gridIntensityValue">40%</span>
-                </label>
-                <input type="range" id="gridIntensity" min="0" max="100" value="40" step="5" class="viz-settings__slider" />
-              </div>
-              <div class="viz-settings__group">
-                <label class="viz-settings__label">
-                  <span>Spacing</span>
-                  <span class="viz-settings__value" id="gridSpacingValue">5</span>
-                </label>
-                <input type="range" id="gridSpacing" min="2" max="20" value="5" step="1" class="viz-settings__slider" />
-              </div>
-              <div class="viz-settings__group viz-settings__checkboxes">
-                <label class="viz-settings__checkbox-label">
-                  <input type="checkbox" id="gridFloor" checked />
-                  <span>Floor Grid</span>
-                </label>
-                <label class="viz-settings__checkbox-label">
-                  <input type="checkbox" id="gridPerspective" />
-                  <span>Perspective Lines</span>
-                </label>
-              </div>
-              <div class="viz-settings__group">
-                <label class="viz-settings__label"><span>Audio Band</span></label>
-                <div class="viz-settings__band-select">
-                  <button class="viz-settings__band-btn" data-effect="grid" data-band="bass">Bass</button>
-                  <button class="viz-settings__band-btn" data-effect="grid" data-band="mid">Mid</button>
-                  <button class="viz-settings__band-btn" data-effect="grid" data-band="treble">Treble</button>
-                  <button class="viz-settings__band-btn active" data-effect="grid" data-band="energy">Energy</button>
-                </div>
-              </div>
-              <div class="viz-settings__group">
-                <label class="viz-settings__label"><span>Color</span></label>
-                <div class="viz-settings__color-row">
-                  <input type="color" id="gridColor" value="#00ffff" class="viz-settings__color-input" />
-                </div>
-              </div>
-              <button class="viz-settings__trigger-btn" id="triggerGrid" type="button">📐 Pulse Grid</button>
-            </div>
-          </details>
-
-          <!-- Light Sources -->
-          <details class="viz-settings__section">
-            <summary class="viz-settings__section-header">
-              <span>Light Sources</span>
-              <label class="viz-settings__toggle" onclick="event.stopPropagation()">
-                <input type="checkbox" id="lightsEnabled" />
-                <span class="viz-settings__toggle-slider"></span>
-              </label>
-            </summary>
-            <div class="viz-settings__section-content">
-              <div class="viz-settings__group viz-settings__checkboxes">
-                <label class="viz-settings__checkbox-label">
-                  <input type="checkbox" id="godRaysEnabled" />
-                  <span>God Rays</span>
-                </label>
-                <label class="viz-settings__checkbox-label">
-                  <input type="checkbox" id="pulseLights" checked />
-                  <span>Pulse with Beat</span>
-                </label>
-              </div>
-              <div class="viz-settings__group">
-                <label class="viz-settings__label">
-                  <span>God Ray Intensity</span>
-                  <span class="viz-settings__value" id="godRayIntensityValue">30%</span>
-                </label>
-                <input type="range" id="godRayIntensity" min="0" max="100" value="30" step="5" class="viz-settings__slider" />
-              </div>
-              <div class="viz-settings__group">
-                <label class="viz-settings__label"><span>Audio Band</span></label>
-                <div class="viz-settings__band-select">
-                  <button class="viz-settings__band-btn active" data-effect="lights" data-band="bass">Bass</button>
-                  <button class="viz-settings__band-btn" data-effect="lights" data-band="mid">Mid</button>
-                  <button class="viz-settings__band-btn" data-effect="lights" data-band="treble">Treble</button>
-                  <button class="viz-settings__band-btn" data-effect="lights" data-band="energy">Energy</button>
-                </div>
-              </div>
-              <button class="viz-settings__trigger-btn" id="triggerLights" type="button">💡 Flash Lights</button>
-            </div>
-          </details>
-
-          <!-- Particles -->
-          <details class="viz-settings__section">
-            <summary class="viz-settings__section-header">
-              <span>Particles</span>
-              <label class="viz-settings__toggle" onclick="event.stopPropagation()">
-                <input type="checkbox" id="particlesEnabled" checked />
-                <span class="viz-settings__toggle-slider"></span>
-              </label>
-            </summary>
-            <div class="viz-settings__section-content">
-              <div class="viz-settings__group">
-                <label class="viz-settings__label"><span>Type</span></label>
-                <select id="particleType" class="viz-settings__select">
-                  <option value="dust">Dust</option>
-                  <option value="sparks">Sparks</option>
-                  <option value="bubbles">Bubbles</option>
-                  <option value="embers">Embers</option>
-                  <option value="snow">Snow</option>
-                  <option value="rain">Rain</option>
-                </select>
-              </div>
-              <div class="viz-settings__group">
-                <label class="viz-settings__label">
-                  <span>Count</span>
-                  <span class="viz-settings__value" id="particleCountValue">500</span>
-                </label>
-                <input type="range" id="particleCount" min="100" max="2000" value="500" step="100" class="viz-settings__slider" />
-              </div>
-              <div class="viz-settings__group">
-                <label class="viz-settings__label">
-                  <span>Size</span>
-                  <span class="viz-settings__value" id="particleSizeValue">0.3</span>
-                </label>
-                <input type="range" id="particleSize" min="10" max="100" value="30" step="5" class="viz-settings__slider" />
-              </div>
-              <div class="viz-settings__group">
-                <label class="viz-settings__label">
-                  <span>Speed</span>
-                  <span class="viz-settings__value" id="particleSpeedValue">1.0</span>
-                </label>
-                <input type="range" id="particleSpeed" min="10" max="300" value="100" step="10" class="viz-settings__slider" />
-              </div>
-              <div class="viz-settings__group">
-                <label class="viz-settings__label"><span>Audio Band</span></label>
-                <div class="viz-settings__band-select">
-                  <button class="viz-settings__band-btn" data-effect="particles" data-band="bass">Bass</button>
-                  <button class="viz-settings__band-btn" data-effect="particles" data-band="mid">Mid</button>
-                  <button class="viz-settings__band-btn" data-effect="particles" data-band="treble">Treble</button>
-                  <button class="viz-settings__band-btn active" data-effect="particles" data-band="energy">Energy</button>
-                </div>
-              </div>
-              <button class="viz-settings__trigger-btn" id="triggerParticles" type="button">✨ Burst Particles</button>
-            </div>
-          </details>
-
-          <!-- Racer Settings -->
-          <details class="viz-settings__section" open>
-            <summary class="viz-settings__section-header">Racer</summary>
-            <div class="viz-settings__section-content">
-              <div class="viz-settings__group">
-                <label class="viz-settings__label"><span>Model</span></label>
-                <select id="racerModelSelect" class="viz-settings__select">
-                  <option value="white-eagle">White Eagle</option>
-                  <option value="jellyfish">Jellyfish</option>
-                </select>
-              </div>
-              <div class="viz-settings__group">
-                <label class="viz-settings__label">
-                  <span>Cruise Speed</span>
-                  <span class="viz-settings__value" id="cruiseSpeedValue">1.0x</span>
-                </label>
-                <input type="range" id="cruiseSpeed" min="25" max="200" value="100" step="5" class="viz-settings__slider" />
-                <span class="viz-settings__hint">Lower = more chill, Higher = intense</span>
-              </div>
-            </div>
-          </details>
-
-          <!-- World / Chill Ride -->
-          <details class="viz-settings__section" open>
-            <summary class="viz-settings__section-header">World (Chill Ride)</summary>
-            <div class="viz-settings__section-content">
-              <div class="viz-settings__group viz-settings__checkboxes">
-                <label class="viz-settings__checkbox-label">
-                  <input type="checkbox" id="pathEnabled" checked />
-                  <span>Ride Path</span>
-                </label>
-                <label class="viz-settings__checkbox-label">
-                  <input type="checkbox" id="parallaxEnabled" checked />
-                  <span>Parallax Backdrop</span>
-                </label>
-                <label class="viz-settings__checkbox-label">
-                  <input type="checkbox" id="vistaEnabled" checked />
-                  <span>Vista Moments</span>
-                </label>
-              </div>
-
-              <div class="viz-settings__group">
-                <label class="viz-settings__label">
-                  <span>Path Glow</span>
-                  <span class="viz-settings__value" id="pathOpacityValue">18%</span>
-                </label>
-                <input type="range" id="pathOpacity" min="0" max="60" value="18" step="2" class="viz-settings__slider" />
-              </div>
-
-              <div class="viz-settings__group">
-                <label class="viz-settings__label">
-                  <span>Lane Lines</span>
-                  <span class="viz-settings__value" id="pathLaneOpacityValue">28%</span>
-                </label>
-                <input type="range" id="pathLaneOpacity" min="0" max="80" value="28" step="2" class="viz-settings__slider" />
-              </div>
-
-              <div class="viz-settings__group">
-                <label class="viz-settings__label">
-                  <span>Parallax Depth</span>
-                  <span class="viz-settings__value" id="parallaxDepthValue">28%</span>
-                </label>
-                <input type="range" id="parallaxDepth" min="10" max="60" value="28" step="1" class="viz-settings__slider" />
-                <span class="viz-settings__hint">Lower = deeper, Higher = closer</span>
-              </div>
-
-              <div class="viz-settings__group">
-                <label class="viz-settings__label">
-                  <span>Vista Threshold</span>
-                  <span class="viz-settings__value" id="vistaThresholdValue">68%</span>
-                </label>
-                <input type="range" id="vistaThreshold" min="40" max="90" value="68" step="1" class="viz-settings__slider" />
-              </div>
-
-              <div class="viz-settings__group">
-                <label class="viz-settings__label">
-                  <span>Vista Duration</span>
-                  <span class="viz-settings__value" id="vistaDurationValue">2.6s</span>
-                </label>
-                <input type="range" id="vistaDuration" min="10" max="60" value="26" step="1" class="viz-settings__slider" />
-              </div>
-
-              <div class="viz-settings__group">
-                <label class="viz-settings__label">
-                  <span>Vista Cooldown</span>
-                  <span class="viz-settings__value" id="vistaCooldownValue">5.0s</span>
-                </label>
-                <input type="range" id="vistaCooldown" min="10" max="120" value="50" step="5" class="viz-settings__slider" />
-              </div>
-              <button class="viz-settings__trigger-btn" id="triggerVista" type="button">🎬 Trigger Vista</button>
-            </div>
-          </details>
-
-          <!-- Flight Controls -->
-          <details class="viz-settings__section" open>
-            <summary class="viz-settings__section-header">Flight Controls</summary>
-            <div class="viz-settings__section-content">
-              <div class="viz-settings__group">
-                <label class="viz-settings__label">
-                  <span>Lateral Limit</span>
-                  <span class="viz-settings__value" id="lateralLimitValue">100</span>
-                </label>
-                <input type="range" id="lateralLimit" min="10" max="100" value="100" step="5" class="viz-settings__slider" />
-                <span class="viz-settings__hint">How far left/right you can fly</span>
-              </div>
-
-              <div class="viz-settings__group">
-                <label class="viz-settings__label">
-                  <span>Min Altitude</span>
-                  <span class="viz-settings__value" id="minAltitudeValue">0.5</span>
-                </label>
-                <input type="range" id="minAltitude" min="1" max="50" value="5" step="1" class="viz-settings__slider" />
-                <span class="viz-settings__hint">Lowest flight height (x0.1)</span>
-              </div>
-
-              <div class="viz-settings__group">
-                <label class="viz-settings__label">
-                  <span>Max Altitude</span>
-                  <span class="viz-settings__value" id="maxAltitudeValue">18</span>
-                </label>
-                <input type="range" id="maxAltitude" min="10" max="50" value="18" step="1" class="viz-settings__slider" />
-              </div>
-
-              <div class="viz-settings__group">
-                <label class="viz-settings__label">
-                  <span>Steer Response</span>
-                  <span class="viz-settings__value" id="steerResponseValue">23</span>
-                </label>
-                <input type="range" id="steerResponse" min="5" max="40" value="23" step="1" class="viz-settings__slider" />
-                <span class="viz-settings__hint">Higher = snappier left/right</span>
-              </div>
-
-              <div class="viz-settings__group">
-                <label class="viz-settings__label">
-                  <span>Vertical Response</span>
-                  <span class="viz-settings__value" id="verticalResponseValue">17</span>
-                </label>
-                <input type="range" id="verticalResponse" min="5" max="40" value="17" step="1" class="viz-settings__slider" />
-                <span class="viz-settings__hint">Higher = snappier up/down</span>
-              </div>
-
-              <div class="viz-settings__group">
-                <label class="viz-settings__label">
-                  <span>Bank Angle</span>
-                  <span class="viz-settings__value" id="bankAngleValue">45%</span>
-                </label>
-                <input type="range" id="bankAngle" min="0" max="100" value="45" step="5" class="viz-settings__slider" />
-                <span class="viz-settings__hint">Roll when turning</span>
-              </div>
-            </div>
-          </details>
-
-          <!-- Visual Style -->
-          <details class="viz-settings__section">
-            <summary class="viz-settings__section-header">Visual Style</summary>
-            <div class="viz-settings__section-content">
-              <div class="viz-settings__group">
-                <label class="viz-settings__label">
-                  <span>Fog Density</span>
-                  <span class="viz-settings__value" id="fogDensityValue">100%</span>
-                </label>
-                <input type="range" id="fogDensity" min="0" max="200" value="100" step="10" class="viz-settings__slider" />
-              </div>
-              <div class="viz-settings__group">
-                <label class="viz-settings__label">
-                  <span>Speed Lines</span>
-                  <span class="viz-settings__value" id="speedLinesValue">100%</span>
-                </label>
-                <input type="range" id="speedLinesIntensity" min="0" max="100" value="100" step="5" class="viz-settings__slider" />
-              </div>
-              <div class="viz-settings__group viz-settings__checkboxes">
-                <label class="viz-settings__checkbox-label">
-                  <input type="checkbox" id="colorShiftEnabled" />
-                  <span>Color Shift</span>
-                </label>
-                <label class="viz-settings__checkbox-label">
-                  <input type="checkbox" id="screenShakeEnabled" checked />
-                  <span>Screen Shake</span>
-                </label>
-              </div>
-              <button class="viz-settings__trigger-btn" id="triggerShake" type="button">📳 Trigger Shake</button>
-            </div>
-          </details>
-        </div>
-
-        <div class="viz-settings__footer">
-          <button class="viz-settings__btn viz-settings__btn--randomize" id="randomizeEffectsBtn" type="button">Randomize</button>
-          <button class="viz-settings__btn viz-settings__btn--reset" id="resetEffectsBtn" type="button">Reset All</button>
         </div>
       </div>
 
@@ -678,17 +273,17 @@
     <!-- Keep a real media element in the DOM for best mobile behavior -->
     <audio id="playerAudio" preload="metadata" crossorigin="anonymous" playsinline style="display:none"></audio>
 
-    <script src="./tracks.js?v=12"></script>
+    <script src="./tracks.js?v=13"></script>
     <script src="./models.js?v=9"></script>
-    <script src="./themes.js?v=9"></script>
-    <script src="./backgrounds.js?v=9"></script>
-    <script src="./track-scenes.js?v=14"></script>
+    <script src="./themes.js?v=10"></script>
+    <script src="./backgrounds.js?v=10"></script>
+    <script src="./track-scenes.js?v=21"></script>
     <script src="./effects-manager.js?v=10"></script>
     <script src="./noise.js?v=9"></script>
     <script src="./terrain.js?v=9"></script>
-    <script src="./environments.js?v=9"></script>
+    <script src="./environments.js?v=10"></script>
     <script src="./stem-player.js?v=12"></script>
     <script src="./ios-viz.js?v=9"></script>
-    <script src="./app.js?v=13"></script>
+    <script src="./app.js?v=25"></script>
   </body>
 </html>

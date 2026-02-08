@@ -23,6 +23,14 @@
   const seek = /** @type {HTMLInputElement|null} */ ($("seek"));
   const volume = /** @type {HTMLInputElement|null} */ ($("volume"));
 
+  // Waveform visualization elements
+  const waveformCanvas = /** @type {HTMLCanvasElement|null} */ ($("waveformCanvas"));
+  const waveformPlayhead = $("waveformPlayhead");
+  const waveformContainer = $("waveformContainer");
+
+  // Stem mixer elements
+  const stemMixer = $("stemMixer");
+
   // Playlist modal elements
   const playlistBtn = $("playlistBtn");
   const playlistModal = $("playlistModal");
@@ -37,12 +45,14 @@
 
   const bgVizCanvas = /** @type {HTMLCanvasElement|null} */ ($("bgViz"));
 
-  // Game settings elements
-  const vizSettingsBtn = $("vizSettingsBtn");
-  const vizSettings = $("vizSettings");
-  const closeVizSettingsBtn = $("closeVizSettings");
-  const vizReactivity = /** @type {HTMLInputElement|null} */ ($("vizReactivity"));
-  const reactivityValue = $("reactivityValue");
+  // Stem debug panel elements
+  const stemDebugPanel = $("stemDebugPanel");
+  const stemDebugContent = $("stemDebugContent");
+  const closeStemDebugBtn = $("closeStemDebug");
+
+  // Viz params UI (removed but keep refs for compatibility)
+  const vizReactivity = null;
+  const reactivityValue = null;
 
   // Racer settings elements
   const racerModelSelect = /** @type {HTMLSelectElement|null} */ ($("racerModelSelect"));
@@ -171,9 +181,6 @@
   const vistaDurationValue = $("vistaDurationValue");
   const vistaCooldownValue = $("vistaCooldownValue");
 
-  // Band select buttons
-  const bandButtons = document.querySelectorAll('.viz-settings__band-btn');
-
   if (
     !app ||
     !controlBar ||
@@ -195,10 +202,7 @@
     !addBtn ||
     !clearBtn ||
     !filePicker ||
-    !dropzone ||
-    !vizSettingsBtn ||
-    !vizSettings ||
-    !closeVizSettingsBtn
+    !dropzone
   ) {
     console.error("App: Missing required DOM elements");
     return;
@@ -233,7 +237,35 @@
 
   let isSeeking = false;
   let playlistOpen = false;
-  let vizSettingsOpen = false;
+  let stemDebugVisible = false;
+
+  // Stem effect overrides (for toggling and intensity)
+  const stemEffectOverrides = {};
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STEM EFFECT PRESETS - Paste your tuned settings here!
+  // Format: "Track Title": { stemName: { threshold: 0-1, gain: 0.5-3 }, ... }
+  // ═══════════════════════════════════════════════════════════════════════════
+  const stemEffectPresets = {
+    // Example:
+    // "Terms & Conditions": {
+    //   drums: { threshold: 0.15, gain: 1.4 },
+    //   bass: { threshold: 0.1, gain: 1.2 },
+    //   vocals: { threshold: 0.2, gain: 1.0 },
+    //   synth: { threshold: 0.05, gain: 1.5 }
+    // }
+  };
+
+  // Live audio analysis for debug panel
+  const liveAudio = {
+    bass: 0,
+    mid: 0,
+    treble: 0,
+    energy: 0,
+    speedMultiplier: 1,
+    beatPulse: 0,
+    stems: {}
+  };
 
   // Visualizer settings values
   const vizParams = {
@@ -400,13 +432,6 @@
     if (vistaDurationValue) vistaDurationValue.textContent = `${(clamp(effectsConfig.world.vistaDuration, 0.5, 10)).toFixed(1)}s`;
     if (vistaCooldownValue) vistaCooldownValue.textContent = `${(clamp(effectsConfig.world.vistaCooldown, 0.5, 20)).toFixed(1)}s`;
 
-    // Update band buttons
-    bandButtons.forEach(btn => {
-      const effect = btn.getAttribute('data-effect');
-      const band = btn.getAttribute('data-band');
-      const currentBand = effectsConfig[effect]?.band;
-      btn.classList.toggle('active', band === currentBand);
-    });
   }
 
   // Reset effects to defaults
@@ -562,6 +587,9 @@
   let timeData = null;
   let vizRaf = 0;
 
+  // Store last audio data for waveform visualization
+  let lastAudioData = { frequencyData: null, energy: 0 };
+
   // ---- Three.js visualizer ----
   // Use jspm.dev which properly handles ES module dependencies
   const THREE_CDN = "https://ga.jspm.io/npm:three@0.160.0/build/three.module.js";
@@ -643,6 +671,161 @@
 
   function clamp(n, min, max) {
     return Math.max(min, Math.min(max, n));
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // WAVEFORM VISUALIZER - Canvas-based progress visualization
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /** @type {WaveformVisualizer|null} */
+  let waveformViz = null;
+
+  class WaveformVisualizer {
+    constructor(canvas) {
+      this.canvas = canvas;
+      this.ctx = canvas.getContext('2d');
+      this.barCount = 60;
+      this.smoothedData = new Float32Array(this.barCount);
+      this.resizeObserver = null;
+      this.setupResize();
+    }
+
+    setupResize() {
+      this.resizeObserver = new ResizeObserver(() => this.resize());
+      this.resizeObserver.observe(this.canvas.parentElement);
+      this.resize();
+    }
+
+    resize() {
+      const parent = this.canvas.parentElement;
+      if (!parent) return;
+      const rect = parent.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      this.canvas.width = rect.width * dpr;
+      this.canvas.height = rect.height * dpr;
+      this.canvas.style.width = rect.width + 'px';
+      this.canvas.style.height = rect.height + 'px';
+      this.ctx.scale(dpr, dpr);
+      this.displayWidth = rect.width;
+      this.displayHeight = rect.height;
+    }
+
+    draw(progress, isPlaying, audioData) {
+      const { ctx, displayWidth: width, displayHeight: height, barCount } = this;
+      if (!width || !height) return;
+
+      const barWidth = width / barCount;
+      const gap = 2;
+
+      // Get accent color from CSS
+      const accentRgb = getCssVar('--wa-accent-rgb', '124, 60, 255').split(',').map(n => parseInt(n.trim()));
+
+      ctx.clearRect(0, 0, width, height);
+
+      for (let i = 0; i < barCount; i++) {
+        // Generate or update bar height
+        let targetHeight;
+        if (isPlaying && audioData) {
+          // Use frequency data mapped to bar position
+          const freqIndex = Math.floor((i / barCount) * 128);
+          const energy = audioData.frequencyData ? audioData.frequencyData[freqIndex] / 255 : 0.1;
+          targetHeight = 0.15 + energy * 0.7;
+        } else {
+          // Subtle idle animation
+          targetHeight = 0.08 + Math.sin(Date.now() / 1000 + i * 0.3) * 0.04;
+        }
+
+        // Smooth the data
+        this.smoothedData[i] += (targetHeight - this.smoothedData[i]) * 0.15;
+        const barHeight = this.smoothedData[i] * height;
+
+        const x = i * barWidth;
+        const y = (height - barHeight) / 2;
+
+        // Color based on progress
+        const progressX = progress * width;
+        const isPast = (x + barWidth / 2) < progressX;
+
+        if (isPast) {
+          ctx.fillStyle = `rgba(${accentRgb[0]}, ${accentRgb[1]}, ${accentRgb[2]}, 0.9)`;
+        } else {
+          ctx.fillStyle = `rgba(${accentRgb[0]}, ${accentRgb[1]}, ${accentRgb[2]}, 0.25)`;
+        }
+
+        // Draw rounded bar
+        const radius = Math.min(barWidth / 3, 3);
+        ctx.beginPath();
+        ctx.roundRect(x + gap / 2, y, barWidth - gap, barHeight, radius);
+        ctx.fill();
+      }
+    }
+
+    destroy() {
+      if (this.resizeObserver) {
+        this.resizeObserver.disconnect();
+      }
+    }
+  }
+
+  // Initialize waveform visualizer
+  function initWaveformVisualizer() {
+    if (!waveformCanvas) return;
+    waveformViz = new WaveformVisualizer(waveformCanvas);
+  }
+
+  // Update waveform in animation loop
+  function updateWaveform(progress, isPlaying, audioData) {
+    if (!waveformViz) return;
+    waveformViz.draw(progress, isPlaying, audioData);
+
+    // Update playhead position
+    if (waveformPlayhead) {
+      waveformPlayhead.style.setProperty('--progress', String(progress));
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STEM MIXER - Quick access stem toggles in control bar
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function initStemMixer() {
+    if (!stemMixer) return;
+
+    const buttons = stemMixer.querySelectorAll('.stem-btn');
+
+    buttons.forEach(btn => {
+      const stemId = btn.dataset.stem;
+
+      // Toggle mute on click
+      btn.addEventListener('click', () => {
+        const isActive = btn.getAttribute('aria-pressed') === 'true';
+        btn.setAttribute('aria-pressed', String(!isActive));
+
+        if (stemPlayer) {
+          // Mute = set volume to 0, unmute = restore to 1
+          stemPlayer.setStemVolume(stemId, isActive ? 0 : 1);
+        }
+
+        // Also update the stem effect override
+        const override = getStemEffectOverride(stemId);
+        override.enabled = !isActive;
+      });
+    });
+  }
+
+  // Update stem mixer level indicators
+  function updateStemMixerLevels(analysisData) {
+    if (!stemMixer || !analysisData) return;
+
+    const buttons = stemMixer.querySelectorAll('.stem-btn');
+    buttons.forEach(btn => {
+      const stemId = btn.dataset.stem;
+      const analysis = analysisData[stemId];
+      if (analysis) {
+        const level = Math.min(1, analysis.energy || 0);
+        btn.style.setProperty('--level', String(level));
+      }
+    });
   }
 
   function getCssVar(name, fallback = "") {
@@ -935,9 +1118,13 @@
     durationEl.textContent = formatTime(dur);
 
     if (!isSeeking && Number.isFinite(dur) && dur > 0) {
-      const progress = (cur / dur) * 100;
-      seek.value = String(Math.round((cur / dur) * 1000));
-      seek.style.setProperty("--progress", `${progress}%`);
+      const progress = cur / dur;
+      seek.value = String(Math.round(progress * 1000));
+      seek.style.setProperty("--progress", `${progress * 100}%`);
+
+      // Update waveform visualization
+      const isPlaying = !isPlaybackPaused();
+      updateWaveform(progress, isPlaying, lastAudioData);
     }
 
     // Update lyrics sync
@@ -965,7 +1152,7 @@
       }
     }
 
-    // Only update DOM if the lyric changed
+    // Update DOM when lyric line changes
     if (newIndex !== currentLyricIndex) {
       currentLyricIndex = newIndex;
 
@@ -976,7 +1163,7 @@
         // Show section headers separately
         if (current.type === "section") {
           lyricsSectionEl.textContent = current.text;
-          lyricsCurrentEl.textContent = "";
+          lyricsCurrentEl.innerHTML = "";
         } else {
           // Find the most recent section
           let sectionText = "";
@@ -987,7 +1174,15 @@
             }
           }
           lyricsSectionEl.textContent = sectionText;
-          lyricsCurrentEl.textContent = current.text;
+
+          // KARAOKE MODE: Render words as individual spans if word timing exists
+          if (current.words && current.words.length > 0) {
+            lyricsCurrentEl.innerHTML = current.words.map((w, i) =>
+              `<span class="lyric-word" data-start="${w.start}" data-end="${w.end}">${w.word}</span>`
+            ).join(' ');
+          } else {
+            lyricsCurrentEl.textContent = current.text;
+          }
         }
 
         // Show next lyric (skip section headers for preview)
@@ -1002,10 +1197,41 @@
         lyricsOverlay.classList.add("is-visible");
       } else {
         lyricsSectionEl.textContent = "";
-        lyricsCurrentEl.textContent = "";
+        lyricsCurrentEl.innerHTML = "";
         lyricsNextEl.textContent = "";
         lyricsOverlay.classList.remove("is-visible");
       }
+    }
+
+    // KARAOKE WORD HIGHLIGHTING: Update word highlighting on every frame
+    if (currentLyricIndex >= 0 && lyricsData[currentLyricIndex]?.words) {
+      const words = lyricsData[currentLyricIndex].words;
+      const wordEls = lyricsCurrentEl.querySelectorAll('.lyric-word');
+
+      wordEls.forEach((el, i) => {
+        if (i >= words.length) return;
+        const word = words[i];
+        const start = word.start;
+        const end = word.end;
+
+        if (currentTime >= start && currentTime < end) {
+          // Currently being sung - highlight with progress
+          el.classList.add('is-active');
+          el.classList.remove('is-sung');
+          // Calculate progress through the word (0 to 1)
+          const progress = (currentTime - start) / (end - start);
+          el.style.setProperty('--word-progress', `${Math.min(100, progress * 100)}%`);
+        } else if (currentTime >= end) {
+          // Already sung
+          el.classList.remove('is-active');
+          el.classList.add('is-sung');
+          el.style.setProperty('--word-progress', '100%');
+        } else {
+          // Not yet sung
+          el.classList.remove('is-active', 'is-sung');
+          el.style.setProperty('--word-progress', '0%');
+        }
+      });
     }
   }
 
@@ -1109,9 +1335,6 @@
   // ---- Playlist Modal ----
 
   function openPlaylist() {
-    // Close other panels
-    if (vizSettingsOpen) closeVizSettings();
-
     playlistOpen = true;
     playlistModal.hidden = false;
     // Trigger reflow for animation
@@ -1220,34 +1443,6 @@
       threeCamera.position.z = targetDistance;
     }
     threeCamera.updateProjectionMatrix();
-  }
-
-  function handleVizSettingsClickOutside(e) {
-    const target = /** @type {HTMLElement} */ (e.target);
-    if (!vizSettings.contains(target) && !vizSettingsBtn.contains(target)) {
-      closeVizSettings();
-    }
-  }
-
-  function openVizSettings() {
-    vizSettingsOpen = true;
-    vizSettings.hidden = false;
-    void vizSettings.offsetWidth;
-    vizSettings.classList.add("is-open");
-    vizSettingsBtn.setAttribute("aria-expanded", "true");
-    setTimeout(() => {
-      document.addEventListener("click", handleVizSettingsClickOutside);
-    }, 10);
-  }
-
-  function closeVizSettings() {
-    vizSettingsOpen = false;
-    vizSettings.classList.remove("is-open");
-    vizSettingsBtn.setAttribute("aria-expanded", "false");
-    document.removeEventListener("click", handleVizSettingsClickOutside);
-    setTimeout(() => {
-      if (!vizSettingsOpen) vizSettings.hidden = true;
-    }, 200);
   }
 
   function resetVizParams() {
@@ -2142,6 +2337,14 @@
       treble = avgBins(Math.floor(freqData.length * 0.55), Math.floor(freqData.length * 0.92));
     }
 
+    // Store for waveform visualization
+    lastAudioData = { frequencyData: freqData, energy };
+
+    // Update stem mixer levels
+    if (stemAnalysisData) {
+      updateStemMixerLevels(stemAnalysisData);
+    }
+
     // ---- Audio-reactive speed calculation ----
     const reactivity = vizParams.audioReactivity;
     let bassHit = false;
@@ -2185,6 +2388,29 @@
     } else {
       // No reactivity - gradually return to base speed
       audioSpeedMultiplier += (1.0 - audioSpeedMultiplier) * 0.05;
+    }
+
+    // Update live audio state for debug panel
+    liveAudio.bass = bass;
+    liveAudio.mid = mid;
+    liveAudio.treble = treble;
+    liveAudio.energy = energy;
+    liveAudio.speedMultiplier = audioSpeedMultiplier;
+    liveAudio.beatPulse = globalBeatPulse;
+
+    // Populate stems data - use real stem data if available, otherwise synthesize from frequency bands
+    if (stemAnalysisData && stemAnalysisData.drums) {
+      // Real per-stem analysis available (has individual stems like drums, bass, etc.)
+      liveAudio.stems = stemAnalysisData;
+    } else {
+      // Synthesize stem-like values from frequency bands for tracks without separated stems
+      liveAudio.stems = {
+        drums: { energy: bass * 1.2, bass: bass, mid: mid * 0.3, treble: treble * 0.1 },
+        bass: { energy: bass, bass: bass * 1.1, mid: mid * 0.2, treble: 0 },
+        vocals: { energy: mid * 0.8, bass: bass * 0.1, mid: mid, treble: treble * 0.4 },
+        synth: { energy: (mid + treble) * 0.5, bass: bass * 0.2, mid: mid * 0.6, treble: treble * 0.8 },
+        guitar: { energy: mid * 0.6, bass: bass * 0.3, mid: mid * 0.8, treble: treble * 0.3 }
+      };
     }
 
     // Blend between static speed and audio-reactive speed
@@ -2242,11 +2468,38 @@
     if (currentTrackScene && currentTrackScene.update) {
       const shipPos = EnvironmentMode ? EnvironmentMode.getShipPosition() : null;
       const shipSpeed = EnvironmentMode ? EnvironmentMode.getShipSpeed() : 0;
-      // Pass drum/percussion energy for scene object pulsing
-      const drumEnergy = stemAnalysisData?.drums?.energy || 0;
-      const percussionEnergy = stemAnalysisData?.percussion?.energy || 0;
-      const drumPulse = Math.max(drumEnergy, percussionEnergy);
-      currentTrackScene.update(t, freqData, amplitude, shipPos, shipSpeed, { drumPulse, stemAnalysisData });
+
+      // Apply stem effect overrides (threshold + gain) to the stem data
+      let effectiveStems = stemAnalysisData;
+      if (stemAnalysisData && Object.keys(stemEffectOverrides).length > 0) {
+        effectiveStems = {};
+        for (const [stemId, data] of Object.entries(stemAnalysisData)) {
+          const override = stemEffectOverrides[stemId];
+          if (override && !override.enabled) {
+            // Disabled - zero out the values
+            effectiveStems[stemId] = { energy: 0, bass: 0, mid: 0, treble: 0 };
+          } else if (override) {
+            const threshold = override.threshold || 0;
+            const gain = override.gain || 1;
+            // Apply threshold and gain to each value
+            const applyThresholdGain = (val) => {
+              if (val < threshold) return 0;
+              return ((val - threshold) / (1 - threshold || 1)) * gain;
+            };
+            effectiveStems[stemId] = {
+              energy: applyThresholdGain(data.energy || 0),
+              bass: applyThresholdGain(data.bass || 0),
+              mid: applyThresholdGain(data.mid || 0),
+              treble: applyThresholdGain(data.treble || 0)
+            };
+          } else {
+            effectiveStems[stemId] = data;
+          }
+        }
+      }
+
+      // Pass the effective stems directly (scenes access stemData?.drums?.energy etc)
+      currentTrackScene.update(t, freqData, amplitude, shipPos, shipSpeed, effectiveStems);
     }
 
     // Update OrbitControls for smooth damping
@@ -2269,6 +2522,11 @@
         const pulse = 1 + bass * 0.1 * amplitude;
         currentModel.scale.setScalar(modelOverrides.scale * pulse);
       }
+    }
+
+    // Update stem debug panel meters
+    if (stemDebugVisible) {
+      updateStemDebugMeters();
     }
 
     // Render animated background first (if environment mode is active)
@@ -2972,6 +3230,9 @@
     currentIndex = safeIndex;
     const t = tracks[currentIndex];
 
+    // Load stem effect presets for this track (if any)
+    loadStemPresets(t.title);
+
     setTrackDisplay(t);
     updatePlaylistUi();
     updateMediaSession();
@@ -3106,6 +3367,11 @@
 
     // Hide loading overlay now that track is ready
     hideLoadingOverlay();
+
+    // Update stem debug panel if visible
+    if (stemDebugVisible) {
+      populateStemDebugPanel();
+    }
 
     if (autoplay) {
       void play();
@@ -3524,22 +3790,6 @@
   // Filter
   filterInput.addEventListener("input", updatePlaylistUi);
 
-  // Game settings
-  vizSettingsBtn.addEventListener("click", () => {
-    vizSettingsOpen ? closeVizSettings() : openVizSettings();
-  });
-  closeVizSettingsBtn.addEventListener("click", closeVizSettings);
-
-
-  // Audio reactivity slider
-  if (vizReactivity) {
-    vizReactivity.addEventListener("input", () => {
-      vizParams.audioReactivity = clamp(Number(vizReactivity.value) / 100, 0, 1);
-      updateVizParamDisplays();
-      saveVizParams();
-    });
-  }
-
   // Racer model selector
   if (racerModelSelect) {
     // Load saved model selection
@@ -3957,24 +4207,6 @@
     });
   }
 
-  // Band select buttons
-  bandButtons.forEach(btn => {
-    btn.addEventListener('click', () => {
-      const effect = btn.getAttribute('data-effect');
-      const band = btn.getAttribute('data-band');
-      if (effect && band && effectsConfig[effect]) {
-        effectsConfig[effect].band = band;
-        // Update button states for this effect
-        bandButtons.forEach(b => {
-          if (b.getAttribute('data-effect') === effect) {
-            b.classList.toggle('active', b.getAttribute('data-band') === band);
-          }
-        });
-        saveEffectsConfig();
-        applyEffectsToEnvironment();
-      }
-    });
-  });
 
   // Reset and Randomize buttons
   if (resetEffectsBtn) {
@@ -4263,18 +4495,372 @@
       playlistOpen ? closePlaylist() : openPlaylist();
     } else if (key === "h") {
       controlBar.classList.toggle("is-hidden");
-    } else if (key === "f") {
-      e.preventDefault();
-      if (!playlistOpen) openPlaylist();
-      setTimeout(() => filterInput.focus(), 100);
     } else if (key === "escape") {
-      if (vizSettingsOpen) {
-        closeVizSettings();
-      } else if (playlistOpen) {
+      if (playlistOpen) {
         closePlaylist();
+      } else if (stemDebugPanel && !stemDebugPanel.hidden) {
+        stemDebugVisible = false;
+        stemDebugPanel.hidden = true;
       }
+    } else if (key === "f") {
+      // Toggle audio reactivity panel
+      toggleStemDebugPanel();
     }
   });
+
+  // ---- Stem Debug Panel Functions ----
+
+  function toggleStemDebugPanel() {
+    if (!stemDebugPanel) return;
+    stemDebugVisible = !stemDebugVisible;
+    stemDebugPanel.hidden = !stemDebugVisible;
+    if (stemDebugVisible) {
+      populateStemDebugPanel();
+    }
+  }
+
+  function getStemEffectOverride(stemId) {
+    if (!stemEffectOverrides[stemId]) {
+      // Vocals: 15% threshold, 2x gain (drives background effects)
+      const isVocals = (stemId === 'vocals');
+      const defaultThreshold = isVocals ? 0.15 : 0;
+      const defaultGain = isVocals ? 2.0 : 1.0;
+      stemEffectOverrides[stemId] = { enabled: true, threshold: defaultThreshold, gain: defaultGain };
+    }
+    return stemEffectOverrides[stemId];
+  }
+
+  function handleStemToggle(stemId, enabled) {
+    const override = getStemEffectOverride(stemId);
+    override.enabled = enabled;
+  }
+
+  function handleStemThreshold(stemId, threshold) {
+    const override = getStemEffectOverride(stemId);
+    override.threshold = threshold;
+    const valueEl = document.querySelector(`.stem-debug-effect-row[data-stem="${stemId}"] .stem-threshold-value`);
+    if (valueEl) valueEl.textContent = `${Math.round(threshold * 100)}%`;
+  }
+
+  function handleStemGain(stemId, gain) {
+    const override = getStemEffectOverride(stemId);
+    override.gain = gain;
+    const valueEl = document.querySelector(`.stem-debug-effect-row[data-stem="${stemId}"] .stem-gain-value`);
+    if (valueEl) valueEl.textContent = `${gain.toFixed(1)}x`;
+  }
+
+  // Load presets for a track (called when track changes)
+  function loadStemPresets(trackTitle) {
+    // Clear current overrides
+    Object.keys(stemEffectOverrides).forEach(key => delete stemEffectOverrides[key]);
+
+    // Load presets if they exist for this track
+    const preset = stemEffectPresets[trackTitle];
+    if (preset) {
+      for (const [stemId, settings] of Object.entries(preset)) {
+        stemEffectOverrides[stemId] = {
+          enabled: true,
+          threshold: settings.threshold || 0,
+          gain: settings.gain || 1.0
+        };
+      }
+      console.log(`Loaded stem presets for "${trackTitle}"`);
+    }
+  }
+
+  // Copy current settings to clipboard in paste-ready format
+  function copyStemSettings() {
+    const trackTitle = playlist[currentTrack]?.title || 'Unknown Track';
+    const settings = {};
+
+    // Collect all non-default settings
+    for (const [stemId, override] of Object.entries(stemEffectOverrides)) {
+      // Only include if threshold or gain differs from defaults
+      if (override.threshold !== 0 || override.gain !== 1.0 || !override.enabled) {
+        settings[stemId] = {};
+        if (override.threshold !== 0) settings[stemId].threshold = parseFloat(override.threshold.toFixed(2));
+        if (override.gain !== 1.0) settings[stemId].gain = parseFloat(override.gain.toFixed(2));
+        if (!override.enabled) settings[stemId].enabled = false;
+      }
+    }
+
+    if (Object.keys(settings).length === 0) {
+      alert('No custom settings to copy (all at defaults)');
+      return;
+    }
+
+    // Format as pasteable code
+    const lines = [`    "${trackTitle}": {`];
+    const entries = Object.entries(settings);
+    entries.forEach(([stemId, s], i) => {
+      const parts = [];
+      if (s.threshold !== undefined) parts.push(`threshold: ${s.threshold}`);
+      if (s.gain !== undefined) parts.push(`gain: ${s.gain}`);
+      if (s.enabled === false) parts.push(`enabled: false`);
+      const comma = i < entries.length - 1 ? ',' : '';
+      lines.push(`      ${stemId}: { ${parts.join(', ')} }${comma}`);
+    });
+    lines.push('    },');
+
+    const code = lines.join('\n');
+
+    // Copy to clipboard
+    navigator.clipboard.writeText(code).then(() => {
+      // Flash the copy button to confirm
+      const copyBtn = document.getElementById('copyStemSettings');
+      if (copyBtn) {
+        copyBtn.textContent = 'COPIED!';
+        copyBtn.style.color = '#00ff88';
+        setTimeout(() => {
+          copyBtn.textContent = 'COPY';
+          copyBtn.style.color = '';
+        }, 1500);
+      }
+    }).catch(err => {
+      console.error('Failed to copy:', err);
+      // Fallback: show in alert
+      alert('Copy this to stemEffectPresets:\n\n' + code);
+    });
+  }
+
+  function populateStemDebugPanel() {
+    if (!stemDebugContent) return;
+
+    let html = '';
+
+    // === STEM AUDIO LEVELS ===
+    // Show stem energy levels (removed generic audio bands - now using strict stem mapping)
+    html += `
+      <div class="stem-debug-section">
+        <div class="stem-debug-section-title">STEM AUDIO LEVELS</div>
+        <div class="stem-debug-hint">Each stem drives exactly one visual effect (1:1 mapping)</div>
+        <div class="stem-debug-band" data-band="drums-stem">
+          <div class="stem-debug-band-label">DRUMS</div>
+          <div class="stem-debug-band-meter">
+            <div class="stem-debug-band-fill" style="background: linear-gradient(90deg, #ff4444, #ff8800);"></div>
+          </div>
+          <div class="stem-debug-band-value">0%</div>
+        </div>
+        <div class="stem-debug-band" data-band="bass-stem">
+          <div class="stem-debug-band-label">BASS</div>
+          <div class="stem-debug-band-meter">
+            <div class="stem-debug-band-fill" style="background: linear-gradient(90deg, #4444ff, #00aaff);"></div>
+          </div>
+          <div class="stem-debug-band-value">0%</div>
+        </div>
+        <div class="stem-debug-band" data-band="vocals-stem">
+          <div class="stem-debug-band-label">VOCALS</div>
+          <div class="stem-debug-band-meter">
+            <div class="stem-debug-band-fill" style="background: linear-gradient(90deg, #ff44ff, #ffaaff);"></div>
+          </div>
+          <div class="stem-debug-band-value">0%</div>
+        </div>
+        <div class="stem-debug-band" data-band="synth-stem">
+          <div class="stem-debug-band-label">SYNTH</div>
+          <div class="stem-debug-band-meter">
+            <div class="stem-debug-band-fill" style="background: linear-gradient(90deg, #00ff88, #00ffff);"></div>
+          </div>
+          <div class="stem-debug-band-value">0%</div>
+        </div>
+        <div class="stem-debug-band" data-band="guitar-stem">
+          <div class="stem-debug-band-label">GUITAR</div>
+          <div class="stem-debug-band-meter">
+            <div class="stem-debug-band-fill" style="background: linear-gradient(90deg, #ffaa00, #ffff00);"></div>
+          </div>
+          <div class="stem-debug-band-value">0%</div>
+        </div>
+      </div>
+    `;
+
+
+    // === STEM EFFECTS SECTION ===
+    // Get stem effects from current track scene
+    let stemEffects = null;
+    if (currentTrackScene && currentTrackScene.stemEffects) {
+      stemEffects = currentTrackScene.stemEffects;
+    }
+
+    // Fallback: try to get from stem player manifest
+    if (!stemEffects && stemPlayer && stemPlayer.manifest && stemPlayer.manifest.stems) {
+      stemEffects = {};
+      for (const [stemId, stemConfig] of Object.entries(stemPlayer.manifest.stems)) {
+        if (stemConfig.visualization) {
+          stemEffects[stemId] = {
+            target: stemConfig.visualization.target || 'unknown',
+            effect: stemConfig.visualization.effect || 'unknown',
+            color: stemConfig.visualization.color || '#ffffff'
+          };
+        }
+      }
+    }
+
+    if (stemEffects && Object.keys(stemEffects).length > 0) {
+      html += `<div class="stem-debug-section"><div class="stem-debug-section-title">STEM EFFECTS</div>`;
+      html += `<div class="stem-debug-hint">THR = Threshold (minimum level to trigger) | GAIN = Intensity multiplier</div>`;
+
+      for (const [stemId, config] of Object.entries(stemEffects)) {
+        const color = config.color || '#00ffff';
+        const override = getStemEffectOverride(stemId);
+        const isEnabled = override.enabled;
+        const threshold = override.threshold || 0;
+        const gain = override.gain || 1.0;
+
+        html += `
+          <div class="stem-debug-effect-row${isEnabled ? '' : ' stem-debug-effect-row--disabled'}" data-stem="${stemId}">
+            <div class="stem-effect-header">
+              <label class="stem-debug-effect-toggle">
+                <input type="checkbox" data-stem="${stemId}" ${isEnabled ? 'checked' : ''}>
+                <span class="stem-debug-effect-check"></span>
+              </label>
+              <div class="stem-debug-effect-label">${stemId.toUpperCase()}</div>
+              <div class="stem-debug-effect-target">${config.target || ''} → ${config.effect || ''}</div>
+              <div class="stem-debug-effect-meter">
+                <div class="stem-debug-effect-threshold" style="left: ${threshold * 100}%;"></div>
+                <div class="stem-debug-effect-fill" style="background: ${color};"></div>
+              </div>
+            </div>
+            <div class="stem-effect-controls">
+              <div class="stem-control">
+                <span class="stem-control-label">THR</span>
+                <input type="range" class="stem-control-slider stem-threshold-slider" data-stem="${stemId}"
+                       min="0" max="80" value="${Math.round(threshold * 100)}" step="5">
+                <span class="stem-threshold-value">${Math.round(threshold * 100)}%</span>
+              </div>
+              <div class="stem-control">
+                <span class="stem-control-label">GAIN</span>
+                <input type="range" class="stem-control-slider stem-gain-slider" data-stem="${stemId}"
+                       min="50" max="300" value="${Math.round(gain * 100)}" step="10">
+                <span class="stem-gain-value">${gain.toFixed(1)}x</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+      html += `</div>`;
+    } else {
+      html += `<div class="stem-debug-section"><div class="stem-debug-section-title">STEM EFFECTS</div><div class="stem-debug-empty">No stem effects for this track</div></div>`;
+    }
+
+    stemDebugContent.innerHTML = html;
+
+    // Attach event listeners for toggles
+    stemDebugContent.querySelectorAll('.stem-debug-effect-toggle input').forEach(toggle => {
+      toggle.addEventListener('change', (e) => {
+        const stemId = e.target.dataset.stem;
+        const enabled = e.target.checked;
+        const row = e.target.closest('.stem-debug-effect-row');
+        if (row) {
+          row.classList.toggle('stem-debug-effect-row--disabled', !enabled);
+        }
+        handleStemToggle(stemId, enabled);
+      });
+    });
+
+    // Attach event listeners for threshold sliders
+    stemDebugContent.querySelectorAll('.stem-threshold-slider').forEach(slider => {
+      slider.addEventListener('input', (e) => {
+        const stemId = e.target.dataset.stem;
+        const threshold = Number(e.target.value) / 100;
+        handleStemThreshold(stemId, threshold);
+        // Update threshold indicator position
+        const row = e.target.closest('.stem-debug-effect-row');
+        const thresholdEl = row?.querySelector('.stem-debug-effect-threshold');
+        if (thresholdEl) thresholdEl.style.left = `${threshold * 100}%`;
+      });
+    });
+
+    // Attach event listeners for gain sliders
+    stemDebugContent.querySelectorAll('.stem-gain-slider').forEach(slider => {
+      slider.addEventListener('input', (e) => {
+        const stemId = e.target.dataset.stem;
+        const gain = Number(e.target.value) / 100;
+        handleStemGain(stemId, gain);
+      });
+    });
+  }
+
+  function updateStemDebugMeters() {
+    if (!stemDebugVisible || !stemDebugContent) return;
+
+    // Update stem audio level meters (strict 1:1 mapping)
+    const stemLevels = [
+      { id: 'drums-stem', stem: 'drums' },
+      { id: 'bass-stem', stem: 'bass' },
+      { id: 'vocals-stem', stem: 'vocals' },
+      { id: 'synth-stem', stem: 'synth' },
+      { id: 'guitar-stem', stem: 'guitar' }
+    ];
+
+    stemLevels.forEach(item => {
+      const el = stemDebugContent.querySelector(`.stem-debug-band[data-band="${item.id}"]`);
+      if (!el) return;
+      const fill = el.querySelector('.stem-debug-band-fill');
+      const valueEl = el.querySelector('.stem-debug-band-value');
+
+      let value = item.value;
+      if (item.stem && liveAudio.stems[item.stem]) {
+        value = liveAudio.stems[item.stem].energy || 0;
+      } else if (item.stem) {
+        value = 0;
+      }
+
+      if (fill) fill.style.width = `${Math.min(100, value * 100)}%`;
+      if (valueEl) valueEl.textContent = `${Math.round(value * 100)}%`;
+    });
+
+    // Update stem effect meters
+    const rows = stemDebugContent.querySelectorAll('.stem-debug-effect-row[data-stem]');
+    rows.forEach(row => {
+      const stemId = row.dataset.stem;
+      const meterFill = row.querySelector('.stem-debug-effect-fill');
+      if (!meterFill || !stemId) return;
+
+      // Get energy for this stem from live audio
+      const stemData = liveAudio.stems[stemId];
+      let rawEnergy = stemData ? stemData.energy : 0;
+
+      // Apply threshold and gain
+      const override = getStemEffectOverride(stemId);
+      let energy = rawEnergy;
+      if (!override.enabled) {
+        energy = 0;
+      } else {
+        // Apply threshold (energy below threshold = 0)
+        const threshold = override.threshold || 0;
+        if (rawEnergy < threshold) {
+          energy = 0;
+        } else {
+          // Remap energy from threshold-1 to 0-1, then apply gain
+          energy = ((rawEnergy - threshold) / (1 - threshold)) * (override.gain || 1);
+        }
+      }
+
+      // Show raw energy on the meter, but with threshold line visible
+      meterFill.style.width = `${Math.min(100, rawEnergy * 100)}%`;
+      // Change color if below threshold
+      if (override.enabled && rawEnergy < (override.threshold || 0)) {
+        meterFill.style.opacity = '0.3';
+      } else {
+        meterFill.style.opacity = '1';
+      }
+    });
+  }
+
+  // Expose the stem effect override getter for track scenes to use
+  window.getStemEffectOverride = getStemEffectOverride;
+
+  if (closeStemDebugBtn) {
+    closeStemDebugBtn.addEventListener('click', () => {
+      stemDebugVisible = false;
+      if (stemDebugPanel) stemDebugPanel.hidden = true;
+    });
+  }
+
+  // Copy stem settings button
+  const copyStemSettingsBtn = document.getElementById('copyStemSettings');
+  if (copyStemSettingsBtn) {
+    copyStemSettingsBtn.addEventListener('click', copyStemSettings);
+  }
 
   // Resize handling
   window.addEventListener("resize", () => {
@@ -4293,4 +4879,8 @@
       startIOSVizLoop();
     }
   }
+
+  // Initialize waveform visualizer and stem mixer
+  initWaveformVisualizer();
+  initStemMixer();
 })();

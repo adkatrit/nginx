@@ -12,6 +12,17 @@ window.TrackScenes = (function() {
   const lerp = (a, b, t) => a + (b - a) * t;
   const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 
+  // Get effective stem energy respecting enabled/threshold/gain overrides
+  function getEffectiveStemEnergy(stemId, rawEnergy) {
+    if (!window.getStemEffectOverride) return rawEnergy;
+    const override = window.getStemEffectOverride(stemId);
+    if (!override.enabled) return 0;
+    const threshold = override.threshold || 0;
+    if (rawEnergy < threshold) return 0;
+    // Remap from threshold-1 to 0-1, then apply gain
+    return ((rawEnergy - threshold) / (1 - threshold)) * (override.gain || 1);
+  }
+
   // ═══════════════════════════════════════════════════════════════════════════
   // DATA TIDE - Underwater bioluminescent data ocean with coral towers
   // ═══════════════════════════════════════════════════════════════════════════
@@ -234,16 +245,24 @@ window.TrackScenes = (function() {
 
     return {
       group,
+      stemEffects: {
+        drums: { target: 'corals', effect: 'scale pulse', color: '#00ffaa' },
+        bass: { target: 'caustic rays', effect: 'opacity wave', color: '#0066ff' },
+        vocals: { target: 'fog + bio lights', effect: 'atmosphere glow', color: '#44ffff' },
+        synth: { target: 'particles', effect: 'swarm speed', color: '#00ccff' },
+        guitar: { target: 'spotlights', effect: 'beam intensity', color: '#88ffdd' }
+      },
       update(time, freq, amplitude, shipPos, shipSpeed, audioExtra) {
-        const bassEnergy = freq ? (freq[0] + freq[1] + freq[2]) / 3 / 255 : 0;
-        const midEnergy = freq ? (freq[10] + freq[20] + freq[30]) / 3 / 255 : 0;
-        const highEnergy = freq ? (freq[60] + freq[80] + freq[100]) / 3 / 255 : 0;
+        // STRICT 1:1 STEM MAPPING - respects enabled/threshold/gain overrides
+        const drumEnergy = getEffectiveStemEnergy('drums', audioExtra?.drums?.energy || 0);
+        const bassEnergy = getEffectiveStemEnergy('bass', audioExtra?.bass?.energy || 0);
+        const vocalEnergy = getEffectiveStemEnergy('vocals', audioExtra?.vocals?.energy || 0);
+        const synthEnergy = getEffectiveStemEnergy('synth', audioExtra?.synth?.energy || 0);
+        const guitarEnergy = getEffectiveStemEnergy('guitar', audioExtra?.guitar?.energy || 0);
 
-        // Get drum pulse
-        const drumPulse = audioExtra?.drumPulse || 0;
-        lastDrumPulse = lastDrumPulse * 0.85 + drumPulse * 0.15;
+        // Smooth drum pulse for coral animations
+        lastDrumPulse = lastDrumPulse * 0.75 + drumEnergy * 0.25;
 
-        // Follow the ship's Z position so scene stays with racer
         const shipZ = shipPos ? shipPos.z : 0;
 
         // CONTINUOUS GENERATION: Spawn new corals ahead, remove behind
@@ -267,50 +286,40 @@ window.TrackScenes = (function() {
           }
         }
 
-        // DRUM PULSE: Coral towers grow and glow on drum hits
+        // DRUMS → Corals pulse and glow
         corals.forEach(coral => {
           const data = coral.userData;
           if (data.stem && data.tip) {
-            // Scale coral taller on drum hits
-            const drumScale = 1 + lastDrumPulse * 0.5;
-            coral.scale.set(1 + lastDrumPulse * 0.2, drumScale, 1 + lastDrumPulse * 0.2);
-
-            // Glow brighter on hits
-            data.stemMat.emissiveIntensity = data.baseEmissive + lastDrumPulse * 0.6;
-            data.tipMat.opacity = 0.6 + lastDrumPulse * 0.4;
+            const drumScale = 1 + lastDrumPulse * 1.5;
+            coral.scale.set(1 + lastDrumPulse * 0.5, drumScale, 1 + lastDrumPulse * 0.5);
+            data.stemMat.emissiveIntensity = data.baseEmissive + lastDrumPulse * 2;
+            data.tipMat.opacity = 0.7 + lastDrumPulse * 0.3;
           }
         });
 
-        // Animate bioluminescent point lights
+        // VOCALS → Background atmosphere (bio lights + fog density feel)
         bioLights.forEach((bl, i) => {
-          bl.light.position.x = bl.basePos.x + Math.sin(time * bl.speed + bl.phase) * 3;
-          bl.light.position.y = bl.basePos.y + Math.cos(time * bl.speed * 0.7 + bl.phase) * 2;
-          bl.light.position.z = bl.basePos.z + Math.sin(time * bl.speed * 0.5 + bl.phase * 2) * 3;
-          bl.light.intensity = 0.5 + midEnergy * 2 + Math.sin(time * 2 + bl.phase) * 0.3 + lastDrumPulse * 2;
+          bl.light.position.x = bl.basePos.x + Math.sin(time * bl.speed + bl.phase) * 4;
+          bl.light.position.y = bl.basePos.y + Math.cos(time * bl.speed * 0.7 + bl.phase) * 3;
+          bl.light.position.z = bl.basePos.z + Math.sin(time * bl.speed * 0.5 + bl.phase * 2) * 4;
+          bl.light.intensity = 1 + vocalEnergy * 6 + Math.sin(time * 2 + bl.phase) * 0.5;
         });
 
-        // Pulse spotlights with bass and drums
+        // GUITAR → Spotlights beam intensity
         lights.forEach((l, i) => {
-          l.light.intensity = 1 + bassEnergy * 4 + lastDrumPulse * 3;
-          l.light.angle = Math.PI / 8 + Math.sin(time * 0.5 + l.phase) * 0.1;
+          l.light.intensity = 2 + guitarEnergy * 10;
+          l.light.angle = Math.PI / 8 + Math.sin(time * 0.5 + l.phase) * 0.15;
         });
 
-        // Animate particles with current flow
+        // SYNTH → Particles swarm speed
         const pos = particleGeom.attributes.position.array;
         for (let i = 0; i < particleCount; i++) {
           const v = velocities[i];
           const idx = i * 3;
-
-          pos[idx] += v.x + Math.sin(time * 0.5 + v.phase) * 0.008;
-          pos[idx + 1] += v.y + Math.cos(time * 0.3 + v.phase) * 0.004;
-          pos[idx + 2] += v.z + Math.sin(time * 0.4 + v.phase) * 0.008;
-
-          // More particle movement on drum hits
-          if (bassEnergy > 0.5 || lastDrumPulse > 0.3) {
-            const boost = Math.max(bassEnergy, lastDrumPulse);
-            pos[idx] += (Math.random() - 0.5) * boost * 0.1;
-            pos[idx + 1] += (Math.random() - 0.5) * boost * 0.1;
-          }
+          const synthBoost = 1 + synthEnergy * 3;
+          pos[idx] += (v.x + Math.sin(time * 0.5 + v.phase) * 0.01) * synthBoost;
+          pos[idx + 1] += (v.y + Math.cos(time * 0.3 + v.phase) * 0.006) * synthBoost;
+          pos[idx + 2] += (v.z + Math.sin(time * 0.4 + v.phase) * 0.01) * synthBoost;
 
           if (pos[idx] > 25) pos[idx] = -25;
           if (pos[idx] < -25) pos[idx] = 25;
@@ -320,22 +329,20 @@ window.TrackScenes = (function() {
           if (pos[idx + 2] < -25) pos[idx + 2] = 25;
         }
         particleGeom.attributes.position.needsUpdate = true;
+        particleMat.opacity = 0.7 + synthEnergy * 0.3;
+        particleMat.size = 0.2 + synthEnergy * 0.3;
 
-        // Animate caustic rays
+        // BASS → Caustic rays opacity
         currents.forEach((ray, i) => {
-          ray.material.opacity = 0.01 + highEnergy * 0.04 + lastDrumPulse * 0.03;
-          ray.scale.x = 1 + Math.sin(time * ray.userData.speed + ray.userData.phase) * 0.4 + lastDrumPulse * 0.3;
+          ray.material.opacity = 0.02 + bassEnergy * 0.12;
+          ray.scale.x = 1 + Math.sin(time * ray.userData.speed + ray.userData.phase) * 0.5 + bassEnergy * 0.5;
           ray.scale.z = ray.scale.x;
-          ray.position.x += Math.sin(time * 0.2 + ray.userData.phase) * 0.02;
+          ray.position.x += Math.sin(time * 0.2 + ray.userData.phase) * 0.03;
         });
 
-        particleMat.opacity = 0.6 + bassEnergy * 0.4;
-        particleMat.size = 0.15 + midEnergy * 0.15 + lastDrumPulse * 0.1;
-
-        // Follow ship Z position with smooth oscillation overlay
+        // Follow ship Z position
         const zoomOscillation = Math.sin(time * 0.15) * 4 + Math.sin(time * 0.08) * 2;
-        const audioZoom = bassEnergy * 1.5 + lastDrumPulse * 1;
-        group.position.z = shipZ + zoomOscillation - audioZoom;
+        group.position.z = shipZ + zoomOscillation;
 
         // Gentle vertical drift
         group.position.y = Math.sin(time * 0.1) * 0.5;
@@ -566,103 +573,275 @@ window.TrackScenes = (function() {
     const group = new THREE.Group();
 
     // Soft foggy atmosphere
-    scene.fog = new THREE.FogExp2(0x202030, 0.02);
+    scene.fog = new THREE.FogExp2(0x151520, 0.015);
 
-    // Floating soft spheres (like bubbles/clouds)
-    const spheres = [];
-    const sphereCount = 30;
-    for (let i = 0; i < sphereCount; i++) {
-      const radius = 0.3 + Math.random() * 1.5;
-      const geom = new THREE.SphereGeometry(radius, 32, 32);
-      const mat = new THREE.MeshStandardMaterial({
-        color: new THREE.Color().setHSL(0.3 + Math.random() * 0.15, 0.3, 0.7),
-        transparent: true,
-        opacity: 0.15 + Math.random() * 0.15,
-        roughness: 1,
-        metalness: 0
-      });
-      const sphere = new THREE.Mesh(geom, mat);
-      sphere.position.set(
-        (Math.random() - 0.5) * 30,
-        (Math.random() - 0.5) * 15,
-        (Math.random() - 0.5) * 30
-      );
-      sphere.userData = {
-        baseScale: sphere.scale.clone(),
+    // === CONTINUOUSLY GENERATED FLOATING CLOUDS ===
+    const clouds = [];
+    const cloudGroup = new THREE.Group();
+    const CLOUD_SPACING = 12;
+    const CLOUDS_AHEAD = 20;
+    const CLOUDS_BEHIND = 8;
+    let nextCloudZ = -50;
+    let cloudSideToggle = 0;
+
+    function spawnCloud(z) {
+      const cloudPiece = new THREE.Group();
+      const numSpheres = 3 + Math.floor(Math.random() * 4);
+      const baseRadius = 1 + Math.random() * 2;
+      const hue = 0.25 + Math.random() * 0.15; // Green-cyan range
+
+      for (let i = 0; i < numSpheres; i++) {
+        const radius = baseRadius * (0.4 + Math.random() * 0.6);
+        const geom = new THREE.SphereGeometry(radius, 16, 16);
+        const mat = new THREE.MeshStandardMaterial({
+          color: new THREE.Color().setHSL(hue, 0.4, 0.6),
+          transparent: true,
+          opacity: 0.12 + Math.random() * 0.1,
+          roughness: 1,
+          metalness: 0,
+          emissive: new THREE.Color().setHSL(hue, 0.5, 0.2),
+          emissiveIntensity: 0.3
+        });
+        const sphere = new THREE.Mesh(geom, mat);
+        sphere.position.set(
+          (Math.random() - 0.5) * baseRadius * 2,
+          (Math.random() - 0.5) * baseRadius,
+          (Math.random() - 0.5) * baseRadius
+        );
+        cloudPiece.add(sphere);
+      }
+
+      // Position cloud to sides of path
+      const side = cloudSideToggle % 2 === 0 ? -1 : 1;
+      cloudSideToggle++;
+      const xOffset = 8 + Math.random() * 15;
+      const yOffset = -2 + Math.random() * 12;
+      cloudPiece.position.set(side * xOffset, yOffset, z);
+      cloudPiece.userData = {
+        spawnZ: z,
         phase: Math.random() * Math.PI * 2,
-        floatSpeed: 0.2 + Math.random() * 0.3,
-        breathSpeed: 0.5 + Math.random() * 0.5
+        floatSpeed: 0.3 + Math.random() * 0.3,
+        baseY: yOffset
       };
-      group.add(sphere);
-      spheres.push(sphere);
+      cloudGroup.add(cloudPiece);
+      clouds.push(cloudPiece);
     }
 
-    // Gentle particle dust
-    const dustCount = 1000;
+    // Initial cloud spawn
+    for (let z = -50; z < 180; z += CLOUD_SPACING) {
+      spawnCloud(z);
+      nextCloudZ = z + CLOUD_SPACING;
+    }
+    scene.add(cloudGroup);
+
+    // === CONTINUOUSLY GENERATED SOFT PILLARS ===
+    const pillars = [];
+    const pillarGroup = new THREE.Group();
+    const PILLAR_SPACING = 8;
+    const PILLARS_AHEAD = 25;
+    const PILLARS_BEHIND = 8;
+    let nextPillarZ = -40;
+    let pillarSideToggle = 0;
+
+    function spawnPillar(z) {
+      const height = 8 + Math.random() * 20;
+      const radius = 0.3 + Math.random() * 0.5;
+      const hue = 0.3 + Math.random() * 0.1;
+
+      const geom = new THREE.CylinderGeometry(radius * 0.7, radius, height, 8);
+      const mat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color().setHSL(hue, 0.3, 0.5),
+        transparent: true,
+        opacity: 0.25,
+        roughness: 0.8,
+        metalness: 0.1,
+        emissive: new THREE.Color().setHSL(hue, 0.6, 0.3),
+        emissiveIntensity: 0.2
+      });
+      const pillar = new THREE.Mesh(geom, mat);
+
+      const side = pillarSideToggle % 2 === 0 ? -1 : 1;
+      pillarSideToggle++;
+      const xOffset = 6 + Math.random() * 12;
+      pillar.position.set(side * xOffset, height / 2 - 5, z);
+      pillar.userData = {
+        spawnZ: z,
+        baseEmissive: mat.emissiveIntensity,
+        height: height,
+        mat: mat
+      };
+      pillarGroup.add(pillar);
+      pillars.push(pillar);
+
+      // Add glowing orb at top
+      const orbGeom = new THREE.SphereGeometry(radius * 1.5, 12, 12);
+      const orbMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color().setHSL(hue, 0.8, 0.6),
+        transparent: true,
+        opacity: 0.4,
+        blending: THREE.AdditiveBlending
+      });
+      const orb = new THREE.Mesh(orbGeom, orbMat);
+      orb.position.set(side * xOffset, height - 4, z);
+      orb.userData = { mat: orbMat, phase: Math.random() * Math.PI * 2 };
+      pillarGroup.add(orb);
+      pillars.push(orb);
+    }
+
+    for (let z = -40; z < 160; z += PILLAR_SPACING) {
+      spawnPillar(z);
+      nextPillarZ = z + PILLAR_SPACING;
+    }
+    scene.add(pillarGroup);
+
+    // Gentle particle dust (2000 particles)
+    const dustCount = 2000;
     const dustGeom = new THREE.BufferGeometry();
     const dustPos = new Float32Array(dustCount * 3);
-    for (let i = 0; i < dustCount * 3; i++) {
-      dustPos[i] = (Math.random() - 0.5) * 50;
+    for (let i = 0; i < dustCount; i++) {
+      dustPos[i * 3] = (Math.random() - 0.5) * 60;
+      dustPos[i * 3 + 1] = Math.random() * 25 - 5;
+      dustPos[i * 3 + 2] = Math.random() * 200 - 50;
     }
     dustGeom.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
     const dustMat = new THREE.PointsMaterial({
-      color: 0xaaffaa,
-      size: 0.05,
+      color: 0xaaffcc,
+      size: 0.08,
       transparent: true,
-      opacity: 0.3,
+      opacity: 0.4,
       blending: THREE.AdditiveBlending
     });
     const dust = new THREE.Points(dustGeom, dustMat);
-    group.add(dust);
+    scene.add(dust);
 
     // Soft ambient light
-    const ambientLight = new THREE.AmbientLight(0x404060, 0.5);
+    const ambientLight = new THREE.AmbientLight(0x303050, 0.6);
     group.add(ambientLight);
 
-    const softLight = new THREE.PointLight(0x88ffaa, 1, 50);
-    softLight.position.set(0, 5, 0);
-    group.add(softLight);
+    // Dynamic lights that respond to audio
+    const vocalLight = new THREE.PointLight(0x88ffaa, 1, 40);
+    vocalLight.position.set(0, 8, 0);
+    group.add(vocalLight);
+
+    const bassLight = new THREE.PointLight(0x4488ff, 0.5, 30);
+    bassLight.position.set(0, -3, 0);
+    group.add(bassLight);
 
     scene.add(group);
 
+    let lastDrumPulse = 0;
+
     return {
       group,
-      update(time, freq, amplitude, shipPos, shipSpeed) {
-        const bassEnergy = freq ? (freq[0] + freq[1]) / 2 / 255 : 0;
-        const midEnergy = freq ? (freq[20] + freq[40]) / 2 / 255 : 0;
+      // STRICT 1:1 stem-to-effect mapping
+      stemEffects: {
+        drums: { target: 'pillars', effect: 'emissive pulse', color: '#88ffaa' },
+        bass: { target: 'clouds', effect: 'breathing scale', color: '#4488ff' },
+        vocals: { target: 'atmosphere lights', effect: 'background glow', color: '#aaffcc' },
+        synth: { target: 'dust particles', effect: 'opacity', color: '#66ffbb' },
+        guitar: { target: 'orbs', effect: 'brightness', color: '#ffaa66' }
+      },
+      update(time, freq, amplitude, shipPos, shipSpeed, stemData) {
         const shipZ = shipPos ? shipPos.z : 0;
 
-        // Gentle breathing spheres
-        spheres.forEach(sphere => {
-          const breathe = 1 + Math.sin(time * sphere.userData.breathSpeed + sphere.userData.phase) * 0.1;
-          const audioBreath = 1 + midEnergy * 0.2;
-          sphere.scale.setScalar(breathe * audioBreath);
+        // STRICT 1:1 STEM MAPPING - respects enabled/threshold/gain overrides
+        const drumsEnergy = getEffectiveStemEnergy('drums', stemData?.drums?.energy || 0);
+        const bassEnergy = getEffectiveStemEnergy('bass', stemData?.bass?.energy || 0);
+        const vocalsEnergy = getEffectiveStemEnergy('vocals', stemData?.vocals?.energy || 0);
+        const synthEnergy = getEffectiveStemEnergy('synth', stemData?.synth?.energy || 0);
+        const guitarEnergy = getEffectiveStemEnergy('guitar', stemData?.guitar?.energy || 0);
 
-          // Gentle floating
-          sphere.position.y += Math.sin(time * sphere.userData.floatSpeed + sphere.userData.phase) * 0.003;
-          sphere.position.x += Math.cos(time * sphere.userData.floatSpeed * 0.5) * 0.002;
+        // Drum pulse detection
+        if (drumsEnergy > 0.6 && time - lastDrumPulse > 0.15) {
+          lastDrumPulse = time;
+        }
+        const drumPulse = Math.max(0, 1 - (time - lastDrumPulse) * 4);
 
-          // Soft opacity pulse
-          sphere.material.opacity = 0.1 + midEnergy * 0.15;
-        });
+        // === CONTINUOUS CLOUD GENERATION ===
+        const cloudSpawnZ = shipZ + CLOUDS_AHEAD * CLOUD_SPACING;
+        const cloudCleanZ = shipZ - CLOUDS_BEHIND * CLOUD_SPACING;
 
-        // Dust drift
-        dust.rotation.y += 0.0002;
-        dust.rotation.x += 0.0001;
-        dustMat.opacity = 0.2 + bassEnergy * 0.2;
+        while (nextCloudZ < cloudSpawnZ) {
+          spawnCloud(nextCloudZ);
+          nextCloudZ += CLOUD_SPACING;
+        }
 
-        // Light pulse
-        softLight.intensity = 0.8 + midEnergy * 0.5;
+        // BASS → Clouds breathing scale
+        for (let i = clouds.length - 1; i >= 0; i--) {
+          const cloud = clouds[i];
+          if (cloud.userData.spawnZ < cloudCleanZ) {
+            cloudGroup.remove(cloud);
+            cloud.traverse(c => {
+              if (c.geometry) c.geometry.dispose();
+              if (c.material) c.material.dispose();
+            });
+            clouds.splice(i, 1);
+          } else {
+            const breathe = 1 + Math.sin(time * cloud.userData.floatSpeed + cloud.userData.phase) * 0.15;
+            const bassBreath = 1 + bassEnergy * 0.5;
+            cloud.scale.setScalar(breathe * bassBreath);
+            cloud.position.y = cloud.userData.baseY + Math.sin(time * 0.5 + cloud.userData.phase) * 1.5;
+            cloud.traverse(c => {
+              if (c.material && c.material.opacity !== undefined) {
+                c.material.opacity = 0.1 + bassEnergy * 0.15;
+              }
+            });
+          }
+        }
 
-        // Follow ship Z + gentle oscillating zoom
-        const zoomOscillation = Math.sin(time * 0.1) * 3 + Math.sin(time * 0.05) * 1.5;
-        group.position.z = shipZ + zoomOscillation;
+        // === CONTINUOUS PILLAR GENERATION ===
+        const pillarSpawnZ = shipZ + PILLARS_AHEAD * PILLAR_SPACING;
+        const pillarCleanZ = shipZ - PILLARS_BEHIND * PILLAR_SPACING;
 
-        // Slight vertical and horizontal sway
-        group.position.y = Math.sin(time * 0.08) * 0.8;
-        group.position.x = Math.sin(time * 0.06) * 0.5;
+        while (nextPillarZ < pillarSpawnZ) {
+          spawnPillar(nextPillarZ);
+          nextPillarZ += PILLAR_SPACING;
+        }
+
+        // DRUMS → Pillars emissive pulse, GUITAR → Orbs brightness
+        for (let i = pillars.length - 1; i >= 0; i--) {
+          const obj = pillars[i];
+          if (obj.userData.spawnZ < pillarCleanZ) {
+            pillarGroup.remove(obj);
+            if (obj.geometry) obj.geometry.dispose();
+            if (obj.material) obj.material.dispose();
+            pillars.splice(i, 1);
+          } else if (obj.userData.mat && obj.userData.baseEmissive !== undefined) {
+            obj.userData.mat.emissiveIntensity = obj.userData.baseEmissive + drumPulse * 0.8;
+          } else if (obj.userData.phase !== undefined && obj.userData.mat) {
+            const pulse = Math.sin(time * 2 + obj.userData.phase) * 0.2;
+            obj.userData.mat.opacity = 0.3 + pulse + guitarEnergy * 0.5;
+          }
+        }
+
+        // SYNTH → Dust particles opacity
+        dust.position.z = shipZ;
+        dustMat.opacity = 0.3 + synthEnergy * 0.5;
+
+        // VOCALS → Background atmosphere lights
+        vocalLight.intensity = 0.8 + vocalsEnergy * 2;
+        vocalLight.position.z = shipZ;
+        bassLight.intensity = 0.3 + vocalsEnergy * 1.5;
+        bassLight.position.z = shipZ;
+
+        group.position.z = shipZ;
       },
       dispose() {
+        clouds.forEach(c => {
+          c.traverse(child => {
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) child.material.dispose();
+          });
+        });
+        pillars.forEach(p => {
+          if (p.geometry) p.geometry.dispose();
+          if (p.material) p.material.dispose();
+        });
+        scene.remove(cloudGroup);
+        scene.remove(pillarGroup);
+        scene.remove(dust);
+        dustGeom.dispose();
+        dustMat.dispose();
         group.traverse(child => {
           if (child.geometry) child.geometry.dispose();
           if (child.material) child.material.dispose();
@@ -680,9 +859,146 @@ window.TrackScenes = (function() {
     const group = new THREE.Group();
 
     // Glitchy fog
-    scene.fog = new THREE.Fog(0x100818, 2, 30);
+    scene.fog = new THREE.Fog(0x0a0410, 5, 60);
 
-    // HUD ring elements
+    // === CONTINUOUSLY GENERATED HOLOGRAPHIC BILLBOARDS ===
+    const billboards = [];
+    const billboardGroup = new THREE.Group();
+    const BILLBOARD_SPACING = 15;
+    const BILLBOARDS_AHEAD = 18;
+    const BILLBOARDS_BEHIND = 6;
+    let nextBillboardZ = -40;
+    let billboardSideToggle = 0;
+
+    function spawnBillboard(z) {
+      const width = 4 + Math.random() * 6;
+      const height = 3 + Math.random() * 4;
+      const hue = Math.random();
+
+      // Main billboard panel
+      const panelGeom = new THREE.PlaneGeometry(width, height);
+      const panelMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color().setHSL(hue, 1, 0.4),
+        transparent: true,
+        opacity: 0.15,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending
+      });
+      const panel = new THREE.Mesh(panelGeom, panelMat);
+
+      // Glowing border
+      const borderGeom = new THREE.EdgesGeometry(panelGeom);
+      const borderMat = new THREE.LineBasicMaterial({
+        color: new THREE.Color().setHSL(hue, 1, 0.7),
+        transparent: true,
+        opacity: 0.8
+      });
+      const border = new THREE.LineSegments(borderGeom, borderMat);
+      panel.add(border);
+
+      // Scan line effect
+      const scanGeom = new THREE.PlaneGeometry(width * 0.95, 0.05);
+      const scanMat = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.4,
+        blending: THREE.AdditiveBlending
+      });
+      const scanLine = new THREE.Mesh(scanGeom, scanMat);
+      scanLine.position.z = 0.01;
+      panel.add(scanLine);
+
+      const side = billboardSideToggle % 2 === 0 ? -1 : 1;
+      billboardSideToggle++;
+      const xOffset = 12 + Math.random() * 10;
+      const yOffset = 2 + Math.random() * 8;
+      panel.position.set(side * xOffset, yOffset, z);
+      panel.rotation.y = side * -0.3;
+
+      panel.userData = {
+        spawnZ: z,
+        hue: hue,
+        scanLine: scanLine,
+        scanY: -height / 2,
+        scanSpeed: 0.05 + Math.random() * 0.08,
+        height: height,
+        panelMat: panelMat,
+        borderMat: borderMat
+      };
+      billboardGroup.add(panel);
+      billboards.push(panel);
+    }
+
+    for (let z = -40; z < 180; z += BILLBOARD_SPACING) {
+      spawnBillboard(z);
+      nextBillboardZ = z + BILLBOARD_SPACING;
+    }
+    scene.add(billboardGroup);
+
+    // === CONTINUOUSLY GENERATED DATA PILLARS ===
+    const dataPillars = [];
+    const pillarGroup = new THREE.Group();
+    const PILLAR_SPACING = 10;
+    const PILLARS_AHEAD = 20;
+    const PILLARS_BEHIND = 6;
+    let nextPillarZ = -30;
+    let pillarSideToggle = 0;
+
+    function spawnDataPillar(z) {
+      const pillarPiece = new THREE.Group();
+      const height = 15 + Math.random() * 25;
+      const radius = 0.3 + Math.random() * 0.4;
+
+      // Main pillar (wireframe)
+      const pillarGeom = new THREE.CylinderGeometry(radius, radius * 1.5, height, 6);
+      const pillarMat = new THREE.MeshBasicMaterial({
+        color: 0x00ffff,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.3
+      });
+      const pillar = new THREE.Mesh(pillarGeom, pillarMat);
+      pillar.position.y = height / 2 - 5;
+      pillarPiece.add(pillar);
+
+      // Data rings traveling up the pillar
+      const numRings = 3 + Math.floor(Math.random() * 3);
+      for (let i = 0; i < numRings; i++) {
+        const ringGeom = new THREE.RingGeometry(radius * 1.2, radius * 1.8, 6);
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: new THREE.Color().setHSL(Math.random() * 0.3 + 0.7, 1, 0.5),
+          transparent: true,
+          opacity: 0.6,
+          side: THREE.DoubleSide,
+          blending: THREE.AdditiveBlending
+        });
+        const ring = new THREE.Mesh(ringGeom, ringMat);
+        ring.rotation.x = Math.PI / 2;
+        ring.position.y = -5 + (i / numRings) * height;
+        ring.userData = { speed: 0.1 + Math.random() * 0.15, maxY: height - 5, minY: -5 };
+        pillarPiece.add(ring);
+      }
+
+      const side = pillarSideToggle % 2 === 0 ? -1 : 1;
+      pillarSideToggle++;
+      const xOffset = 6 + Math.random() * 8;
+      pillarPiece.position.set(side * xOffset, 0, z);
+      pillarPiece.userData = {
+        spawnZ: z,
+        pillarMat: pillarMat,
+        height: height
+      };
+      pillarGroup.add(pillarPiece);
+      dataPillars.push(pillarPiece);
+    }
+
+    for (let z = -30; z < 150; z += PILLAR_SPACING) {
+      spawnDataPillar(z);
+      nextPillarZ = z + PILLAR_SPACING;
+    }
+    scene.add(pillarGroup);
+
+    // HUD ring elements (follow camera)
     const rings = [];
     for (let i = 0; i < 5; i++) {
       const ringGeom = new THREE.RingGeometry(2 + i * 1.5, 2.1 + i * 1.5, 64);
@@ -695,175 +1011,201 @@ window.TrackScenes = (function() {
       });
       const ring = new THREE.Mesh(ringGeom, ringMat);
       ring.position.z = -5 - i * 2;
-      ring.userData = { baseZ: ring.position.z, rotSpeed: 0.01 * (i % 2 === 0 ? 1 : -1) };
+      ring.userData = { baseZ: ring.position.z, rotSpeed: 0.01 * (i % 2 === 0 ? 1 : -1), mat: ringMat };
       group.add(ring);
       rings.push(ring);
     }
 
-    // Floating glitch cubes
-    const cubes = [];
-    for (let i = 0; i < 40; i++) {
-      const size = 0.1 + Math.random() * 0.4;
-      const geom = new THREE.BoxGeometry(size, size, size);
-      const mat = new THREE.MeshBasicMaterial({
-        color: new THREE.Color().setHSL(Math.random(), 1, 0.5),
-        transparent: true,
-        opacity: 0.6,
-        wireframe: Math.random() > 0.5
-      });
-      const cube = new THREE.Mesh(geom, mat);
-      cube.position.set(
-        (Math.random() - 0.5) * 20,
-        (Math.random() - 0.5) * 10,
-        (Math.random() - 0.5) * 20
-      );
-      cube.userData = {
-        basePos: cube.position.clone(),
-        glitchOffset: new THREE.Vector3(),
-        glitchTimer: Math.random() * 100
-      };
-      group.add(cube);
-      cubes.push(cube);
+    // Floating glitch particles (1500)
+    const glitchCount = 1500;
+    const glitchGeom = new THREE.BufferGeometry();
+    const glitchPos = new Float32Array(glitchCount * 3);
+    const glitchColors = new Float32Array(glitchCount * 3);
+    for (let i = 0; i < glitchCount; i++) {
+      glitchPos[i * 3] = (Math.random() - 0.5) * 50;
+      glitchPos[i * 3 + 1] = Math.random() * 20 - 5;
+      glitchPos[i * 3 + 2] = Math.random() * 200 - 50;
+      const hue = Math.random() * 0.3 + 0.7; // Magenta to cyan range
+      const col = new THREE.Color().setHSL(hue, 1, 0.6);
+      glitchColors[i * 3] = col.r;
+      glitchColors[i * 3 + 1] = col.g;
+      glitchColors[i * 3 + 2] = col.b;
     }
+    glitchGeom.setAttribute('position', new THREE.BufferAttribute(glitchPos, 3));
+    glitchGeom.setAttribute('color', new THREE.BufferAttribute(glitchColors, 3));
+    const glitchMat = new THREE.PointsMaterial({
+      size: 0.12,
+      transparent: true,
+      opacity: 0.6,
+      vertexColors: true,
+      blending: THREE.AdditiveBlending
+    });
+    const glitchParticles = new THREE.Points(glitchGeom, glitchMat);
+    scene.add(glitchParticles);
 
-    // Scan lines (horizontal bars)
-    const scanLines = [];
-    for (let i = 0; i < 10; i++) {
-      const lineGeom = new THREE.PlaneGeometry(30, 0.02);
-      const lineMat = new THREE.MeshBasicMaterial({
-        color: 0xff00ff,
-        transparent: true,
-        opacity: 0.2,
-        blending: THREE.AdditiveBlending
-      });
-      const line = new THREE.Mesh(lineGeom, lineMat);
-      line.position.set(0, -8 + i * 1.8, 2);
-      line.userData = { speed: 0.05 + Math.random() * 0.1 };
-      group.add(line);
-      scanLines.push(line);
-    }
-
-    // Cyberpunk neon lighting rig
-    // Main magenta spotlight
-    const magentaSpot = new THREE.SpotLight(0xff00ff, 4, 40, Math.PI / 5, 0.5, 1);
-    magentaSpot.position.set(8, 8, 8);
-    magentaSpot.target.position.set(0, 0, 0);
+    // Cyberpunk lighting
+    const magentaSpot = new THREE.SpotLight(0xff00ff, 4, 50, Math.PI / 5, 0.5, 1);
+    magentaSpot.position.set(8, 10, 0);
     group.add(magentaSpot);
-    group.add(magentaSpot.target);
 
-    // Cyan counter light
-    const cyanSpot = new THREE.SpotLight(0x00ffff, 4, 40, Math.PI / 5, 0.5, 1);
-    cyanSpot.position.set(-8, 8, 8);
-    cyanSpot.target.position.set(0, 0, 0);
+    const cyanSpot = new THREE.SpotLight(0x00ffff, 4, 50, Math.PI / 5, 0.5, 1);
+    cyanSpot.position.set(-8, 10, 0);
     group.add(cyanSpot);
-    group.add(cyanSpot.target);
 
-    // Point lights for neon glow
-    const neonLight1 = new THREE.PointLight(0xff00ff, 3, 25);
-    neonLight1.position.set(5, 3, 5);
-    group.add(neonLight1);
-
-    const neonLight2 = new THREE.PointLight(0x00ffff, 3, 25);
-    neonLight2.position.set(-5, -3, 5);
-    group.add(neonLight2);
-
-    // Additional accent lights
-    const yellowAccent = new THREE.PointLight(0xffff00, 1, 15);
-    yellowAccent.position.set(0, 5, -5);
-    group.add(yellowAccent);
-
-    // Glitch strobe light
-    const strobeLight = new THREE.PointLight(0xffffff, 0, 30);
-    strobeLight.position.set(0, 0, 5);
+    const strobeLight = new THREE.PointLight(0xffffff, 0, 40);
     group.add(strobeLight);
 
     scene.add(group);
 
     let glitchIntensity = 0;
+    let lastDrumHit = 0;
 
     return {
       group,
-      update(time, freq, amplitude, shipPos, shipSpeed) {
-        const bassEnergy = freq ? (freq[0] + freq[2]) / 2 / 255 : 0;
-        const highEnergy = freq ? (freq[60] + freq[80] + freq[100]) / 3 / 255 : 0;
-        const midEnergy = freq ? (freq[20] + freq[40]) / 2 / 255 : 0;
+      // STRICT 1:1 stem-to-effect mapping
+      stemEffects: {
+        drums: { target: 'HUD rings', effect: 'glitch displacement', color: '#ff00ff' },
+        bass: { target: 'billboards', effect: 'brightness', color: '#00ffff' },
+        vocals: { target: 'strobe + spots', effect: 'background atmosphere', color: '#ffffff' },
+        synth: { target: 'data pillars', effect: 'ring speed', color: '#ff00aa' },
+        guitar: { target: 'particles', effect: 'color shift', color: '#ffff00' }
+      },
+      update(time, freq, amplitude, shipPos, shipSpeed, stemData) {
         const shipZ = shipPos ? shipPos.z : 0;
 
-        // Follow ship position
-        group.position.z = shipZ;
+        // STRICT 1:1 STEM MAPPING - respects enabled/threshold/gain overrides
+        const drumsEnergy = getEffectiveStemEnergy('drums', stemData?.drums?.energy || 0);
+        const bassEnergy = getEffectiveStemEnergy('bass', stemData?.bass?.energy || 0);
+        const vocalsEnergy = getEffectiveStemEnergy('vocals', stemData?.vocals?.energy || 0);
+        const synthEnergy = getEffectiveStemEnergy('synth', stemData?.synth?.energy || 0);
+        const guitarEnergy = getEffectiveStemEnergy('guitar', stemData?.guitar?.energy || 0);
 
-        // Trigger glitch on bass hits
-        if (bassEnergy > 0.7) {
+        // Drum hit detection for glitch
+        if (drumsEnergy > 0.6 && time - lastDrumHit > 0.15) {
           glitchIntensity = 1;
+          lastDrumHit = time;
         }
-        glitchIntensity *= 0.9;
+        glitchIntensity *= 0.92;
 
-        // Rotate HUD rings
+        // === CONTINUOUS BILLBOARD GENERATION ===
+        const billboardSpawnZ = shipZ + BILLBOARDS_AHEAD * BILLBOARD_SPACING;
+        const billboardCleanZ = shipZ - BILLBOARDS_BEHIND * BILLBOARD_SPACING;
+
+        while (nextBillboardZ < billboardSpawnZ) {
+          spawnBillboard(nextBillboardZ);
+          nextBillboardZ += BILLBOARD_SPACING;
+        }
+
+        for (let i = billboards.length - 1; i >= 0; i--) {
+          const bb = billboards[i];
+          if (bb.userData.spawnZ < billboardCleanZ) {
+            billboardGroup.remove(bb);
+            bb.traverse(c => {
+              if (c.geometry) c.geometry.dispose();
+              if (c.material) c.material.dispose();
+            });
+            billboards.splice(i, 1);
+          } else {
+            // Bass drives billboard brightness
+            bb.userData.panelMat.opacity = 0.1 + bassEnergy * 0.3;
+            bb.userData.borderMat.opacity = 0.5 + bassEnergy * 0.5;
+
+            // Animate scan line
+            bb.userData.scanY += bb.userData.scanSpeed * (1 + synthEnergy * 2);
+            if (bb.userData.scanY > bb.userData.height / 2) {
+              bb.userData.scanY = -bb.userData.height / 2;
+            }
+            bb.userData.scanLine.position.y = bb.userData.scanY;
+          }
+        }
+
+        // === CONTINUOUS PILLAR GENERATION ===
+        const pillarSpawnZ = shipZ + PILLARS_AHEAD * PILLAR_SPACING;
+        const pillarCleanZ = shipZ - PILLARS_BEHIND * PILLAR_SPACING;
+
+        while (nextPillarZ < pillarSpawnZ) {
+          spawnDataPillar(nextPillarZ);
+          nextPillarZ += PILLAR_SPACING;
+        }
+
+        for (let i = dataPillars.length - 1; i >= 0; i--) {
+          const dp = dataPillars[i];
+          if (dp.userData.spawnZ < pillarCleanZ) {
+            pillarGroup.remove(dp);
+            dp.traverse(c => {
+              if (c.geometry) c.geometry.dispose();
+              if (c.material) c.material.dispose();
+            });
+            dataPillars.splice(i, 1);
+          } else {
+            // Synth drives data ring speed
+            dp.traverse(c => {
+              if (c.userData && c.userData.speed) {
+                c.position.y += c.userData.speed * (1 + synthEnergy * 3);
+                if (c.position.y > c.userData.maxY) c.position.y = c.userData.minY;
+              }
+            });
+            dp.userData.pillarMat.opacity = 0.2 + drumsEnergy * 0.4;
+          }
+        }
+
+        // HUD rings - drums drive glitch displacement
+        group.position.z = shipZ;
         rings.forEach((ring, i) => {
-          ring.rotation.z += ring.userData.rotSpeed * (1 + highEnergy * 2);
-          ring.material.opacity = 0.25 + highEnergy * 0.5;
+          ring.rotation.z += ring.userData.rotSpeed * (1 + synthEnergy * 2);
+          ring.userData.mat.opacity = 0.2 + vocalsEnergy * 0.5;
 
-          if (glitchIntensity > 0.3 && Math.random() > 0.7) {
-            ring.position.x = (Math.random() - 0.5) * glitchIntensity;
-            ring.position.y = (Math.random() - 0.5) * glitchIntensity;
+          if (glitchIntensity > 0.3 && Math.random() > 0.6) {
+            ring.position.x = (Math.random() - 0.5) * glitchIntensity * 2;
+            ring.position.y = (Math.random() - 0.5) * glitchIntensity * 2;
           } else {
             ring.position.x *= 0.85;
             ring.position.y *= 0.85;
           }
         });
 
-        // Glitch cubes
-        cubes.forEach(cube => {
-          cube.rotation.x += 0.01 + highEnergy * 0.02;
-          cube.rotation.y += 0.015 + highEnergy * 0.02;
-
-          cube.userData.glitchTimer -= 1;
-          if (cube.userData.glitchTimer <= 0 || glitchIntensity > 0.5) {
-            if (Math.random() > 0.6) {
-              cube.userData.glitchOffset.set(
-                (Math.random() - 0.5) * 3,
-                (Math.random() - 0.5) * 3,
-                (Math.random() - 0.5) * 3
-              );
-              cube.material.color.setHSL(Math.random(), 1, 0.5);
+        // Glitch particles - guitar drives color shift
+        glitchParticles.position.z = shipZ;
+        glitchMat.opacity = 0.4 + drumsEnergy * 0.4;
+        const colors = glitchGeom.attributes.color.array;
+        if (guitarEnergy > 0.3) {
+          for (let i = 0; i < glitchCount; i++) {
+            if (Math.random() > 0.95) {
+              const hue = (time * 0.5 + Math.random()) % 1;
+              const col = new THREE.Color().setHSL(hue, 1, 0.6);
+              colors[i * 3] = col.r;
+              colors[i * 3 + 1] = col.g;
+              colors[i * 3 + 2] = col.b;
             }
-            cube.userData.glitchTimer = 15 + Math.random() * 60;
           }
+          glitchGeom.attributes.color.needsUpdate = true;
+        }
 
-          cube.position.copy(cube.userData.basePos).add(cube.userData.glitchOffset);
-          cube.userData.glitchOffset.multiplyScalar(0.92);
-        });
-
-        // Animate scan lines
-        scanLines.forEach(line => {
-          line.position.y += line.userData.speed * (1 + bassEnergy);
-          if (line.position.y > 10) line.position.y = -10;
-          line.material.opacity = 0.15 + bassEnergy * 0.4;
-        });
-
-        // Dynamic neon lighting
-        const magentaPulse = 1 + Math.sin(time * 3) * 0.3;
-        const cyanPulse = 1 + Math.cos(time * 3) * 0.3;
-
-        magentaSpot.intensity = 3 * magentaPulse + bassEnergy * 5;
-        cyanSpot.intensity = 3 * cyanPulse + highEnergy * 5;
-
-        neonLight1.intensity = 2 + bassEnergy * 4;
-        neonLight2.intensity = 2 + highEnergy * 4;
-        yellowAccent.intensity = 0.5 + midEnergy * 2;
-
-        // Strobe on glitch
-        strobeLight.intensity = glitchIntensity * 10;
-
-        // Color cycling for extra trippy effect
-        const hueShift = time * 0.1;
-        neonLight1.color.setHSL((0.83 + hueShift) % 1, 1, 0.5);
-        neonLight2.color.setHSL((0.5 + hueShift) % 1, 1, 0.5);
+        // VOCALS → Background atmosphere (strobe + ambient spots)
+        strobeLight.intensity = vocalsEnergy * 10 + glitchIntensity * 15;
+        strobeLight.position.z = shipZ;
+        magentaSpot.intensity = 3 + vocalsEnergy * 8;
+        cyanSpot.intensity = 3 + vocalsEnergy * 8;
+        magentaSpot.position.z = shipZ;
+        cyanSpot.position.z = shipZ;
       },
       dispose() {
-        group.traverse(child => {
-          if (child.geometry) child.geometry.dispose();
-          if (child.material) child.material.dispose();
+        billboards.forEach(b => b.traverse(c => {
+          if (c.geometry) c.geometry.dispose();
+          if (c.material) c.material.dispose();
+        }));
+        dataPillars.forEach(p => p.traverse(c => {
+          if (c.geometry) c.geometry.dispose();
+          if (c.material) c.material.dispose();
+        }));
+        scene.remove(billboardGroup);
+        scene.remove(pillarGroup);
+        glitchGeom.dispose();
+        glitchMat.dispose();
+        scene.remove(glitchParticles);
+        group.traverse(c => {
+          if (c.geometry) c.geometry.dispose();
+          if (c.material) c.material.dispose();
         });
         scene.remove(group);
         scene.fog = null;
@@ -877,10 +1219,124 @@ window.TrackScenes = (function() {
   function buildSignalIntegrity(THREE, scene, audioData) {
     const group = new THREE.Group();
 
-    // Clean dark background
-    scene.fog = new THREE.Fog(0x000510, 10, 50);
+    // Clean icy fog
+    scene.fog = new THREE.Fog(0x000815, 10, 80);
 
-    // 3D Oscilloscope waveform
+    // === CONTINUOUSLY GENERATED SIGNAL TOWERS ===
+    const towers = [];
+    const towerGroup = new THREE.Group();
+    const TOWER_SPACING = 12;
+    const TOWERS_AHEAD = 20;
+    const TOWERS_BEHIND = 6;
+    let nextTowerZ = -50;
+    let towerSideToggle = 0;
+
+    function spawnTower(z) {
+      const towerPiece = new THREE.Group();
+      const height = 12 + Math.random() * 25;
+      const radius = 0.2 + Math.random() * 0.3;
+
+      // Main tower (ice crystal-like)
+      const towerGeom = new THREE.CylinderGeometry(radius * 0.3, radius, height, 4);
+      const towerMat = new THREE.MeshStandardMaterial({
+        color: 0x88ddff,
+        transparent: true,
+        opacity: 0.4,
+        roughness: 0.1,
+        metalness: 0.8,
+        emissive: 0x004466,
+        emissiveIntensity: 0.3
+      });
+      const tower = new THREE.Mesh(towerGeom, towerMat);
+      tower.position.y = height / 2 - 5;
+      towerPiece.add(tower);
+
+      // Signal rings at different heights
+      const numRings = 2 + Math.floor(Math.random() * 3);
+      for (let i = 0; i < numRings; i++) {
+        const ringGeom = new THREE.TorusGeometry(radius * 3, 0.05, 8, 16);
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: 0x00ffff,
+          transparent: true,
+          opacity: 0.6,
+          blending: THREE.AdditiveBlending
+        });
+        const ring = new THREE.Mesh(ringGeom, ringMat);
+        ring.rotation.x = Math.PI / 2;
+        ring.position.y = height * 0.3 + (i / numRings) * height * 0.5;
+        ring.userData = { baseY: ring.position.y, phase: Math.random() * Math.PI * 2, mat: ringMat };
+        towerPiece.add(ring);
+      }
+
+      // Antenna light at top
+      const lightGeom = new THREE.SphereGeometry(radius * 0.8, 8, 8);
+      const lightMat = new THREE.MeshBasicMaterial({
+        color: 0x00ffff,
+        transparent: true,
+        opacity: 0.8,
+        blending: THREE.AdditiveBlending
+      });
+      const lightOrb = new THREE.Mesh(lightGeom, lightMat);
+      lightOrb.position.y = height - 4;
+      lightOrb.userData = { mat: lightMat, phase: Math.random() * Math.PI * 2 };
+      towerPiece.add(lightOrb);
+
+      const side = towerSideToggle % 2 === 0 ? -1 : 1;
+      towerSideToggle++;
+      const xOffset = 8 + Math.random() * 12;
+      towerPiece.position.set(side * xOffset, 0, z);
+      towerPiece.userData = {
+        spawnZ: z,
+        towerMat: towerMat,
+        height: height
+      };
+      towerGroup.add(towerPiece);
+      towers.push(towerPiece);
+    }
+
+    for (let z = -50; z < 180; z += TOWER_SPACING) {
+      spawnTower(z);
+      nextTowerZ = z + TOWER_SPACING;
+    }
+    scene.add(towerGroup);
+
+    // === CONTINUOUSLY GENERATED WAVEFORM PYLONS ===
+    const pylons = [];
+    const pylonGroup = new THREE.Group();
+    const PYLON_SPACING = 6;
+    const PYLONS_AHEAD = 30;
+    const PYLONS_BEHIND = 5;
+    let nextPylonZ = -30;
+
+    function spawnPylon(z) {
+      const height = 0.5 + Math.random() * 8;
+      const geom = new THREE.BoxGeometry(0.15, height, 0.15);
+      const mat = new THREE.MeshBasicMaterial({
+        color: 0x00ff88,
+        transparent: true,
+        opacity: 0.7,
+        blending: THREE.AdditiveBlending
+      });
+      const pylon = new THREE.Mesh(geom, mat);
+      const xPos = (Math.random() - 0.5) * 8; // Spread around center
+      pylon.position.set(xPos, height / 2 - 4, z);
+      pylon.userData = {
+        spawnZ: z,
+        baseHeight: height,
+        mat: mat,
+        xPos: xPos
+      };
+      pylonGroup.add(pylon);
+      pylons.push(pylon);
+    }
+
+    for (let z = -30; z < 150; z += PYLON_SPACING) {
+      spawnPylon(z);
+      nextPylonZ = z + PYLON_SPACING;
+    }
+    scene.add(pylonGroup);
+
+    // 3D Oscilloscope waveform (follows camera)
     const wavePoints = 256;
     const waveGeom = new THREE.BufferGeometry();
     const wavePositions = new Float32Array(wavePoints * 3);
@@ -899,101 +1355,183 @@ window.TrackScenes = (function() {
     waveform.position.z = 2;
     group.add(waveform);
 
-    // Secondary waveform (frequency)
-    const freqGeom = new THREE.BufferGeometry();
-    const freqPositions = new Float32Array(128 * 3);
-    for (let i = 0; i < 128; i++) {
-      freqPositions[i * 3] = (i / 128 - 0.5) * 20;
-      freqPositions[i * 3 + 1] = 0;
-      freqPositions[i * 3 + 2] = -2;
-    }
-    freqGeom.setAttribute('position', new THREE.BufferAttribute(freqPositions, 3));
-    const freqMat = new THREE.LineBasicMaterial({
-      color: 0x00ff88,
-      transparent: true,
-      opacity: 0.7
-    });
-    const freqLine = new THREE.Line(freqGeom, freqMat);
-    group.add(freqLine);
-
-    // Grid floor
-    const gridHelper = new THREE.GridHelper(40, 40, 0x004444, 0x002222);
-    gridHelper.position.y = -5;
-    group.add(gridHelper);
-
-    // Data stream particles
-    const streamCount = 500;
+    // Data stream particles (2000)
+    const streamCount = 2000;
     const streamGeom = new THREE.BufferGeometry();
     const streamPos = new Float32Array(streamCount * 3);
     const streamVel = [];
     for (let i = 0; i < streamCount; i++) {
-      streamPos[i * 3] = (Math.random() - 0.5) * 30;
-      streamPos[i * 3 + 1] = Math.random() * 20 - 10;
-      streamPos[i * 3 + 2] = (Math.random() - 0.5) * 30;
-      streamVel.push(-0.05 - Math.random() * 0.1);
+      streamPos[i * 3] = (Math.random() - 0.5) * 50;
+      streamPos[i * 3 + 1] = Math.random() * 25 - 5;
+      streamPos[i * 3 + 2] = Math.random() * 200 - 50;
+      streamVel.push(-0.08 - Math.random() * 0.15);
     }
     streamGeom.setAttribute('position', new THREE.BufferAttribute(streamPos, 3));
     const streamMat = new THREE.PointsMaterial({
       color: 0x00ffff,
-      size: 0.08,
+      size: 0.1,
       transparent: true,
       opacity: 0.5,
       blending: THREE.AdditiveBlending
     });
     const streams = new THREE.Points(streamGeom, streamMat);
-    group.add(streams);
+    scene.add(streams);
 
-    // Clean lighting
-    const mainLight = new THREE.PointLight(0x00ffff, 1.5, 30);
-    mainLight.position.set(0, 5, 10);
+    // Clean icy lighting
+    const mainLight = new THREE.PointLight(0x00ffff, 2, 50);
     group.add(mainLight);
+
+    const accentLight = new THREE.PointLight(0x00ff88, 1, 40);
+    group.add(accentLight);
 
     scene.add(group);
 
+    let lastDrumHit = 0;
+
     return {
       group,
-      update(time, freq, timeData, amplitude, shipPos, shipSpeed) {
+      // STRICT 1:1 stem-to-effect mapping
+      stemEffects: {
+        drums: { target: 'tower lights', effect: 'flash pulse', color: '#00ffff' },
+        bass: { target: 'signal rings', effect: 'expansion', color: '#0088ff' },
+        vocals: { target: 'ambient lighting', effect: 'background glow', color: '#00ffaa' },
+        synth: { target: 'waveform pylons', effect: 'height', color: '#00ff88' },
+        guitar: { target: 'data particles', effect: 'fall speed', color: '#88ffff' }
+      },
+      update(time, freq, amplitude, shipPos, shipSpeed, stemData) {
         const shipZ = shipPos ? shipPos.z : 0;
-        group.position.z = shipZ;
 
-        // Update oscilloscope from time domain data
-        const wavePos = waveGeom.attributes.position.array;
-        if (timeData) {
-          for (let i = 0; i < Math.min(wavePoints, timeData.length); i++) {
-            wavePos[i * 3 + 1] = ((timeData[i] / 255) - 0.5) * 6;
+        // STRICT 1:1 STEM MAPPING - respects enabled/threshold/gain overrides
+        const drumsEnergy = getEffectiveStemEnergy('drums', stemData?.drums?.energy || 0);
+        const bassEnergy = getEffectiveStemEnergy('bass', stemData?.bass?.energy || 0);
+        const vocalsEnergy = getEffectiveStemEnergy('vocals', stemData?.vocals?.energy || 0);
+        const synthEnergy = getEffectiveStemEnergy('synth', stemData?.synth?.energy || 0);
+        const guitarEnergy = getEffectiveStemEnergy('guitar', stemData?.guitar?.energy || 0);
+
+        // Drum pulse detection - more sensitive
+        if (drumsEnergy > 0.4 && time - lastDrumHit > 0.12) {
+          lastDrumHit = time;
+        }
+        const drumPulse = Math.max(0, 1 - (time - lastDrumHit) * 4);
+
+        // === CONTINUOUS TOWER GENERATION ===
+        const towerSpawnZ = shipZ + TOWERS_AHEAD * TOWER_SPACING;
+        const towerCleanZ = shipZ - TOWERS_BEHIND * TOWER_SPACING;
+
+        while (nextTowerZ < towerSpawnZ) {
+          spawnTower(nextTowerZ);
+          nextTowerZ += TOWER_SPACING;
+        }
+
+        for (let i = towers.length - 1; i >= 0; i--) {
+          const t = towers[i];
+          if (t.userData.spawnZ < towerCleanZ) {
+            towerGroup.remove(t);
+            t.traverse(c => {
+              if (c.geometry) c.geometry.dispose();
+              if (c.material) c.material.dispose();
+            });
+            towers.splice(i, 1);
+          } else {
+            // Update tower elements with INTENSE reactivity
+            t.traverse(c => {
+              if (c.userData) {
+                // Signal rings - bass EXPANDS dramatically
+                if (c.userData.baseY !== undefined) {
+                  const wave = Math.sin(time * 3 + c.userData.phase) * 0.5;
+                  c.scale.setScalar(1 + bassEnergy * 2 + wave * 0.3 + drumPulse * 1.5);
+                  c.userData.mat.opacity = 0.5 + bassEnergy * 0.5 + drumPulse * 0.3;
+                }
+                // Light orbs - drums FLASH intensely
+                if (c.userData.mat && c.userData.phase !== undefined && c.userData.baseY === undefined) {
+                  c.userData.mat.opacity = 0.6 + drumPulse * 0.4 + Math.sin(time * 4 + c.userData.phase) * 0.2;
+                  c.scale.setScalar(1 + drumPulse * 2);
+                }
+              }
+            });
+            // Tower emissive FLARES on drums
+            t.userData.towerMat.emissiveIntensity = 0.3 + drumsEnergy * 1.2 + drumPulse * 0.8;
           }
+        }
+
+        // === CONTINUOUS PYLON GENERATION ===
+        const pylonSpawnZ = shipZ + PYLONS_AHEAD * PYLON_SPACING;
+        const pylonCleanZ = shipZ - PYLONS_BEHIND * PYLON_SPACING;
+
+        while (nextPylonZ < pylonSpawnZ) {
+          spawnPylon(nextPylonZ);
+          nextPylonZ += PYLON_SPACING;
+        }
+
+        for (let i = pylons.length - 1; i >= 0; i--) {
+          const p = pylons[i];
+          if (p.userData.spawnZ < pylonCleanZ) {
+            pylonGroup.remove(p);
+            p.geometry.dispose();
+            p.material.dispose();
+            pylons.splice(i, 1);
+          } else {
+            // Synth drives pylon height DRAMATICALLY
+            const synthWave = Math.sin(time * 6 + p.userData.spawnZ * 0.3) * synthEnergy * 8;
+            const newHeight = p.userData.baseHeight + synthWave + vocalsEnergy * 6 + drumPulse * 4;
+            p.scale.y = Math.max(0.1, newHeight / p.userData.baseHeight);
+            p.position.y = (p.userData.baseHeight * p.scale.y) / 2 - 4;
+            p.userData.mat.opacity = 0.6 + synthEnergy * 0.4 + drumPulse * 0.3;
+          }
+        }
+
+        // Oscilloscope - vocals drive INTENSE amplitude
+        group.position.z = shipZ;
+        const wavePos = waveGeom.attributes.position.array;
+        for (let i = 0; i < wavePoints; i++) {
+          const baseWave = Math.sin(time * 3 + i * 0.1) * 0.5;
+          const vocalWave = Math.sin(time * 8 + i * 0.2) * vocalsEnergy * 6;
+          const drumBounce = Math.sin(time * 15 + i * 0.5) * drumPulse * 2;
+          wavePos[i * 3 + 1] = baseWave + vocalWave + drumBounce;
         }
         waveGeom.attributes.position.needsUpdate = true;
+        waveMat.opacity = 0.7 + vocalsEnergy * 0.3 + drumPulse * 0.2;
 
-        // Update frequency display
-        const freqPos = freqGeom.attributes.position.array;
-        if (freq) {
-          for (let i = 0; i < Math.min(128, freq.length); i++) {
-            freqPos[i * 3 + 1] = (freq[i] / 255) * 5 - 5;
-          }
-        }
-        freqGeom.attributes.position.needsUpdate = true;
-
-        // Animate data streams (falling down like matrix)
+        // Data streams - FASTER on guitar and drums
+        streams.position.z = shipZ;
         const sPos = streamGeom.attributes.position.array;
+        const speedMult = 1 + guitarEnergy * 4 + drumPulse * 2;
         for (let i = 0; i < streamCount; i++) {
-          sPos[i * 3 + 1] += streamVel[i];
+          sPos[i * 3 + 1] += streamVel[i] * speedMult;
           if (sPos[i * 3 + 1] < -10) {
-            sPos[i * 3 + 1] = 10;
-            sPos[i * 3] = (Math.random() - 0.5) * 30;
-            sPos[i * 3 + 2] = (Math.random() - 0.5) * 30;
+            sPos[i * 3 + 1] = 20;
+            sPos[i * 3] = (Math.random() - 0.5) * 50;
           }
         }
         streamGeom.attributes.position.needsUpdate = true;
+        streamMat.opacity = 0.5 + drumsEnergy * 0.5 + drumPulse * 0.2;
+        streamMat.size = 0.1 + drumPulse * 0.15;
 
-        const energy = freq ? freq.reduce((a, b) => a + b, 0) / freq.length / 255 : 0;
-        mainLight.intensity = 1 + energy * 2;
-        waveMat.opacity = 0.6 + energy * 0.4;
+        // VOCALS → Background atmosphere lighting
+        mainLight.intensity = 2 + vocalsEnergy * 8;
+        mainLight.position.z = shipZ;
+        accentLight.intensity = 1.2 + vocalsEnergy * 6;
+        accentLight.position.z = shipZ;
       },
       dispose() {
-        group.traverse(child => {
-          if (child.geometry) child.geometry.dispose();
-          if (child.material) child.material.dispose();
+        towers.forEach(t => t.traverse(c => {
+          if (c.geometry) c.geometry.dispose();
+          if (c.material) c.material.dispose();
+        }));
+        pylons.forEach(p => {
+          p.geometry.dispose();
+          p.material.dispose();
+        });
+        scene.remove(towerGroup);
+        scene.remove(pylonGroup);
+        waveGeom.dispose();
+        waveMat.dispose();
+        streamGeom.dispose();
+        streamMat.dispose();
+        scene.remove(streams);
+        group.traverse(c => {
+          if (c.geometry) c.geometry.dispose();
+          if (c.material) c.material.dispose();
         });
         scene.remove(group);
         scene.fog = null;
@@ -1071,17 +1609,27 @@ window.TrackScenes = (function() {
 
     return {
       group,
-      update(time, freq, amplitude, shipPos, shipSpeed) {
-        const bassEnergy = freq ? (freq[0] + freq[1] + freq[2]) / 3 / 255 : 0;
-        const energy = freq ? freq.reduce((a, b) => a + b, 0) / freq.length / 255 : 0;
+      // STRICT 1:1 stem-to-effect mapping
+      stemEffects: {
+        drums: { target: 'speed lines', effect: 'velocity', color: '#ffaa55' },
+        bass: { target: 'particle trails', effect: 'density', color: '#cc8844' },
+        vocals: { target: 'golden light', effect: 'background glow', color: '#ffcc66' },
+        synth: { target: 'trail opacity', effect: 'intensity', color: '#ff8844' }
+      },
+      update(time, freq, amplitude, shipPos, shipSpeed, stemData) {
         const shipZ = shipPos ? shipPos.z : 0;
+
+        // STRICT 1:1 STEM MAPPING - respects enabled/threshold/gain overrides
+        const drumEnergy = getEffectiveStemEnergy('drums', stemData?.drums?.energy || 0);
+        const bassEnergy = getEffectiveStemEnergy('bass', stemData?.bass?.energy || 0);
+        const vocalEnergy = getEffectiveStemEnergy('vocals', stemData?.vocals?.energy || 0);
+        const synthEnergy = getEffectiveStemEnergy('synth', stemData?.synth?.energy || 0);
 
         // Follow ship position
         group.position.z = shipZ;
 
-        const speedMultiplier = 1 + bassEnergy * 3;
-
-        // Rush speed lines toward camera
+        // DRUMS → Speed lines velocity
+        const speedMultiplier = 1 + drumEnergy * 8;
         speedLines.forEach(line => {
           line.position.z += line.userData.speed * speedMultiplier;
           if (line.position.z > 20) {
@@ -1089,15 +1637,15 @@ window.TrackScenes = (function() {
             line.position.x = (Math.random() - 0.5) * 30;
             line.position.y = (Math.random() - 0.5) * 20;
           }
-          line.material.opacity = 0.3 + bassEnergy * 0.5;
+          line.material.opacity = 0.4 + drumEnergy * 0.6;
         });
 
-        // Animate particle trails
+        // BASS → Particle trails density/burst
         const tPos = trailGeom.attributes.position.array;
         for (let i = 0; i < trailCount; i++) {
           const v = trailVel[i];
-          tPos[i * 3] += v.x;
-          tPos[i * 3 + 1] += v.y;
+          tPos[i * 3] += v.x * (1 + bassEnergy * 2);
+          tPos[i * 3 + 1] += v.y * (1 + bassEnergy * 2);
           tPos[i * 3 + 2] += v.z * speedMultiplier;
 
           if (tPos[i * 3 + 2] > 20) {
@@ -1108,8 +1656,12 @@ window.TrackScenes = (function() {
         }
         trailGeom.attributes.position.needsUpdate = true;
 
-        trailMat.opacity = 0.4 + energy * 0.6;
-        goldLight.intensity = 1.5 + bassEnergy * 4;
+        // SYNTH → Trail opacity/size
+        trailMat.opacity = 0.5 + synthEnergy * 0.5;
+        trailMat.size = 0.1 + synthEnergy * 0.15;
+
+        // VOCALS → Background golden light
+        goldLight.intensity = 2 + vocalEnergy * 10;
       },
       dispose() {
         group.traverse(child => {
@@ -1123,254 +1675,392 @@ window.TrackScenes = (function() {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // TRADE YOU MY HANDS - Intimate, warm bamboo forest with snow
+  // TRADE YOU MY HANDS - Metamorphosis / Human-AI Symbiosis
+  // Crystalline cocoons that burst into butterflies, orbital light spirals
+  // Theme: "Give up control, gain full control" - liberation through partnership
   // ═══════════════════════════════════════════════════════════════════════════
   function buildTradeHands(THREE, scene, audioData) {
-    const group = new THREE.Group();  // For orbs/lights that follow ship
-    scene.fog = new THREE.FogExp2(0x1a1010, 0.012);
+    const group = new THREE.Group();
+    // Lighter fog to let sakura background show through
+    scene.fog = new THREE.FogExp2(0x1a1028, 0.004);
 
-    // CONTINUOUSLY GENERATED BAMBOO PILLARS
-    const pillars = [];
-    const pillarGroup = new THREE.Group();
-    const PILLAR_SPACING = 6;        // Z spacing between pillars
-    const PILLARS_AHEAD = 25;        // How many to keep ahead of ship
-    const PILLARS_BEHIND = 8;        // How many to keep behind ship
-    let nextSpawnZ = -50;            // Next Z position to spawn at
-    let sideToggle = 0;              // Alternates left/right placement
+    // === COCOONS - Continuously generated crystalline forms ===
+    const cocoons = [];
+    const cocoonGroup = new THREE.Group();
+    const COCOON_SPACING = 12;
+    const COCOONS_AHEAD = 20;
+    const COCOONS_BEHIND = 6;
+    let nextCocoonZ = -40;
 
-    // Helper: Create a single pillar at given Z
-    function spawnPillar(z) {
-      const height = 15 + Math.random() * 25;
-      const radius = 0.3 + Math.random() * 0.4;
-      const geom = new THREE.CylinderGeometry(radius * 0.7, radius, height, 8);
-      const hue = 0.08 + Math.random() * 0.06;
+    function spawnCocoon(z) {
+      // Crystalline cocoon shape - elongated icosahedron
+      const geom = new THREE.IcosahedronGeometry(1.2 + Math.random() * 0.8, 1);
+      geom.scale(0.6, 1.4, 0.6);
+
+      const isGold = Math.random() > 0.4;
+      const hue = isGold ? 0.12 : 0.55; // Gold or cyan
       const mat = new THREE.MeshStandardMaterial({
-        color: new THREE.Color().setHSL(hue, 0.4, 0.25 + Math.random() * 0.15),
-        roughness: 0.8,
-        metalness: 0.1,
-        emissive: new THREE.Color().setHSL(hue, 0.6, 0.05),
-        emissiveIntensity: 0.3
-      });
-      const pillar = new THREE.Mesh(geom, mat);
-
-      const side = sideToggle % 2 === 0 ? -1 : 1;
-      sideToggle++;
-      const xOffset = 8 + Math.random() * 15;
-      pillar.position.set(
-        side * xOffset,
-        height / 2 - 2,
-        z + Math.random() * 4
-      );
-      pillar.rotation.z = (Math.random() - 0.5) * 0.1;
-      pillar.userData = {
-        baseScale: 1,
-        baseHeight: height,
-        phase: Math.random() * Math.PI * 2,
-        pulseSpeed: 0.5 + Math.random() * 0.5,
-        spawnZ: z
-      };
-      pillarGroup.add(pillar);
-      pillars.push(pillar);
-
-      // Add glow orb at top of some pillars
-      if (Math.random() > 0.6) {
-        const glowGeom = new THREE.SphereGeometry(0.8 + Math.random() * 0.5, 8, 8);
-        const glowMat = new THREE.MeshBasicMaterial({
-          color: new THREE.Color().setHSL(0.95 + Math.random() * 0.1, 0.7, 0.6),
-          transparent: true,
-          opacity: 0.4,
-          blending: THREE.AdditiveBlending
-        });
-        const glow = new THREE.Mesh(glowGeom, glowMat);
-        glow.position.set(pillar.position.x, height - 1, z + Math.random() * 4);
-        glow.userData = { baseY: height - 1, phase: Math.random() * Math.PI * 2, isGlow: true, spawnZ: z };
-        pillarGroup.add(glow);
-        pillars.push(glow);
-      }
-    }
-
-    // Initial spawn
-    for (let z = -50; z < 150; z += PILLAR_SPACING) {
-      spawnPillar(z);
-      nextSpawnZ = z + PILLAR_SPACING;
-    }
-    scene.add(pillarGroup);
-
-    // Snow particles - WORLD SPACE (not in group)
-    const particleCount = 1200;
-    const particleGeom = new THREE.BufferGeometry();
-    const positions = new Float32Array(particleCount * 3);
-    const colors = new Float32Array(particleCount * 3);
-
-    for (let i = 0; i < particleCount; i++) {
-      positions[i * 3] = (Math.random() - 0.5) * 40;
-      positions[i * 3 + 1] = (Math.random() - 0.5) * 20;
-      positions[i * 3 + 2] = (Math.random() - 0.5) * 100;
-      const hue = 0.95 + Math.random() * 0.1;
-      const color = new THREE.Color().setHSL(hue % 1, 0.4, 0.75);
-      colors[i * 3] = color.r;
-      colors[i * 3 + 1] = color.g;
-      colors[i * 3 + 2] = color.b;
-    }
-    particleGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    particleGeom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-
-    const particleMat = new THREE.PointsMaterial({
-      size: 1.0,
-      vertexColors: true,
-      transparent: true,
-      opacity: 0.9,
-      blending: THREE.AdditiveBlending,
-      sizeAttenuation: true,
-      depthWrite: false,
-      fog: false
-    });
-    const particles = new THREE.Points(particleGeom, particleMat);
-    scene.add(particles);
-
-    // Orbs follow ship
-    const orbs = [];
-    for (let i = 0; i < 10; i++) {
-      const geom = new THREE.SphereGeometry(0.5 + Math.random(), 16, 16);
-      const mat = new THREE.MeshBasicMaterial({
-        color: new THREE.Color().setHSL(0.95 + Math.random() * 0.1, 0.5, 0.6),
+        color: new THREE.Color().setHSL(hue, 0.6, 0.4),
+        roughness: 0.2,
+        metalness: 0.8,
         transparent: true,
-        opacity: 0.1,
+        opacity: 0.7,
+        emissive: new THREE.Color().setHSL(hue, 0.8, 0.15),
+        emissiveIntensity: 0.5
+      });
+
+      const cocoon = new THREE.Mesh(geom, mat);
+      const side = Math.random() > 0.5 ? 1 : -1;
+      cocoon.position.set(
+        side * (6 + Math.random() * 10),
+        -2 + Math.random() * 8,
+        z + Math.random() * 6
+      );
+      cocoon.rotation.set(
+        Math.random() * 0.3,
+        Math.random() * Math.PI * 2,
+        Math.random() * 0.5 - 0.25
+      );
+
+      // Inner glow core
+      const coreGeom = new THREE.IcosahedronGeometry(0.5, 0);
+      const coreMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color().setHSL(hue, 0.9, 0.7),
+        transparent: true,
+        opacity: 0.4,
         blending: THREE.AdditiveBlending
       });
-      const orb = new THREE.Mesh(geom, mat);
-      orb.position.set((Math.random() - 0.5) * 20, (Math.random() - 0.5) * 10, (Math.random() - 0.5) * 15);
-      orb.userData = { phase: Math.random() * Math.PI * 2 };
-      group.add(orb);
-      orbs.push(orb);
+      const core = new THREE.Mesh(coreGeom, coreMat);
+      cocoon.add(core);
+
+      cocoon.userData = {
+        spawnZ: z,
+        phase: Math.random() * Math.PI * 2,
+        pulseSpeed: 0.3 + Math.random() * 0.4,
+        hue,
+        mat,
+        coreMat,
+        hatched: false,
+        hatchProgress: 0
+      };
+
+      cocoonGroup.add(cocoon);
+      cocoons.push(cocoon);
     }
 
-    const warmLight = new THREE.PointLight(0xffaa88, 2, 35);
-    warmLight.position.set(0, 5, 0);
-    group.add(warmLight);
+    for (let z = -40; z < 200; z += COCOON_SPACING) {
+      spawnCocoon(z);
+      nextCocoonZ = z + COCOON_SPACING;
+    }
+    scene.add(cocoonGroup);
 
-    const pinkLight = new THREE.PointLight(0xffbbcc, 1.5, 30);
-    pinkLight.position.set(-8, 0, -5);
-    group.add(pinkLight);
+    // === BUTTERFLIES - Born from cocoons on drum hits ===
+    const butterflies = [];
+    const butterflyGroup = new THREE.Group();
+    scene.add(butterflyGroup);
+
+    function spawnButterfly(position, hue) {
+      // Simple wing geometry
+      const wingShape = new THREE.Shape();
+      wingShape.moveTo(0, 0);
+      wingShape.bezierCurveTo(0.8, 0.3, 1.2, 1.2, 0.3, 1.5);
+      wingShape.bezierCurveTo(-0.2, 1.0, 0, 0.3, 0, 0);
+
+      const wingGeom = new THREE.ShapeGeometry(wingShape);
+      const wingMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color().setHSL(hue, 0.8, 0.6),
+        transparent: true,
+        opacity: 0.7,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending
+      });
+
+      const butterfly = new THREE.Group();
+
+      const leftWing = new THREE.Mesh(wingGeom, wingMat);
+      leftWing.scale.set(0.8, 0.8, 0.8);
+      leftWing.position.x = -0.1;
+      butterfly.add(leftWing);
+
+      const rightWing = new THREE.Mesh(wingGeom.clone(), wingMat.clone());
+      rightWing.scale.set(-0.8, 0.8, 0.8);
+      rightWing.position.x = 0.1;
+      butterfly.add(rightWing);
+
+      butterfly.position.copy(position);
+      butterfly.userData = {
+        velocity: new THREE.Vector3(
+          (Math.random() - 0.5) * 0.15,
+          0.08 + Math.random() * 0.08,
+          (Math.random() - 0.5) * 0.1
+        ),
+        phase: Math.random() * Math.PI * 2,
+        wingSpeed: 8 + Math.random() * 4,
+        leftWing,
+        rightWing,
+        life: 1.0,
+        wingMat
+      };
+
+      butterflyGroup.add(butterfly);
+      butterflies.push(butterfly);
+    }
+
+    // === ORBITAL SPIRAL - Partnership energy around ship ===
+    const spiralCount = 200;
+    const spiralGeom = new THREE.BufferGeometry();
+    const spiralPos = new Float32Array(spiralCount * 3);
+    const spiralColors = new Float32Array(spiralCount * 3);
+
+    for (let i = 0; i < spiralCount; i++) {
+      const t = i / spiralCount;
+      const angle = t * Math.PI * 6;
+      const radius = 3 + t * 5;
+      spiralPos[i * 3] = Math.cos(angle) * radius;
+      spiralPos[i * 3 + 1] = (t - 0.5) * 8;
+      spiralPos[i * 3 + 2] = Math.sin(angle) * radius;
+
+      const hue = t * 0.15 + 0.08; // Gold to amber
+      const col = new THREE.Color().setHSL(hue, 0.7, 0.6);
+      spiralColors[i * 3] = col.r;
+      spiralColors[i * 3 + 1] = col.g;
+      spiralColors[i * 3 + 2] = col.b;
+    }
+    spiralGeom.setAttribute('position', new THREE.BufferAttribute(spiralPos, 3));
+    spiralGeom.setAttribute('color', new THREE.BufferAttribute(spiralColors, 3));
+
+    const spiralMat = new THREE.PointsMaterial({
+      size: 0.3,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.6,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const spiral = new THREE.Points(spiralGeom, spiralMat);
+    group.add(spiral);
+
+    // === AMBIENT PARTICLES - Floating energy motes ===
+    const moteCount = 600;
+    const moteGeom = new THREE.BufferGeometry();
+    const motePos = new Float32Array(moteCount * 3);
+    const moteColors = new Float32Array(moteCount * 3);
+    const moteData = [];
+
+    for (let i = 0; i < moteCount; i++) {
+      motePos[i * 3] = (Math.random() - 0.5) * 60;
+      motePos[i * 3 + 1] = (Math.random() - 0.5) * 25;
+      motePos[i * 3 + 2] = Math.random() * 100;
+
+      const hue = Math.random() > 0.6 ? 0.12 : 0.55;
+      const col = new THREE.Color().setHSL(hue, 0.5, 0.7);
+      moteColors[i * 3] = col.r;
+      moteColors[i * 3 + 1] = col.g;
+      moteColors[i * 3 + 2] = col.b;
+
+      moteData.push({
+        speed: 0.5 + Math.random() * 1,
+        phase: Math.random() * Math.PI * 2,
+        drift: (Math.random() - 0.5) * 0.02
+      });
+    }
+    moteGeom.setAttribute('position', new THREE.BufferAttribute(motePos, 3));
+    moteGeom.setAttribute('color', new THREE.BufferAttribute(moteColors, 3));
+
+    const moteMat = new THREE.PointsMaterial({
+      size: 0.4,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.5,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const motes = new THREE.Points(moteGeom, moteMat);
+    scene.add(motes);
+
+    // === LIGHTS ===
+    const goldLight = new THREE.PointLight(0xffaa44, 2, 40);
+    goldLight.position.set(0, 3, 0);
+    group.add(goldLight);
+
+    const cyanLight = new THREE.PointLight(0x44aaff, 1.5, 35);
+    cyanLight.position.set(-5, -2, 5);
+    group.add(cyanLight);
+
+    const ambientGlow = new THREE.AmbientLight(0x1a1020, 0.3);
+    scene.add(ambientGlow);
 
     scene.add(group);
+
     let initialized = false;
     let lastDrumPulse = 0;
+    let lastVocalPulse = 0;
 
     return {
       group,
-      update(time, freq, amplitude, shipPos, shipSpeed, audioExtra) {
-        const midEnergy = freq ? (freq[20] + freq[40] + freq[60]) / 3 / 255 : 0;
+      // STRICT 1:1 stem-to-effect mapping
+      stemEffects: {
+        drums: { target: 'cocoons', effect: 'pulse scale', color: '#ffcc66' },
+        bass: { target: 'motes', effect: 'drift intensity', color: '#8866ff' },
+        vocals: { target: 'ambient lights', effect: 'background glow', color: '#ff99bb' },
+        synth: { target: 'spiral trail', effect: 'opacity', color: '#66ffcc' },
+        guitar: { target: 'butterflies', effect: 'flutter speed', color: '#ffaa44' }
+      },
+      update(time, freq, amplitude, shipPos, shipSpeed, stemData) {
         const shipZ = shipPos ? shipPos.z : 0;
 
-        // Get drum pulse from audio extra data
-        const drumPulse = audioExtra?.drumPulse || 0;
+        // STRICT 1:1 STEM MAPPING - respects enabled/threshold/gain overrides
+        const drumEnergy = getEffectiveStemEnergy('drums', stemData?.drums?.energy || 0);
+        const bassEnergy = getEffectiveStemEnergy('bass', stemData?.bass?.energy || 0);
+        const vocalEnergy = getEffectiveStemEnergy('vocals', stemData?.vocals?.energy || 0);
+        const synthEnergy = getEffectiveStemEnergy('synth', stemData?.synth?.energy || 0);
+        const guitarEnergy = getEffectiveStemEnergy('guitar', stemData?.guitar?.energy || 0);
 
-        // DRUM PULSE EFFECT: Scale pillars dramatically on drum hits
-        const pulseDecay = 0.15;  // How fast the pulse decays
-        lastDrumPulse = lastDrumPulse * (1 - pulseDecay) + drumPulse * pulseDecay;
-        const bigPulse = lastDrumPulse > 0.3;  // Strong hit threshold
+        // Smooth drum pulse
+        lastDrumPulse = lastDrumPulse * 0.85 + drumEnergy * 0.15;
+        lastVocalPulse = lastVocalPulse * 0.9 + vocalEnergy * 0.1;
 
-        // CONTINUOUS GENERATION: Spawn new pillars ahead, remove behind
-        const spawnAheadZ = shipZ + PILLARS_AHEAD * PILLAR_SPACING;
-        const cleanupBehindZ = shipZ - PILLARS_BEHIND * PILLAR_SPACING;
+        // === COCOON GENERATION ===
+        const spawnZ = shipZ + COCOONS_AHEAD * COCOON_SPACING;
+        const cleanZ = shipZ - COCOONS_BEHIND * COCOON_SPACING;
 
-        // Spawn new pillars ahead
-        while (nextSpawnZ < spawnAheadZ) {
-          spawnPillar(nextSpawnZ);
-          nextSpawnZ += PILLAR_SPACING;
+        while (nextCocoonZ < spawnZ) {
+          spawnCocoon(nextCocoonZ);
+          nextCocoonZ += COCOON_SPACING;
         }
 
-        // Remove pillars that are too far behind
-        for (let i = pillars.length - 1; i >= 0; i--) {
-          const p = pillars[i];
-          if (p.userData.spawnZ < cleanupBehindZ) {
-            pillarGroup.remove(p);
-            if (p.geometry) p.geometry.dispose();
-            if (p.material) p.material.dispose();
-            pillars.splice(i, 1);
+        // Cleanup old cocoons
+        for (let i = cocoons.length - 1; i >= 0; i--) {
+          if (cocoons[i].userData.spawnZ < cleanZ) {
+            const c = cocoons[i];
+            cocoonGroup.remove(c);
+            c.traverse(child => {
+              if (child.geometry) child.geometry.dispose();
+              if (child.material) child.material.dispose();
+            });
+            cocoons.splice(i, 1);
           }
         }
 
-        // Animate pillars with drum pulse
-        pillars.forEach((pillar, i) => {
-          if (pillar.userData.baseHeight) {
-            // Bamboo pillars: scale Y (grow taller) on drum hits
-            const breathe = 1 + Math.sin(time * pillar.userData.pulseSpeed + pillar.userData.phase) * 0.05;
-            const drumScale = 1 + lastDrumPulse * 0.4;  // Up to 40% taller on hits
-            pillar.scale.set(
-              breathe + lastDrumPulse * 0.2,  // Slightly wider
-              drumScale,  // Taller
-              breathe + lastDrumPulse * 0.2
-            );
-            // Flash emissive on strong hits
-            if (pillar.material.emissive) {
-              pillar.material.emissiveIntensity = 0.3 + lastDrumPulse * 1.5;
-            }
-          } else if (pillar.userData.isGlow) {
-            // Glow orbs: pulse opacity and scale
-            const glowPulse = 1 + lastDrumPulse * 0.8;
-            pillar.scale.setScalar(glowPulse);
-            pillar.material.opacity = 0.4 + lastDrumPulse * 0.6;
+        // === ANIMATE COCOONS ===
+        cocoons.forEach(cocoon => {
+          const data = cocoon.userData;
+
+          // Gentle pulsing
+          const breathe = 1 + Math.sin(time * data.pulseSpeed + data.phase) * 0.1;
+          const pulse = 1 + lastDrumPulse * 0.3;
+          cocoon.scale.setScalar(breathe * pulse);
+
+          // Glow intensity with vocals
+          data.mat.emissiveIntensity = 0.3 + lastVocalPulse * 0.8 + lastDrumPulse * 0.5;
+          if (data.coreMat) {
+            data.coreMat.opacity = 0.3 + lastVocalPulse * 0.4 + lastDrumPulse * 0.3;
           }
+
+          // Hatch on strong drum hits
+          if (!data.hatched && lastDrumPulse > 0.5 && Math.random() > 0.7) {
+            data.hatched = true;
+            spawnButterfly(cocoon.position.clone(), data.hue);
+            data.mat.opacity = 0.3;
+          }
+
+          // Slow rotation
+          cocoon.rotation.y += 0.003;
         });
 
-        // Orbs/lights follow ship
-        group.position.z = shipZ;
+        // === ANIMATE BUTTERFLIES ===
+        for (let i = butterflies.length - 1; i >= 0; i--) {
+          const b = butterflies[i];
+          const data = b.userData;
 
-        const pos = particleGeom.attributes.position.array;
+          // Wing flapping
+          const wingAngle = Math.sin(time * data.wingSpeed + data.phase) * 0.8;
+          data.leftWing.rotation.y = wingAngle;
+          data.rightWing.rotation.y = -wingAngle;
 
-        // On first update, spread particles around current ship position
+          // Movement
+          b.position.add(data.velocity);
+          b.position.x += Math.sin(time * 2 + data.phase) * 0.03;
+
+          // Fade out
+          data.life -= 0.003;
+          data.wingMat.opacity = data.life * 0.7;
+
+          // Remove dead butterflies
+          if (data.life <= 0 || b.position.y > 20) {
+            butterflyGroup.remove(b);
+            b.traverse(child => {
+              if (child.geometry) child.geometry.dispose();
+              if (child.material) child.material.dispose();
+            });
+            butterflies.splice(i, 1);
+          }
+        }
+
+        // === ANIMATE SPIRAL ===
+        const sPos = spiralGeom.attributes.position.array;
+        for (let i = 0; i < spiralCount; i++) {
+          const t = i / spiralCount;
+          const angle = t * Math.PI * 6 + time * 0.5;
+          const radius = 3 + t * 5 + lastDrumPulse * 2;
+          sPos[i * 3] = Math.cos(angle) * radius;
+          sPos[i * 3 + 1] = (t - 0.5) * 8 + Math.sin(time + t * 10) * 0.5;
+          sPos[i * 3 + 2] = Math.sin(angle) * radius;
+        }
+        spiralGeom.attributes.position.needsUpdate = true;
+        // SYNTH → Spiral trail opacity
+        spiralMat.opacity = 0.4 + synthEnergy * 0.6;
+        spiralMat.size = 0.3 + synthEnergy * 0.3;
+
+        // BASS → Motes drift intensity
+        const mPos = moteGeom.attributes.position.array;
         if (!initialized && shipPos) {
-          for (let i = 0; i < particleCount; i++) {
-            pos[i * 3] = (Math.random() - 0.5) * 50;
-            pos[i * 3 + 1] = Math.random() * 15 - 3;
-            pos[i * 3 + 2] = shipZ - 10 + Math.random() * 100;
+          for (let i = 0; i < moteCount; i++) {
+            mPos[i * 3 + 2] = shipZ - 30 + Math.random() * 80;
           }
           initialized = true;
-          particleGeom.attributes.position.needsUpdate = true;
-          return;
         }
 
-        // Particles in world space - respawn relative to ship position
-        for (let i = 0; i < particleCount; i++) {
-          const pz = pos[i * 3 + 2];
-          if (pz < shipZ - 15) {
-            pos[i * 3] = (Math.random() - 0.5) * 50;
-            pos[i * 3 + 1] = Math.random() * 15 - 3;
-            pos[i * 3 + 2] = shipZ + 40 + Math.random() * 60;
-          } else if (pz > shipZ + 100) {
-            pos[i * 3] = (Math.random() - 0.5) * 50;
-            pos[i * 3 + 1] = Math.random() * 15 - 3;
-            pos[i * 3 + 2] = shipZ - 10 + Math.random() * 30;
-          }
-          pos[i * 3 + 1] -= 0.03;
-          if (pos[i * 3 + 1] < -10) {
-            pos[i * 3 + 1] = 12 + Math.random() * 3;
+        for (let i = 0; i < moteCount; i++) {
+          const d = moteData[i];
+          const bassDrift = 1 + bassEnergy * 2;
+          mPos[i * 3] += (Math.sin(time * d.speed + d.phase) * 0.02 + d.drift) * bassDrift;
+          mPos[i * 3 + 1] += Math.cos(time * d.speed * 0.7 + d.phase) * 0.015 * bassDrift;
+
+          // Keep near ship
+          if (mPos[i * 3 + 2] < shipZ - 35 || mPos[i * 3 + 2] > shipZ + 50) {
+            mPos[i * 3 + 2] = shipZ - 30 + Math.random() * 80;
+            mPos[i * 3] = (Math.random() - 0.5) * 60;
           }
         }
-        particleGeom.attributes.position.needsUpdate = true;
+        moteGeom.attributes.position.needsUpdate = true;
+        moteMat.opacity = 0.3 + bassEnergy * 0.4;
+        moteMat.size = 0.4 + bassEnergy * 0.3;
 
-        orbs.forEach(orb => {
-          const breathe = 1 + Math.sin(time * 0.5 + orb.userData.phase) * 0.15;
-          const orbPulse = 1 + lastDrumPulse * 0.5;  // Orbs also pulse with drums
-          orb.scale.setScalar(breathe * orbPulse);
-          orb.material.opacity = 0.1 + midEnergy * 0.08 + lastDrumPulse * 0.2;
-        });
+        // VOCALS → Background ambient lights
+        goldLight.intensity = 1.5 + vocalEnergy * 4;
+        cyanLight.intensity = 1 + vocalEnergy * 3;
+        cyanLight.position.x = Math.sin(time * 0.3) * 8;
 
-        warmLight.intensity = 1.5 + midEnergy + lastDrumPulse * 2;  // Flash on drums
-        pinkLight.intensity = 1 + Math.sin(time * 0.3) * 0.4 + lastDrumPulse * 1.5;
-        particleMat.opacity = 0.6 + midEnergy * 0.2;
+        // Group follows ship
+        group.position.z = shipZ;
       },
+
       dispose() {
-        scene.remove(particles);
-        particleGeom.dispose();
-        particleMat.dispose();
-        scene.remove(pillarGroup);
-        pillarGroup.traverse(child => {
+        scene.remove(cocoonGroup);
+        cocoonGroup.traverse(child => {
           if (child.geometry) child.geometry.dispose();
           if (child.material) child.material.dispose();
         });
+        scene.remove(butterflyGroup);
+        butterflyGroup.traverse(child => {
+          if (child.geometry) child.geometry.dispose();
+          if (child.material) child.material.dispose();
+        });
+        scene.remove(motes);
+        moteGeom.dispose();
+        moteMat.dispose();
+        scene.remove(ambientGlow);
         group.traverse(child => {
           if (child.geometry) child.geometry.dispose();
           if (child.material) child.material.dispose();
@@ -2197,14 +2887,26 @@ window.TrackScenes = (function() {
 
     return {
       group,
+      // STRICT 1:1 stem-to-effect mapping
+      stemEffects: {
+        drums: { target: 'towers', effect: 'flash pulse', color: '#00ffff' },
+        bass: { target: 'data rain', effect: 'fall speed', color: '#0066aa' },
+        vocals: { target: 'ambient lights', effect: 'background glow', color: '#00ddff' },
+        synth: { target: 'notifications', effect: 'burst size', color: '#0088ff' },
+        guitar: { target: 'panels', effect: 'scale pulse', color: '#66ddff' }
+      },
       update(time, freq, amplitude, shipPos, shipSpeed, audioExtra) {
         const shipZ = shipPos ? shipPos.z : 0;
-        const bassEnergy = freq ? (freq[0] + freq[1] + freq[2]) / 3 / 255 : 0;
-        const midEnergy = freq ? (freq[20] + freq[40]) / 2 / 255 : 0;
-        const highEnergy = freq ? (freq[80] + freq[100]) / 2 / 255 : 0;
 
-        const drumPulse = audioExtra?.drumPulse || 0;
-        lastDrumPulse = lastDrumPulse * 0.85 + drumPulse * 0.15;
+        // STRICT 1:1 STEM MAPPING - respects enabled/threshold/gain overrides
+        const drumEnergy = getEffectiveStemEnergy('drums', audioExtra?.drums?.energy || 0);
+        const bassEnergy = getEffectiveStemEnergy('bass', audioExtra?.bass?.energy || 0);
+        const vocalEnergy = getEffectiveStemEnergy('vocals', audioExtra?.vocals?.energy || 0);
+        const synthEnergy = getEffectiveStemEnergy('synth', audioExtra?.synth?.energy || 0);
+        const guitarEnergy = getEffectiveStemEnergy('guitar', audioExtra?.guitar?.energy || 0);
+
+        // Slower decay = longer lasting effects
+        lastDrumPulse = lastDrumPulse * 0.75 + drumEnergy * 0.25;
 
         // CONTINUOUS GENERATION: Towers
         const towerSpawnZ = shipZ + TOWERS_AHEAD * TOWER_SPACING;
@@ -2248,32 +2950,30 @@ window.TrackScenes = (function() {
           }
         }
 
-        // Animate towers on drum hits
+        // DRUMS → Towers flash and pulse
         towers.forEach(tower => {
           const data = tower.userData;
           if (data.bodyMat) {
-            // Flash emissive on drums
-            data.bodyMat.emissiveIntensity = 0.05 + lastDrumPulse * 0.3;
-            // Beacon pulses
+            data.bodyMat.emissiveIntensity = 0.1 + lastDrumPulse * 2;
+            const scaleBoost = 1 + lastDrumPulse * 0.15;
+            tower.scale.set(scaleBoost, 1 + lastDrumPulse * 0.1, scaleBoost);
             if (data.beaconMat) {
-              data.beaconMat.opacity = 0.5 + lastDrumPulse * 0.5 + Math.sin(time * 2) * 0.2;
-              data.beacon.scale.setScalar(1 + lastDrumPulse * 0.8);
+              data.beaconMat.opacity = 0.6 + lastDrumPulse * 0.4;
+              data.beacon.scale.setScalar(1 + lastDrumPulse * 2);
             }
           }
         });
 
-        // Animate floating panels
+        // GUITAR → Panels scale pulse
         panels.forEach(panel => {
           const data = panel.userData;
-          // Float up and down
-          panel.position.y = data.baseY + Math.sin(time * data.floatSpeed + data.floatPhase) * 0.8;
-          // Pulse opacity with vocals/mids
-          panel.material.opacity = 0.1 + midEnergy * 0.15 + lastDrumPulse * 0.1;
-          // Scale on drum hits
-          panel.scale.setScalar(1 + lastDrumPulse * 0.2);
+          panel.position.y = data.baseY + Math.sin(time * data.floatSpeed + data.floatPhase) * 1.5;
+          panel.material.opacity = 0.15 + guitarEnergy * 0.6;
+          const panelScale = 1 + guitarEnergy * 0.8;
+          panel.scale.setScalar(panelScale);
         });
 
-        // Animate data rain
+        // BASS → Data rain fall speed
         const rPos = rainGeom.attributes.position.array;
         if (!initialized && shipPos) {
           for (let i = 0; i < rainCount; i++) {
@@ -2282,42 +2982,45 @@ window.TrackScenes = (function() {
           initialized = true;
         }
 
+        const rainSpeedMult = 1 + bassEnergy * 6;
         for (let i = 0; i < rainCount; i++) {
-          rPos[i * 3 + 1] -= rainVel[i] * (1 + bassEnergy * 2 + lastDrumPulse);
+          rPos[i * 3 + 1] -= rainVel[i] * rainSpeedMult;
           if (rPos[i * 3 + 1] < -5) {
             rPos[i * 3 + 1] = 35 + Math.random() * 5;
             rPos[i * 3] = (Math.random() - 0.5) * 80;
             rPos[i * 3 + 2] = shipZ - 40 + Math.random() * 80;
           }
-          // Keep rain in range of ship
           if (rPos[i * 3 + 2] < shipZ - 45 || rPos[i * 3 + 2] > shipZ + 45) {
             rPos[i * 3 + 2] = shipZ - 40 + Math.random() * 80;
           }
         }
         rainGeom.attributes.position.needsUpdate = true;
-        rainMat.opacity = 0.4 + highEnergy * 0.4 + lastDrumPulse * 0.2;
+        rainMat.opacity = 0.5 + bassEnergy * 0.5;
+        rainMat.size = 0.15 + bassEnergy * 0.2;
 
-        // Animate notification particles
+        // SYNTH → Notification particles burst
         const nPos = notifGeom.attributes.position.array;
         for (let i = 0; i < notifCount; i++) {
           const d = notifData[i];
-          nPos[i * 3] += Math.sin(time * d.speed + d.phase) * 0.02;
-          nPos[i * 3 + 1] += Math.cos(time * d.speed * 0.7 + d.phase) * 0.015;
+          const burstForce = synthEnergy * 0.2;
+          nPos[i * 3] += Math.sin(time * d.speed + d.phase) * 0.03 + (Math.random() - 0.5) * burstForce;
+          nPos[i * 3 + 1] += Math.cos(time * d.speed * 0.7 + d.phase) * 0.02 + burstForce * 0.5;
         }
         notifGeom.attributes.position.needsUpdate = true;
-        notifMat.opacity = 0.5 + lastDrumPulse * 0.5;
-        notifMat.size = 0.3 + lastDrumPulse * 0.3;
+        notifMat.opacity = 0.6 + synthEnergy * 0.4;
+        notifMat.size = 0.4 + synthEnergy * 0.8;
 
         // Move floor with ship
         floor.position.z = shipZ;
+        floorMat.emissiveIntensity = 0.2 + drumEnergy * 0.8;
 
         // Lights follow ship
         group.position.z = shipZ;
 
-        // Light intensity on drums
-        blueLight.intensity = 2 + lastDrumPulse * 3 + bassEnergy * 2;
-        cyanLight.intensity = 1.5 + midEnergy * 2;
-        pinkAccent.intensity = 1 + lastDrumPulse * 2;
+        // VOCALS → Background ambient lights
+        blueLight.intensity = 3 + vocalEnergy * 10;
+        cyanLight.intensity = 2 + vocalEnergy * 8;
+        pinkAccent.intensity = 1.5 + vocalEnergy * 6;
       },
       dispose() {
         scene.remove(towerGroup);
@@ -2637,14 +3340,26 @@ window.TrackScenes = (function() {
 
     return {
       group,
+      // STRICT 1:1 stem-to-effect mapping
+      stemEffects: {
+        drums: { target: 'lamps', effect: 'warm pulse', color: '#ffaa55' },
+        bass: { target: 'phone fall', effect: 'speed', color: '#ffcc88' },
+        vocals: { target: 'candle lights', effect: 'background glow', color: '#ffddaa' },
+        synth: { target: 'fireflies', effect: 'swarm glow', color: '#ff8844' },
+        guitar: { target: 'orbs', effect: 'scale breathe', color: '#3388ff' }
+      },
       update(time, freq, amplitude, shipPos, shipSpeed, audioExtra) {
         const shipZ = shipPos ? shipPos.z : 0;
-        const bassEnergy = freq ? (freq[0] + freq[1] + freq[2]) / 3 / 255 : 0;
-        const midEnergy = freq ? (freq[20] + freq[40]) / 2 / 255 : 0;
-        const vocalEnergy = freq ? (freq[40] + freq[60] + freq[80]) / 3 / 255 : 0;
 
-        const drumPulse = audioExtra?.drumPulse || 0;
-        lastDrumPulse = lastDrumPulse * 0.85 + drumPulse * 0.15;
+        // STRICT 1:1 STEM MAPPING - respects enabled/threshold/gain overrides
+        const drumEnergy = getEffectiveStemEnergy('drums', audioExtra?.drums?.energy || 0);
+        const bassEnergy = getEffectiveStemEnergy('bass', audioExtra?.bass?.energy || 0);
+        const vocalEnergy = getEffectiveStemEnergy('vocals', audioExtra?.vocals?.energy || 0);
+        const synthEnergy = getEffectiveStemEnergy('synth', audioExtra?.synth?.energy || 0);
+        const guitarEnergy = getEffectiveStemEnergy('guitar', audioExtra?.guitar?.energy || 0);
+
+        // Slower decay = longer lasting warm glow
+        lastDrumPulse = lastDrumPulse * 0.75 + drumEnergy * 0.25;
 
         // CONTINUOUS GENERATION: Lamps
         const lampSpawnZ = shipZ + LAMPS_AHEAD * LAMP_SPACING;
@@ -2667,15 +3382,15 @@ window.TrackScenes = (function() {
           }
         }
 
-        // Animate lamps - flicker and pulse with music
+        // DRUMS → Lamps warm pulse
         lamps.forEach(lamp => {
           const data = lamp.userData;
-          const flicker = 0.9 + Math.sin(time * 8 + data.phase) * 0.1;
-          const vocalBoost = 1 + vocalEnergy * 0.5 + lastDrumPulse * 0.4;
+          const flicker = 0.85 + Math.sin(time * 10 + data.phase) * 0.15;
+          const drumPulse = 1 + lastDrumPulse * 1.5;
 
-          data.lampMat.opacity = 0.8 * flicker * vocalBoost;
-          data.glowMat.opacity = 0.12 + vocalEnergy * 0.1 + lastDrumPulse * 0.15;
-          data.light.intensity = 1.2 * flicker * vocalBoost + lastDrumPulse;
+          data.lampMat.opacity = 0.9 * flicker * drumPulse;
+          data.glowMat.opacity = 0.2 + lastDrumPulse * 0.5;
+          data.light.intensity = 2 * flicker + lastDrumPulse * 5;
         });
 
         // CONTINUOUS GENERATION: Phones
@@ -2722,61 +3437,53 @@ window.TrackScenes = (function() {
           }
         }
 
-        // Animate phones - fall and FLIP face down
+        // BASS → Phones fall speed
         phones.forEach(phone => {
           const data = phone.userData;
 
-          // Fall
-          phone.position.y -= data.fallSpeed * (1 + lastDrumPulse * 0.5);
+          phone.position.y -= data.fallSpeed * (1 + bassEnergy * 3);
+          phone.position.x += Math.sin(time * 0.5 + data.sway) * 0.015;
 
-          // Gentle sway
-          phone.position.x += Math.sin(time * 0.5 + data.sway) * 0.01;
-
-          // FLIP face down as it falls (rotate around X axis from 0 to PI)
           if (data.flipProgress < Math.PI) {
-            data.flipProgress += data.flipSpeed * (1 + lastDrumPulse);
+            data.flipProgress += data.flipSpeed * (1 + bassEnergy * 4);
             phone.rotation.x = data.flipProgress;
           }
 
-          // Dim screen as it flips past 90 degrees
           const faceDownProgress = Math.max(0, (data.flipProgress - Math.PI / 2) / (Math.PI / 2));
-          data.screenMat.opacity = 0.8 * (1 - faceDownProgress * 0.9);
+          data.screenMat.opacity = 0.9 * (1 - faceDownProgress * 0.85);
 
-          // Reset when fallen
           if (phone.position.y < -8) {
             phone.position.y = 25 + Math.random() * 20;
             phone.position.x = (Math.random() - 0.5) * 30;
             phone.position.z = shipZ + 30 + Math.random() * 50;
             phone.rotation.x = 0;
             data.flipProgress = 0;
-            data.screenMat.opacity = 0.8;
+            data.screenMat.opacity = 0.9;
             data.startY = phone.position.y;
           }
         });
 
-        // Animate warm orbs (pulse dramatically with vocals - human connection)
+        // GUITAR → Orbs scale breathe
         orbs.forEach(orb => {
           const data = orb.userData;
-          const breathe = 1 + Math.sin(time * data.pulseSpeed + data.phase) * 0.25;
-          const vocalPulse = 1 + vocalEnergy * 0.8 + lastDrumPulse * 0.5;
+          const breathe = 1 + Math.sin(time * data.pulseSpeed + data.phase) * 0.3;
+          const guitarPulse = 1 + guitarEnergy * 2;
 
-          orb.scale.setScalar(breathe * vocalPulse);
-          data.orbMat.opacity = 0.15 + vocalEnergy * 0.25 + lastDrumPulse * 0.2;
+          orb.scale.setScalar(breathe * guitarPulse);
+          data.orbMat.opacity = 0.25 + guitarEnergy * 0.6;
           if (data.coreMat) {
-            data.coreMat.opacity = 0.4 + vocalEnergy * 0.4 + lastDrumPulse * 0.3;
+            data.coreMat.opacity = 0.5 + guitarEnergy * 0.5;
           }
 
-          // Float gently
-          orb.position.y = data.baseY + Math.sin(time * 0.4 + data.phase) * 1;
+          orb.position.y = data.baseY + Math.sin(time * 0.4 + data.phase) * 2;
 
-          // Update attached light - brighter on vocals
           if (data.light) {
-            data.light.intensity = 0.8 + vocalEnergy * 2 + lastDrumPulse * 1.2;
+            data.light.intensity = 1.5 + guitarEnergy * 6;
             data.light.position.copy(orb.position);
           }
         });
 
-        // Animate fireflies
+        // Fireflies SWARM and glow brighter on music
         const fPos = fireflyGeom.attributes.position.array;
         if (!initialized && shipPos) {
           for (let i = 0; i < fireflyCount; i++) {
@@ -2787,8 +3494,10 @@ window.TrackScenes = (function() {
 
         for (let i = 0; i < fireflyCount; i++) {
           const d = fireflyData[i];
-          fPos[i * 3] += Math.sin(time * d.speed + d.phase) * 0.025;
-          fPos[i * 3 + 1] += Math.cos(time * d.speed * 0.7 + d.phase) * 0.015;
+          // More erratic movement on drums
+          const drumBurst = lastDrumPulse * 0.1;
+          fPos[i * 3] += Math.sin(time * d.speed + d.phase) * 0.04 + (Math.random() - 0.5) * drumBurst;
+          fPos[i * 3 + 1] += Math.cos(time * d.speed * 0.7 + d.phase) * 0.025 + drumBurst * 0.3;
 
           // Keep near ship
           if (fPos[i * 3 + 2] < shipZ - 45 || fPos[i * 3 + 2] > shipZ + 45) {
@@ -2798,15 +3507,15 @@ window.TrackScenes = (function() {
         }
         fireflyGeom.attributes.position.needsUpdate = true;
 
-        // Firefly intensity with audio
-        fireflyMat.opacity = 0.6 + midEnergy * 0.3 + lastDrumPulse * 0.2;
-        fireflyMat.size = 0.2 + lastDrumPulse * 0.2 + vocalEnergy * 0.1;
+        // SYNTH → Fireflies swarm glow
+        fireflyMat.opacity = 0.7 + synthEnergy * 0.3;
+        fireflyMat.size = 0.3 + synthEnergy * 0.6;
 
-        // Candle lights flicker warmly
-        const flicker = Math.sin(time * 10) * 0.15 + Math.sin(time * 17) * 0.08;
-        candleLight1.intensity = 2.5 + flicker + vocalEnergy * 2 + lastDrumPulse * 1.5;
-        candleLight2.intensity = 1.5 + flicker * 0.8 + midEnergy * 1.5;
-        candleLight3.intensity = 1.5 + flicker * 0.6 + bassEnergy;
+        // VOCALS → Background candle lights atmosphere
+        const flicker = Math.sin(time * 12) * 0.2 + Math.sin(time * 19) * 0.1;
+        candleLight1.intensity = 4 + flicker + vocalEnergy * 10;
+        candleLight2.intensity = 2.5 + flicker * 0.8 + vocalEnergy * 6;
+        candleLight3.intensity = 2.5 + flicker * 0.6 + vocalEnergy * 6;
 
         // Group follows ship
         group.position.z = shipZ;
