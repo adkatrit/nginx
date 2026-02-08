@@ -3049,508 +3049,508 @@ window.TrackScenes = (function() {
   // ═══════════════════════════════════════════════════════════════════════════
   // TURN YOUR PHONE FACE DOWN - Warm, intimate, human connection vs digital
   // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TURN YOUR PHONE FACE DOWN - "The Quiet Room"
+  // A scene about genuine human connection when you put down your phone
+  // ═══════════════════════════════════════════════════════════════════════════
   function buildPhoneFaceDown(THREE, scene, audioData) {
     const group = new THREE.Group();
 
-    // Warm, intimate fog - golden hour feel
-    scene.fog = new THREE.FogExp2(0x1a0f08, 0.012);
+    // Deep intimate atmosphere - warm amber transitioning from cold
+    scene.fog = new THREE.FogExp2(0x0a0805, 0.018);
 
-    // TALL LAMP POSTS / STREET LIGHTS (cozy evening atmosphere)
-    const lamps = [];
-    const lampGroup = new THREE.Group();
-    const LAMP_SPACING = 10;
-    const LAMPS_AHEAD = 20;
-    const LAMPS_BEHIND = 6;
-    let nextLampZ = -50;
-    let lampSideToggle = 0;
+    // ═══════════════════════════════════════════════════════════════════════
+    // HEARTBEAT CORE - Central pulsing warmth (drums)
+    // ═══════════════════════════════════════════════════════════════════════
+    const heartbeatGroup = new THREE.Group();
 
-    function spawnLamp(z) {
-      const lampPiece = new THREE.Group();
-      const height = 18 + Math.random() * 12;  // 18-30 units tall
+    // Inner core - bright warm center
+    const coreGeom = new THREE.SphereGeometry(1.5, 32, 32);
+    const coreMat = new THREE.MeshBasicMaterial({
+      color: 0xffaa66,
+      transparent: true,
+      opacity: 0.9
+    });
+    const heartCore = new THREE.Mesh(coreGeom, coreMat);
+    heartbeatGroup.add(heartCore);
 
-      // Lamp post (thin pole)
-      const poleGeom = new THREE.CylinderGeometry(0.15, 0.2, height, 8);
-      const poleMat = new THREE.MeshStandardMaterial({
-        color: 0x2a2015,
-        roughness: 0.7,
-        metalness: 0.4,
-        emissive: 0x1a0a00,
-        emissiveIntensity: 0.1
+    // Middle pulse ring
+    const midGeom = new THREE.SphereGeometry(3, 24, 24);
+    const midMat = new THREE.MeshBasicMaterial({
+      color: 0xff8844,
+      transparent: true,
+      opacity: 0.3,
+      blending: THREE.AdditiveBlending
+    });
+    const heartMid = new THREE.Mesh(midGeom, midMat);
+    heartbeatGroup.add(heartMid);
+
+    // Outer glow aura
+    const auraGeom = new THREE.SphereGeometry(6, 20, 20);
+    const auraMat = new THREE.MeshBasicMaterial({
+      color: 0xff6633,
+      transparent: true,
+      opacity: 0.1,
+      blending: THREE.AdditiveBlending
+    });
+    const heartAura = new THREE.Mesh(auraGeom, auraMat);
+    heartbeatGroup.add(heartAura);
+
+    // Central point light
+    const heartLight = new THREE.PointLight(0xffaa66, 4, 50);
+    heartbeatGroup.add(heartLight);
+
+    heartbeatGroup.position.set(0, 6, 0);
+    group.add(heartbeatGroup);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // GROUND RIPPLES - Circular waves spreading outward (bass)
+    // ═══════════════════════════════════════════════════════════════════════
+    const ripples = [];
+    const rippleGroup = new THREE.Group();
+    const MAX_RIPPLES = 8;
+
+    function createRipple(intensity) {
+      const ripple = new THREE.Group();
+
+      // Ring geometry
+      const ringGeom = new THREE.RingGeometry(0.5, 1.5, 64);
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: 0xffcc88,
+        transparent: true,
+        opacity: 0.6 * intensity,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending
       });
-      const pole = new THREE.Mesh(poleGeom, poleMat);
-      pole.position.y = height / 2;
-      lampPiece.add(pole);
+      const ring = new THREE.Mesh(ringGeom, ringMat);
+      ring.rotation.x = -Math.PI / 2;
+      ripple.add(ring);
 
-      // Lamp head (glowing orb at top)
-      const lampGeom = new THREE.SphereGeometry(0.8 + Math.random() * 0.4, 12, 12);
-      const hue = 0.08 + Math.random() * 0.04;  // Warm orange
-      const lampMat = new THREE.MeshBasicMaterial({
-        color: new THREE.Color().setHSL(hue, 0.9, 0.65),
+      ripple.userData = {
+        age: 0,
+        maxAge: 3,
+        ringMat: ringMat,
+        startOpacity: 0.6 * intensity
+      };
+
+      ripple.position.y = 0.1;
+      rippleGroup.add(ripple);
+      ripples.push(ripple);
+
+      // Limit ripples
+      while (ripples.length > MAX_RIPPLES) {
+        const old = ripples.shift();
+        rippleGroup.remove(old);
+        old.traverse(c => {
+          if (c.geometry) c.geometry.dispose();
+          if (c.material) c.material.dispose();
+        });
+      }
+    }
+
+    rippleGroup.position.y = 0;
+    group.add(rippleGroup);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // ASCENDING PHONES - Phones floating up and fading (synth)
+    // ═══════════════════════════════════════════════════════════════════════
+    const phones = [];
+    const phoneGroup = new THREE.Group();
+    const PHONE_COUNT = 25;
+
+    function spawnPhone(shipZ) {
+      const phoneWidth = 0.8 + Math.random() * 0.4;
+      const phoneHeight = phoneWidth * 2;
+      const phone = new THREE.Group();
+
+      // Phone body
+      const bodyGeom = new THREE.BoxGeometry(phoneWidth, phoneHeight, 0.08);
+      const bodyMat = new THREE.MeshStandardMaterial({
+        color: 0x222222,
+        roughness: 0.2,
+        metalness: 0.9,
         transparent: true,
         opacity: 0.9
       });
-      const lamp = new THREE.Mesh(lampGeom, lampMat);
-      lamp.position.y = height + 0.5;
-      lampPiece.add(lamp);
-
-      // Glow effect around lamp
-      const glowGeom = new THREE.SphereGeometry(2, 12, 12);
-      const glowMat = new THREE.MeshBasicMaterial({
-        color: new THREE.Color().setHSL(hue, 0.7, 0.5),
-        transparent: true,
-        opacity: 0.15,
-        blending: THREE.AdditiveBlending
-      });
-      const glow = new THREE.Mesh(glowGeom, glowMat);
-      glow.position.y = height + 0.5;
-      lampPiece.add(glow);
-
-      // Point light from lamp
-      const light = new THREE.PointLight(
-        new THREE.Color().setHSL(hue, 0.8, 0.5),
-        1.5,
-        20
-      );
-      light.position.y = height + 0.5;
-      lampPiece.add(light);
-
-      // Position
-      const side = lampSideToggle % 2 === 0 ? -1 : 1;
-      lampSideToggle++;
-      const xOffset = 10 + Math.random() * 8;
-      lampPiece.position.set(side * xOffset, 0, z + Math.random() * 4);
-
-      lampPiece.userData = {
-        spawnZ: z,
-        height: height,
-        lampMat: lampMat,
-        glowMat: glowMat,
-        light: light,
-        phase: Math.random() * Math.PI * 2
-      };
-
-      lampGroup.add(lampPiece);
-      lamps.push(lampPiece);
-    }
-
-    for (let z = -50; z < 150; z += LAMP_SPACING) {
-      spawnLamp(z);
-      nextLampZ = z + LAMP_SPACING;
-    }
-    scene.add(lampGroup);
-
-    // FALLING PHONES that flip face-down as they descend
-    const phones = [];
-    const phoneGroup = new THREE.Group();
-    const PHONE_SPACING = 12;
-    const PHONES_AHEAD = 15;
-    const PHONES_BEHIND = 5;
-    let nextPhoneZ = -30;
-
-    function spawnPhone(z) {
-      const phoneWidth = 1.2 + Math.random() * 0.6;
-      const phoneHeight = phoneWidth * 2;
-
-      const phoneObj = new THREE.Group();
-
-      // Phone body (box)
-      const bodyGeom = new THREE.BoxGeometry(phoneWidth, phoneHeight, 0.1);
-      const bodyMat = new THREE.MeshStandardMaterial({
-        color: 0x1a1a1a,
-        roughness: 0.3,
-        metalness: 0.8
-      });
       const body = new THREE.Mesh(bodyGeom, bodyMat);
-      phoneObj.add(body);
+      phone.add(body);
 
-      // Phone screen (front face)
-      const screenGeom = new THREE.PlaneGeometry(phoneWidth * 0.9, phoneHeight * 0.9);
+      // Screen glow (starts blue, will fade)
+      const screenGeom = new THREE.PlaneGeometry(phoneWidth * 0.88, phoneHeight * 0.88);
       const screenMat = new THREE.MeshBasicMaterial({
-        color: 0x3388ff,
+        color: 0x4488ff,
         transparent: true,
-        opacity: 0.8,
+        opacity: 0.7,
         blending: THREE.AdditiveBlending
       });
       const screen = new THREE.Mesh(screenGeom, screenMat);
-      screen.position.z = 0.06;
-      phoneObj.add(screen);
+      screen.position.z = 0.045;
+      phone.add(screen);
 
-      // Notification dots on screen
-      for (let n = 0; n < 3; n++) {
-        const notifGeom = new THREE.CircleGeometry(0.08, 8);
+      // Notification badges
+      const notifColors = [0xff3344, 0x44ff66, 0xffaa00, 0x44aaff];
+      for (let i = 0; i < 2 + Math.floor(Math.random() * 3); i++) {
+        const notifGeom = new THREE.CircleGeometry(0.06, 8);
         const notifMat = new THREE.MeshBasicMaterial({
-          color: n === 0 ? 0xff4444 : (n === 1 ? 0x44ff44 : 0xffaa00),
+          color: notifColors[Math.floor(Math.random() * notifColors.length)],
           transparent: true,
           opacity: 0.9
         });
         const notif = new THREE.Mesh(notifGeom, notifMat);
         notif.position.set(
-          (Math.random() - 0.5) * phoneWidth * 0.6,
-          (Math.random() - 0.5) * phoneHeight * 0.6,
-          0.07
+          (Math.random() - 0.5) * phoneWidth * 0.7,
+          (Math.random() - 0.5) * phoneHeight * 0.7,
+          0.05
         );
-        phoneObj.add(notif);
+        phone.add(notif);
       }
 
-      // Start high, facing up (screen visible)
-      phoneObj.position.set(
-        (Math.random() - 0.5) * 30,
-        20 + Math.random() * 25,
-        z + Math.random() * 8
+      // Start below, will float up
+      phone.position.set(
+        (Math.random() - 0.5) * 35,
+        -5 + Math.random() * 8,
+        shipZ + (Math.random() - 0.5) * 60
       );
-      phoneObj.rotation.x = 0;  // Screen facing up initially
-      phoneObj.rotation.y = Math.random() * 0.3;
+      phone.rotation.z = (Math.random() - 0.5) * 0.3;
+      phone.rotation.y = Math.random() * 0.2;
 
-      phoneObj.userData = {
-        spawnZ: z,
-        fallSpeed: 0.015 + Math.random() * 0.02,
-        flipProgress: 0,
-        flipSpeed: 0.008 + Math.random() * 0.005,
-        startY: phoneObj.position.y,
+      phone.userData = {
+        riseSpeed: 0.02 + Math.random() * 0.015,
+        rotSpeed: (Math.random() - 0.5) * 0.01,
+        driftX: (Math.random() - 0.5) * 0.02,
+        phase: Math.random() * Math.PI * 2,
+        bodyMat: bodyMat,
         screenMat: screenMat,
-        sway: Math.random() * Math.PI * 2
+        fadeHeight: 25 + Math.random() * 10
       };
 
-      phoneGroup.add(phoneObj);
-      phones.push(phoneObj);
+      phoneGroup.add(phone);
+      phones.push(phone);
     }
 
-    for (let z = -30; z < 120; z += PHONE_SPACING) {
-      spawnPhone(z);
-      if (Math.random() > 0.5) spawnPhone(z + PHONE_SPACING / 2);
-      nextPhoneZ = z + PHONE_SPACING;
+    // Initial phones
+    for (let i = 0; i < PHONE_COUNT; i++) {
+      spawnPhone(0);
+      // Spread initial heights
+      phones[i].position.y = -5 + Math.random() * 35;
     }
     scene.add(phoneGroup);
 
-    // WARM GLOWING ORBS OF LIGHT (smaller, brighter, more ethereal)
-    const orbs = [];
-    const orbGroup = new THREE.Group();
-    const ORB_SPACING = 10;
-    const ORBS_AHEAD = 15;
-    const ORBS_BEHIND = 5;
-    let nextOrbZ = -20;
+    // ═══════════════════════════════════════════════════════════════════════
+    // CONNECTION THREADS - Ethereal lines between warm points (guitar)
+    // ═══════════════════════════════════════════════════════════════════════
+    const connectionPoints = [];
+    const threads = [];
+    const threadGroup = new THREE.Group();
+    const POINT_COUNT = 12;
 
-    function spawnOrb(z) {
-      const orbSize = 0.6 + Math.random() * 0.8;  // Much smaller: 0.6-1.4 units
-      const hue = 0.06 + Math.random() * 0.06;
-      const orbColor = new THREE.Color().setHSL(hue, 0.85, 0.7);
-
-      // Outer glow (soft, diffuse)
-      const glowGeom = new THREE.SphereGeometry(orbSize * 2.5, 16, 16);
-      const glowMat = new THREE.MeshBasicMaterial({
-        color: orbColor,
-        transparent: true,
-        opacity: 0.08,
-        blending: THREE.AdditiveBlending
-      });
-      const orb = new THREE.Mesh(glowGeom, glowMat);
-
-      // Middle glow layer
-      const midGeom = new THREE.SphereGeometry(orbSize * 1.2, 12, 12);
-      const midMat = new THREE.MeshBasicMaterial({
-        color: new THREE.Color().setHSL(hue, 0.9, 0.75),
-        transparent: true,
-        opacity: 0.25,
-        blending: THREE.AdditiveBlending
-      });
-      const mid = new THREE.Mesh(midGeom, midMat);
-      orb.add(mid);
-
-      // Bright inner core (the light source)
-      const coreGeom = new THREE.SphereGeometry(orbSize * 0.35, 10, 10);
-      const coreMat = new THREE.MeshBasicMaterial({
-        color: new THREE.Color().setHSL(hue, 0.7, 0.95),
-        transparent: true,
-        opacity: 0.95,
-        blending: THREE.AdditiveBlending
-      });
-      const core = new THREE.Mesh(coreGeom, coreMat);
-      orb.add(core);
-
-      orb.position.set(
-        (Math.random() - 0.5) * 25,
-        2 + Math.random() * 12,
-        z + Math.random() * 8
-      );
-
-      orb.userData = {
-        spawnZ: z,
-        phase: Math.random() * Math.PI * 2,
-        pulseSpeed: 0.4 + Math.random() * 0.4,
-        baseY: orb.position.y,
-        orbMat: glowMat,
-        midMat: midMat,
-        coreMat: coreMat,
-        size: orbSize
+    // Create warm connection points
+    for (let i = 0; i < POINT_COUNT; i++) {
+      const angle = (i / POINT_COUNT) * Math.PI * 2;
+      const radius = 15 + Math.random() * 10;
+      const point = {
+        x: Math.cos(angle) * radius,
+        y: 3 + Math.random() * 10,
+        z: Math.sin(angle) * radius,
+        phase: Math.random() * Math.PI * 2
       };
+      connectionPoints.push(point);
 
-      // Point light for each orb (brighter, tighter radius)
-      const light = new THREE.PointLight(
-        new THREE.Color().setHSL(hue, 0.8, 0.6),
-        0.8,
-        8
-      );
-      light.position.copy(orb.position);
-      orb.userData.light = light;
-      orbGroup.add(light);
-
-      orbGroup.add(orb);
-      orbs.push(orb);
+      // Warm glow at each point
+      const glowGeom = new THREE.SphereGeometry(0.4, 12, 12);
+      const glowMat = new THREE.MeshBasicMaterial({
+        color: 0xffcc88,
+        transparent: true,
+        opacity: 0.5,
+        blending: THREE.AdditiveBlending
+      });
+      const glow = new THREE.Mesh(glowGeom, glowMat);
+      glow.position.set(point.x, point.y, point.z);
+      point.mesh = glow;
+      point.mat = glowMat;
+      threadGroup.add(glow);
     }
 
-    for (let z = -20; z < 140; z += ORB_SPACING) {
-      spawnOrb(z);
-      nextOrbZ = z + ORB_SPACING;
-    }
-    scene.add(orbGroup);
+    // Create threads between nearby points
+    for (let i = 0; i < connectionPoints.length; i++) {
+      const p1 = connectionPoints[i];
+      const p2 = connectionPoints[(i + 1) % connectionPoints.length];
+      const p3 = connectionPoints[(i + 3) % connectionPoints.length];
 
-    // FIREFLY PARTICLES (warm floating specks)
-    const fireflyCount = 1200;
-    const fireflyGeom = new THREE.BufferGeometry();
-    const fireflyPos = new Float32Array(fireflyCount * 3);
-    const fireflyData = [];
-
-    for (let i = 0; i < fireflyCount; i++) {
-      fireflyPos[i * 3] = (Math.random() - 0.5) * 60;
-      fireflyPos[i * 3 + 1] = Math.random() * 20;
-      fireflyPos[i * 3 + 2] = (Math.random() - 0.5) * 80;
-      fireflyData.push({
-        phase: Math.random() * Math.PI * 2,
-        speed: 0.2 + Math.random() * 0.5,
-        blinkPhase: Math.random() * Math.PI * 2
+      [p2, p3].forEach(target => {
+        const curve = new THREE.QuadraticBezierCurve3(
+          new THREE.Vector3(p1.x, p1.y, p1.z),
+          new THREE.Vector3((p1.x + target.x) / 2, (p1.y + target.y) / 2 + 3, (p1.z + target.z) / 2),
+          new THREE.Vector3(target.x, target.y, target.z)
+        );
+        const points = curve.getPoints(20);
+        const lineGeom = new THREE.BufferGeometry().setFromPoints(points);
+        const lineMat = new THREE.LineBasicMaterial({
+          color: 0xffaa66,
+          transparent: true,
+          opacity: 0.15,
+          blending: THREE.AdditiveBlending
+        });
+        const line = new THREE.Line(lineGeom, lineMat);
+        line.userData = { mat: lineMat, baseOpacity: 0.15 };
+        threadGroup.add(line);
+        threads.push(line);
       });
     }
-    fireflyGeom.setAttribute('position', new THREE.BufferAttribute(fireflyPos, 3));
 
-    const fireflyMat = new THREE.PointsMaterial({
-      color: 0xffcc66,
-      size: 0.25,
+    group.add(threadGroup);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // CONVERSATION SPARKS - Particles near center (vocals)
+    // ═══════════════════════════════════════════════════════════════════════
+    const sparkCount = 400;
+    const sparkGeom = new THREE.BufferGeometry();
+    const sparkPos = new Float32Array(sparkCount * 3);
+    const sparkData = [];
+
+    for (let i = 0; i < sparkCount; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 2 + Math.random() * 8;
+      sparkPos[i * 3] = Math.cos(angle) * radius;
+      sparkPos[i * 3 + 1] = 4 + Math.random() * 8;
+      sparkPos[i * 3 + 2] = Math.sin(angle) * radius;
+      sparkData.push({
+        baseRadius: radius,
+        angle: angle,
+        yBase: sparkPos[i * 3 + 1],
+        phase: Math.random() * Math.PI * 2,
+        orbitSpeed: 0.2 + Math.random() * 0.3
+      });
+    }
+    sparkGeom.setAttribute('position', new THREE.BufferAttribute(sparkPos, 3));
+
+    const sparkMat = new THREE.PointsMaterial({
+      color: 0xffffcc,
+      size: 0.15,
       transparent: true,
-      opacity: 0.85,
+      opacity: 0.4,
       blending: THREE.AdditiveBlending
     });
-    const fireflies = new THREE.Points(fireflyGeom, fireflyMat);
-    group.add(fireflies);
+    const sparks = new THREE.Points(sparkGeom, sparkMat);
+    group.add(sparks);
 
-    // Warm ambient lighting
-    const candleLight1 = new THREE.PointLight(0xffaa66, 3, 40);
-    candleLight1.position.set(0, 5, 0);
-    group.add(candleLight1);
+    // ═══════════════════════════════════════════════════════════════════════
+    // AMBIENT DUST - Floating warm particles (percussion)
+    // ═══════════════════════════════════════════════════════════════════════
+    const dustCount = 600;
+    const dustGeom = new THREE.BufferGeometry();
+    const dustPos = new Float32Array(dustCount * 3);
+    const dustData = [];
 
-    const candleLight2 = new THREE.PointLight(0xff8844, 2, 30);
-    candleLight2.position.set(-10, 4, 5);
-    group.add(candleLight2);
+    for (let i = 0; i < dustCount; i++) {
+      dustPos[i * 3] = (Math.random() - 0.5) * 60;
+      dustPos[i * 3 + 1] = Math.random() * 25;
+      dustPos[i * 3 + 2] = (Math.random() - 0.5) * 80;
+      dustData.push({
+        phase: Math.random() * Math.PI * 2,
+        speed: 0.1 + Math.random() * 0.2,
+        driftX: (Math.random() - 0.5) * 0.02,
+        driftY: (Math.random() - 0.5) * 0.01
+      });
+    }
+    dustGeom.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
 
-    const candleLight3 = new THREE.PointLight(0xffcc88, 2, 30);
-    candleLight3.position.set(10, 4, -5);
-    group.add(candleLight3);
+    const dustMat = new THREE.PointsMaterial({
+      color: 0xffddaa,
+      size: 0.12,
+      transparent: true,
+      opacity: 0.35,
+      blending: THREE.AdditiveBlending
+    });
+    const dust = new THREE.Points(dustGeom, dustMat);
+    group.add(dust);
 
-    const ambient = new THREE.HemisphereLight(0xffaa66, 0x1a0800, 0.4);
+    // ═══════════════════════════════════════════════════════════════════════
+    // AMBIENT LIGHTING
+    // ═══════════════════════════════════════════════════════════════════════
+    const warmLight1 = new THREE.PointLight(0xffaa66, 2, 40);
+    warmLight1.position.set(-15, 8, -10);
+    group.add(warmLight1);
+
+    const warmLight2 = new THREE.PointLight(0xff8855, 1.5, 35);
+    warmLight2.position.set(15, 6, 10);
+    group.add(warmLight2);
+
+    const ambient = new THREE.HemisphereLight(0xffcc99, 0x111008, 0.25);
     group.add(ambient);
 
     scene.add(group);
 
-    let lastDrumPulse = 0;
+    // State
+    let lastBassHit = 0;
+    let bassThreshold = 0.5;
+    let lastBassEnergy = 0;
+    let heartbeatPhase = 0;
     let initialized = false;
 
     return {
       group,
-      // STRICT 1:1 stem-to-effect mapping
       stemEffects: {
-        drums: { target: 'lamps', effect: 'warm pulse', color: '#ffaa55' },
-        bass: { target: 'phone fall', effect: 'speed', color: '#ffcc88' },
-        vocals: { target: 'candle lights', effect: 'background glow', color: '#ffddaa' },
-        synth: { target: 'fireflies', effect: 'swarm glow', color: '#ff8844' },
-        guitar: { target: 'orbs', effect: 'scale breathe', color: '#3388ff' }
+        drums: { target: 'heartbeat', effect: 'pulse', color: '#ffaa66' },
+        bass: { target: 'ripples', effect: 'spawn waves', color: '#ffcc88' },
+        vocals: { target: 'sparks', effect: 'glow intensity', color: '#ffffcc' },
+        synth: { target: 'phones', effect: 'rise speed', color: '#4488ff' },
+        guitar: { target: 'threads', effect: 'brightness', color: '#ffaa66' },
+        percussion: { target: 'dust', effect: 'shimmer', color: '#ffddaa' }
       },
       update(time, freq, amplitude, shipPos, shipSpeed, audioExtra) {
         const shipZ = shipPos ? shipPos.z : 0;
 
-        // STRICT 1:1 STEM MAPPING - respects enabled/threshold/gain overrides
+        // Get stem energies
         const drumEnergy = getEffectiveStemEnergy('drums', audioExtra?.drums?.energy || 0);
         const bassEnergy = getEffectiveStemEnergy('bass', audioExtra?.bass?.energy || 0);
         const vocalEnergy = getEffectiveStemEnergy('vocals', audioExtra?.vocals?.energy || 0);
         const synthEnergy = getEffectiveStemEnergy('synth', audioExtra?.synth?.energy || 0);
         const guitarEnergy = getEffectiveStemEnergy('guitar', audioExtra?.guitar?.energy || 0);
+        const percEnergy = getEffectiveStemEnergy('percussion', audioExtra?.percussion?.energy || 0);
 
-        // Slower decay = longer lasting warm glow
-        lastDrumPulse = lastDrumPulse * 0.75 + drumEnergy * 0.25;
+        // ═══════════════════════════════════════════════════════════════════
+        // DRUMS → Heartbeat pulse
+        // ═══════════════════════════════════════════════════════════════════
+        heartbeatPhase += 0.05 + drumEnergy * 0.15;
+        const heartbeat = Math.sin(heartbeatPhase) * 0.5 + 0.5;
+        const drumPulse = 1 + drumEnergy * 1.5;
 
-        // CONTINUOUS GENERATION: Lamps
-        const lampSpawnZ = shipZ + LAMPS_AHEAD * LAMP_SPACING;
-        const lampCleanZ = shipZ - LAMPS_BEHIND * LAMP_SPACING;
+        heartCore.scale.setScalar(1 + heartbeat * 0.3 * drumPulse);
+        heartMid.scale.setScalar(1 + heartbeat * 0.4 * drumPulse);
+        heartAura.scale.setScalar(1 + heartbeat * 0.5 + drumEnergy * 0.8);
 
-        while (nextLampZ < lampSpawnZ) {
-          spawnLamp(nextLampZ);
-          nextLampZ += LAMP_SPACING;
+        coreMat.opacity = 0.7 + drumEnergy * 0.3;
+        midMat.opacity = 0.2 + drumEnergy * 0.4;
+        auraMat.opacity = 0.08 + drumEnergy * 0.2;
+        heartLight.intensity = 3 + drumEnergy * 8;
+
+        // ═══════════════════════════════════════════════════════════════════
+        // BASS → Ground ripples
+        // ═══════════════════════════════════════════════════════════════════
+        // Detect bass hits
+        if (bassEnergy > bassThreshold && lastBassEnergy < bassThreshold) {
+          createRipple(bassEnergy);
         }
+        lastBassEnergy = bassEnergy;
 
-        for (let i = lamps.length - 1; i >= 0; i--) {
-          if (lamps[i].userData.spawnZ < lampCleanZ) {
-            const l = lamps[i];
-            lampGroup.remove(l);
-            l.traverse(child => {
-              if (child.geometry) child.geometry.dispose();
-              if (child.material) child.material.dispose();
+        // Update ripples
+        const dt = 0.016;
+        for (let i = ripples.length - 1; i >= 0; i--) {
+          const ripple = ripples[i];
+          const data = ripple.userData;
+          data.age += dt;
+
+          // Expand outward
+          const progress = data.age / data.maxAge;
+          const scale = 1 + progress * 25;
+          ripple.scale.setScalar(scale);
+
+          // Fade out
+          data.ringMat.opacity = data.startOpacity * (1 - progress);
+
+          if (data.age > data.maxAge) {
+            rippleGroup.remove(ripple);
+            ripple.traverse(c => {
+              if (c.geometry) c.geometry.dispose();
+              if (c.material) c.material.dispose();
             });
-            lamps.splice(i, 1);
+            ripples.splice(i, 1);
           }
         }
 
-        // DRUMS → Lamps warm pulse
-        lamps.forEach(lamp => {
-          const data = lamp.userData;
-          const flicker = 0.85 + Math.sin(time * 10 + data.phase) * 0.15;
-          const drumPulse = 1 + lastDrumPulse * 1.5;
-
-          data.lampMat.opacity = 0.9 * flicker * drumPulse;
-          data.glowMat.opacity = 0.2 + lastDrumPulse * 0.5;
-          data.light.intensity = 2 * flicker + lastDrumPulse * 5;
-        });
-
-        // CONTINUOUS GENERATION: Phones
-        const phoneSpawnZ = shipZ + PHONES_AHEAD * PHONE_SPACING;
-        const phoneCleanZ = shipZ - PHONES_BEHIND * PHONE_SPACING;
-
-        while (nextPhoneZ < phoneSpawnZ) {
-          spawnPhone(nextPhoneZ);
-          if (Math.random() > 0.5) spawnPhone(nextPhoneZ + PHONE_SPACING / 2);
-          nextPhoneZ += PHONE_SPACING;
-        }
-
-        for (let i = phones.length - 1; i >= 0; i--) {
-          if (phones[i].userData.spawnZ < phoneCleanZ) {
-            const p = phones[i];
-            phoneGroup.remove(p);
-            p.traverse(child => {
-              if (child.geometry) child.geometry.dispose();
-              if (child.material) child.material.dispose();
-            });
-            phones.splice(i, 1);
-          }
-        }
-
-        // CONTINUOUS GENERATION: Orbs
-        const orbSpawnZ = shipZ + ORBS_AHEAD * ORB_SPACING;
-        const orbCleanZ = shipZ - ORBS_BEHIND * ORB_SPACING;
-
-        while (nextOrbZ < orbSpawnZ) {
-          spawnOrb(nextOrbZ);
-          nextOrbZ += ORB_SPACING;
-        }
-
-        for (let i = orbs.length - 1; i >= 0; i--) {
-          if (orbs[i].userData.spawnZ < orbCleanZ) {
-            const o = orbs[i];
-            if (o.userData.light) orbGroup.remove(o.userData.light);
-            orbGroup.remove(o);
-            o.traverse(child => {
-              if (child.geometry) child.geometry.dispose();
-              if (child.material) child.material.dispose();
-            });
-            orbs.splice(i, 1);
-          }
-        }
-
-        // BASS → Phones fall speed
+        // ═══════════════════════════════════════════════════════════════════
+        // SYNTH → Phones rise and fade
+        // ═══════════════════════════════════════════════════════════════════
         phones.forEach(phone => {
           const data = phone.userData;
 
-          phone.position.y -= data.fallSpeed * (1 + bassEnergy * 3);
-          phone.position.x += Math.sin(time * 0.5 + data.sway) * 0.015;
+          // Rise faster with synth
+          phone.position.y += data.riseSpeed * (1 + synthEnergy * 2);
+          phone.position.x += data.driftX + Math.sin(time + data.phase) * 0.01;
+          phone.rotation.z += data.rotSpeed;
 
-          if (data.flipProgress < Math.PI) {
-            data.flipProgress += data.flipSpeed * (1 + bassEnergy * 4);
-            phone.rotation.x = data.flipProgress;
-          }
+          // Fade as it rises
+          const fadeProgress = Math.max(0, (phone.position.y - 15) / data.fadeHeight);
+          data.bodyMat.opacity = 0.9 * (1 - fadeProgress);
+          data.screenMat.opacity = 0.7 * (1 - fadeProgress * 1.2);
 
-          const faceDownProgress = Math.max(0, (data.flipProgress - Math.PI / 2) / (Math.PI / 2));
-          data.screenMat.opacity = 0.9 * (1 - faceDownProgress * 0.85);
-
-          if (phone.position.y < -8) {
-            phone.position.y = 25 + Math.random() * 20;
-            phone.position.x = (Math.random() - 0.5) * 30;
-            phone.position.z = shipZ + 30 + Math.random() * 50;
-            phone.rotation.x = 0;
-            data.flipProgress = 0;
-            data.screenMat.opacity = 0.9;
-            data.startY = phone.position.y;
+          // Respawn when faded
+          if (phone.position.y > data.fadeHeight + 15 || data.bodyMat.opacity <= 0) {
+            phone.position.y = -5 + Math.random() * 3;
+            phone.position.x = (Math.random() - 0.5) * 35;
+            phone.position.z = shipZ + (Math.random() - 0.5) * 60;
+            data.bodyMat.opacity = 0.9;
+            data.screenMat.opacity = 0.7;
           }
         });
 
-        // GUITAR → Orbs pulse and glow
-        orbs.forEach(orb => {
-          const data = orb.userData;
-          const breathe = 1 + Math.sin(time * data.pulseSpeed + data.phase) * 0.15;
-          const guitarPulse = 1 + guitarEnergy * 0.8;
-
-          orb.scale.setScalar(breathe * guitarPulse);
-          data.orbMat.opacity = 0.06 + guitarEnergy * 0.15;
-          if (data.midMat) {
-            data.midMat.opacity = 0.2 + guitarEnergy * 0.4;
-          }
-          if (data.coreMat) {
-            data.coreMat.opacity = 0.85 + guitarEnergy * 0.15;
-          }
-
-          orb.position.y = data.baseY + Math.sin(time * 0.5 + data.phase) * 1.5;
-
-          if (data.light) {
-            data.light.intensity = 0.6 + guitarEnergy * 2;
-            data.light.position.copy(orb.position);
-          }
+        // ═══════════════════════════════════════════════════════════════════
+        // GUITAR → Connection threads glow
+        // ═══════════════════════════════════════════════════════════════════
+        connectionPoints.forEach((p, i) => {
+          const wobble = Math.sin(time * 0.5 + p.phase) * 2;
+          p.mesh.position.y = p.y + wobble;
+          p.mat.opacity = 0.3 + guitarEnergy * 0.6;
+          p.mesh.scale.setScalar(1 + guitarEnergy * 0.8);
         });
 
-        // Fireflies SWARM and glow brighter on music
-        const fPos = fireflyGeom.attributes.position.array;
+        threads.forEach(thread => {
+          thread.userData.mat.opacity = thread.userData.baseOpacity + guitarEnergy * 0.4;
+        });
+
+        // ═══════════════════════════════════════════════════════════════════
+        // VOCALS → Conversation sparks orbit and glow
+        // ═══════════════════════════════════════════════════════════════════
+        const sPos = sparkGeom.attributes.position.array;
+        for (let i = 0; i < sparkCount; i++) {
+          const d = sparkData[i];
+          // Orbit around center, faster with vocals
+          d.angle += d.orbitSpeed * 0.02 * (1 + vocalEnergy * 2);
+          const r = d.baseRadius + Math.sin(time * 2 + d.phase) * 1;
+          sPos[i * 3] = Math.cos(d.angle) * r;
+          sPos[i * 3 + 1] = d.yBase + Math.sin(time * 0.8 + d.phase) * 1.5;
+          sPos[i * 3 + 2] = Math.sin(d.angle) * r;
+        }
+        sparkGeom.attributes.position.needsUpdate = true;
+        sparkMat.opacity = 0.3 + vocalEnergy * 0.6;
+        sparkMat.size = 0.12 + vocalEnergy * 0.25;
+
+        // ═══════════════════════════════════════════════════════════════════
+        // PERCUSSION → Dust shimmer
+        // ═══════════════════════════════════════════════════════════════════
+        const dPos = dustGeom.attributes.position.array;
         if (!initialized && shipPos) {
-          for (let i = 0; i < fireflyCount; i++) {
-            fPos[i * 3 + 2] = shipZ - 40 + Math.random() * 80;
+          for (let i = 0; i < dustCount; i++) {
+            dPos[i * 3 + 2] = shipZ - 40 + Math.random() * 80;
           }
           initialized = true;
         }
 
-        for (let i = 0; i < fireflyCount; i++) {
-          const d = fireflyData[i];
-          // More erratic movement on drums
-          const drumBurst = lastDrumPulse * 0.1;
-          fPos[i * 3] += Math.sin(time * d.speed + d.phase) * 0.04 + (Math.random() - 0.5) * drumBurst;
-          fPos[i * 3 + 1] += Math.cos(time * d.speed * 0.7 + d.phase) * 0.025 + drumBurst * 0.3;
+        for (let i = 0; i < dustCount; i++) {
+          const d = dustData[i];
+          dPos[i * 3] += d.driftX + (Math.random() - 0.5) * percEnergy * 0.1;
+          dPos[i * 3 + 1] += d.driftY + Math.sin(time * d.speed + d.phase) * 0.01;
 
           // Keep near ship
-          if (fPos[i * 3 + 2] < shipZ - 45 || fPos[i * 3 + 2] > shipZ + 45) {
-            fPos[i * 3 + 2] = shipZ - 40 + Math.random() * 80;
-            fPos[i * 3] = (Math.random() - 0.5) * 60;
+          if (dPos[i * 3 + 2] < shipZ - 45 || dPos[i * 3 + 2] > shipZ + 45) {
+            dPos[i * 3 + 2] = shipZ - 40 + Math.random() * 80;
+            dPos[i * 3] = (Math.random() - 0.5) * 60;
+            dPos[i * 3 + 1] = Math.random() * 25;
           }
         }
-        fireflyGeom.attributes.position.needsUpdate = true;
-
-        // SYNTH → Fireflies swarm glow
-        fireflyMat.opacity = 0.7 + synthEnergy * 0.3;
-        fireflyMat.size = 0.3 + synthEnergy * 0.6;
-
-        // VOCALS → Background candle lights atmosphere
-        const flicker = Math.sin(time * 12) * 0.2 + Math.sin(time * 19) * 0.1;
-        candleLight1.intensity = 4 + flicker + vocalEnergy * 10;
-        candleLight2.intensity = 2.5 + flicker * 0.8 + vocalEnergy * 6;
-        candleLight3.intensity = 2.5 + flicker * 0.6 + vocalEnergy * 6;
+        dustGeom.attributes.position.needsUpdate = true;
+        dustMat.opacity = 0.25 + percEnergy * 0.4;
+        dustMat.size = 0.1 + percEnergy * 0.15;
 
         // Group follows ship
         group.position.z = shipZ;
+        threadGroup.position.z = shipZ;
+        rippleGroup.position.z = shipZ;
       },
       dispose() {
-        scene.remove(lampGroup);
-        lampGroup.traverse(child => {
-          if (child.geometry) child.geometry.dispose();
-          if (child.material) child.material.dispose();
-        });
         scene.remove(phoneGroup);
         phoneGroup.traverse(child => {
-          if (child.geometry) child.geometry.dispose();
-          if (child.material) child.material.dispose();
-        });
-        scene.remove(orbGroup);
-        orbGroup.traverse(child => {
           if (child.geometry) child.geometry.dispose();
           if (child.material) child.material.dispose();
         });
