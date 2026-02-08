@@ -7,50 +7,83 @@
   "stems": {
     "drums": {
       "audio": "drums.mp3",
+      "midi": "drums.mid",
       "visualization": {
-        "target": "terrain",
-        "effect": "impact",
-        "color": "#ff6644"
+        "target": "heartbeat",
+        "effect": "pulse",
+        "color": "#ffaa66"
       }
     },
     "bass": {
       "audio": "bass.mp3",
+      "midi": "bass.mid",
       "visualization": {
-        "target": "terrain",
-        "effect": "deformation",
-        "color": "#4466ff"
+        "target": "ripples",
+        "effect": "spawn",
+        "color": "#ffcc88"
       }
     },
     "vocals": {
       "audio": "vocals.mp3",
+      "midi": "vocals.mid",
       "visualization": {
-        "target": "atmosphere",
-        "effect": "fog",
-        "color": "#ffffff"
+        "target": "sparks",
+        "effect": "glow",
+        "color": "#ffffcc"
       }
     },
     "synth": {
       "audio": "synth.mp3",
+      "midi": "synth.mid",
       "visualization": {
-        "target": "background",
-        "effect": "pulse",
-        "color": "#ffaa00"
+        "target": "phones",
+        "effect": "rise",
+        "color": "#4488ff"
       }
     },
     "guitar": {
       "audio": "guitar.mp3",
+      "midi": "guitar.mid",
       "visualization": {
-        "target": "particles",
-        "effect": "trails",
-        "color": "#ff8844"
+        "target": "threads",
+        "effect": "brightness",
+        "color": "#ffaa66"
       }
     },
     "percussion": {
       "audio": "percussion.mp3",
+      "midi": "percussion.mid",
+      "visualization": {
+        "target": "dust",
+        "effect": "shimmer",
+        "color": "#ffddaa"
+      }
+    },
+    "backing-vocals": {
+      "audio": "backing-vocals.mp3",
+      "midi": "backing-vocals.mid",
+      "visualization": {
+        "target": "atmosphere",
+        "effect": "glow",
+        "color": "#ffeecc"
+      }
+    },
+    "keyboard": {
+      "audio": "keyboard.mp3",
+      "midi": "keyboard.mid",
+      "visualization": {
+        "target": "particles",
+        "effect": "trails",
+        "color": "#88aaff"
+      }
+    },
+    "fx": {
+      "audio": "fx.mp3",
+      "midi": "fx.mid",
       "visualization": {
         "target": "particles",
         "effect": "burst",
-        "color": "#ff4488"
+        "color": "#ff88ff"
       }
     }
   }

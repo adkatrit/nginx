@@ -281,10 +281,11 @@
   // - rotationY: Math.PI = facing away, Math.PI/2 = facing right (towards screen)
   // - collisionRadius: hitbox size for the model (adjusted per model size/shape)
   // - offsetY: vertical offset to position model correctly above ground
+  // - collisionOffset: {x, y, z} offset from player position to collision center
   const SELECTABLE_RACERS = /** @type {const} */ (['white-eagle', 'jellyfish']);
   const RACER_MODELS = {
     'racer_spaceship': { url: './models/racer_spaceship/scene.gltf', scale: 0.5, rotationY: Math.PI, collisionRadius: 1.2, offsetY: 0 },
-    'white-eagle': { url: './models/white-eagle/scene.gltf', scale: 0.04, rotationY: Math.PI * 1.5, collisionRadius: 1.6, offsetY: 0.0 },
+    'white-eagle': { url: './models/white-eagle/scene.gltf', scale: 0.04, rotationY: Math.PI * 1.5, collisionRadius: 1.2, offsetY: 0.0, collisionOffset: { x: 0, y: -0.3, z: 0 }, collisionScale: { x: 1.3, y: 0.5, z: 0.5 } },
     'icy_dragon': { url: './models/icy_dragon/scene.gltf', scale: 0.8, rotationY: Math.PI, collisionRadius: 1.5, offsetY: 0 },
     'butterfly': { url: './models/butterfly/scene.gltf', scale: 0.05, rotationY: Math.PI, collisionRadius: 0.5, offsetY: 0.5 },
     'biped_robot': { url: './models/biped_robot/scene.gltf', scale: 0.5, rotationY: Math.PI, collisionRadius: 0.8, offsetY: 0 },
@@ -354,6 +355,8 @@
       }
       this.playerCollisionRadius = 1.5;  // Default, updated when model loads
       this.playerOffsetY = 0;  // Vertical offset for model
+      this.playerCollisionOffset = { x: 0, y: 0, z: 0 };  // Offset from player pos to collision center
+      this.playerCollisionScale = { x: 1, z: 1 };  // Ellipsoid scale (x=width, z=depth)
       this.showCollisionRadius = false;  // Debug: show collision radius sphere
       this.collisionRadiusMesh = null;   // Debug mesh for collision radius
 
@@ -1280,8 +1283,10 @@
             this.playerOffsetY = modelConfig.offsetY;
           }
 
-          // Set collision radius for this model
+          // Set collision radius, offset, and scale for this model
           this.playerCollisionRadius = modelConfig.collisionRadius || 1.5;
+          this.playerCollisionOffset = modelConfig.collisionOffset || { x: 0, y: 0, z: 0 };
+          this.playerCollisionScale = modelConfig.collisionScale || { x: 1, z: 1 };
 
           // Update collision radius debug mesh if visible
           if (this.showCollisionRadius) {
@@ -1344,16 +1349,20 @@
           this.collisionRadiusMesh.name = 'collision-radius-debug';
         }
 
-        // Update scale to match current collision radius
+        // Update scale to match current collision radius and ellipsoid scale
         const radius = this.playerCollisionRadius || 1.5;
-        this.collisionRadiusMesh.scale.setScalar(radius);
+        const scaleX = this.playerCollisionScale?.x || 1;
+        const scaleY = this.playerCollisionScale?.y || 1;
+        const scaleZ = this.playerCollisionScale?.z || 1;
+        // Apply ellipsoid: X=width, Y=height, Z=depth (football shape)
+        this.collisionRadiusMesh.scale.set(radius * scaleX, radius * scaleY, radius * scaleZ);
 
         // Add to scene if not already added
         if (!this.collisionRadiusMesh.parent) {
           this.scene.add(this.collisionRadiusMesh);
         }
         this.collisionRadiusMesh.visible = true;
-        console.log('Collision radius debug ON - radius:', radius.toFixed(2));
+        console.log('Collision ellipsoid debug ON - radius:', radius.toFixed(2), 'scale: x=' + scaleX.toFixed(2) + ' y=' + scaleY.toFixed(2) + ' z=' + scaleZ.toFixed(2));
       } else {
         // Hide the mesh
         if (this.collisionRadiusMesh) {
@@ -2712,9 +2721,14 @@
           this.player.rotation.x += (targetPitch - this.player.rotation.x) * 0.12;
         }
 
-        // Update collision radius debug mesh position
+        // Update collision radius debug mesh position (with model-specific offset)
         if (this.collisionRadiusMesh && this.collisionRadiusMesh.visible) {
-          this.collisionRadiusMesh.position.copy(this.player.position);
+          const offset = this.playerCollisionOffset || { x: 0, y: 0, z: 0 };
+          this.collisionRadiusMesh.position.set(
+            this.player.position.x + offset.x,
+            this.player.position.y + offset.y,
+            this.player.position.z + offset.z
+          );
         }
       }
 
@@ -2815,8 +2829,10 @@
 
       const playerX = this.lateralPos;
       const playerZ = this.distance;
-      // Use model-specific collision radius
+      // Use model-specific collision radius and ellipsoid scale
       const playerRadius = this.playerCollisionRadius || 1.5;
+      const scaleX = this.playerCollisionScale?.x || 1;
+      const scaleZ = this.playerCollisionScale?.z || 1;
 
       for (const chunk of this.chunks) {
         for (const obj of chunk.objects) {
@@ -2824,10 +2840,17 @@
 
           const dx = playerX - obj.position.x;
           const dz = playerZ - obj.position.z;
-          const dist = Math.sqrt(dx * dx + dz * dz);
-          const collisionDist = playerRadius + (obj.userData.collisionRadius || 2);
+          const objRadius = obj.userData.collisionRadius || 2;
 
-          if (dist < collisionDist) {
+          // Ellipsoid collision: normalize distances by ellipsoid radii
+          const radiusX = playerRadius * scaleX;
+          const radiusZ = playerRadius * scaleZ;
+          const normalizedDist = Math.sqrt(
+            (dx / (radiusX + objRadius)) ** 2 +
+            (dz / (radiusZ + objRadius)) ** 2
+          );
+
+          if (normalizedDist < 1) {
             // Collision!
             this.handleCollision();
             return;

@@ -1,4 +1,5 @@
 :root {
+  --control-bar-height: 120px;
   --wa-bg0: #0f0f0f;
   --wa-bg1: #161616;
   --wa-panel: #2a2a2a;
@@ -2076,6 +2077,19 @@ input[type="range"]:active::-moz-range-thumb {
   border-color: rgba(255, 255, 255, 0.3);
 }
 
+.ctrl-btn--fullscreen {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.ctrl-btn--fullscreen:hover {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.ctrl-btn--fullscreen[aria-pressed="true"] {
+  color: rgba(100, 200, 255, 0.9);
+}
+
 /* ============================================
    Playlist Modal
    ============================================ */
@@ -3380,14 +3394,14 @@ input[type="range"]:active::-moz-range-thumb {
 
 .lyrics-overlay {
   position: fixed;
-  bottom: 120px;
+  bottom: calc(var(--control-bar-height, 120px) + 20px);
   left: 50%;
   transform: translateX(-50%);
-  z-index: 100;
+  z-index: 150;
   text-align: center;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.3s ease, bottom 0.2s ease;
   max-width: 90vw;
   width: 800px;
 }
@@ -3464,7 +3478,6 @@ input[type="range"]:active::-moz-range-thumb {
 /* Mobile adjustments */
 @media (max-width: 768px) {
   .lyrics-overlay {
-    bottom: 200px;
     width: 95vw;
   }
 
@@ -3474,12 +3487,6 @@ input[type="range"]:active::-moz-range-thumb {
 
   .lyrics-overlay__next {
     font-size: 0.85rem;
-  }
-}
-
-@media (max-width: 480px) {
-  .lyrics-overlay {
-    bottom: 220px;
   }
 }
 
@@ -4137,22 +4144,70 @@ input[type="range"]:active::-moz-range-thumb {
   gap: 3px;
 }
 
-.keyboard-hint__keys kbd {
+.keyboard-hint__keys kbd,
+.keyboard-hint__layout kbd {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 22px;
-  height: 22px;
-  padding: 0 6px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
+  border-radius: 3px;
   color: rgba(255, 255, 255, 0.7);
   font-family: var(--wa-mono);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
   text-transform: uppercase;
   box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
+}
+
+/* Wide keys (Shift, Space) */
+.keyboard-hint__keys kbd.kbd--wide {
+  min-width: 44px;
+  padding: 0 8px;
+  font-size: 8px;
+}
+
+/* Arrow keys - smaller */
+.keyboard-hint__layout kbd.kbd--arrow {
+  min-width: 16px;
+  height: 16px;
+  font-size: 10px;
+  padding: 0;
+  opacity: 0.6;
+}
+
+/* Movement hint with keyboard layout */
+.keyboard-hint--movement {
+  align-items: flex-start;
+}
+
+.keyboard-hint__layout {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.keyboard-hint__row {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+}
+
+/* First row: W centered over S, arrow up */
+.keyboard-hint__row:first-child {
+  padding-left: 22px; /* Offset to center W over S */
+}
+
+.keyboard-hint__row:first-child kbd.kbd--arrow {
+  margin-left: 8px;
+}
+
+/* Second row: ASD + arrow keys */
+.keyboard-hint__row:last-child kbd.kbd--arrow:first-of-type {
+  margin-left: 6px;
 }
 
 .keyboard-hint__label {
@@ -4167,11 +4222,27 @@ input[type="range"]:active::-moz-range-thumb {
     left: 12px;
   }
 
-  .keyboard-hint__keys kbd {
-    min-width: 18px;
-    height: 18px;
-    font-size: 9px;
-    padding: 0 4px;
+  .keyboard-hint__keys kbd,
+  .keyboard-hint__layout kbd {
+    min-width: 16px;
+    height: 16px;
+    font-size: 8px;
+    padding: 0 3px;
+  }
+
+  .keyboard-hint__keys kbd.kbd--wide {
+    min-width: 36px;
+    font-size: 7px;
+  }
+
+  .keyboard-hint__layout kbd.kbd--arrow {
+    min-width: 14px;
+    height: 14px;
+    font-size: 8px;
+  }
+
+  .keyboard-hint__row:first-child {
+    padding-left: 18px;
   }
 
   .keyboard-hint {

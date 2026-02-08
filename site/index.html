@@ -4,7 +4,77 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#070a18" />
-    <title>Audio Environments</title>
+    <title>Audio Environments | DeytaDreams — 3D Stem Visualizer</title>
+
+    <!-- SEO Meta -->
+    <meta name="description" content="Fly through audio-reactive 3D worlds powered by stem-separated music. Mix drums, bass, vocals, and synth in real-time. Featuring original tracks by DeytaDreams." />
+    <meta name="author" content="DeytaDreams" />
+    <meta name="keywords" content="audio visualization, music visualizer, 3D music, stem player, WebAudio, Three.js, DeytaDreams, immersive music, audio reactive, stem mixer" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://jrod.dev/" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://jrod.dev/" />
+    <meta property="og:title" content="Audio Environments by DeytaDreams" />
+    <meta property="og:description" content="Immersive 3D music visualization with stem mixing. Fly through audio-reactive worlds — drums shape terrain, bass bends landscapes, vocals paint atmosphere." />
+    <meta property="og:image" content="https://jrod.dev/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Audio Environments — 3D audio-reactive terrain with glowing equalizer bars" />
+    <meta property="og:site_name" content="Audio Environments" />
+    <meta property="og:locale" content="en_US" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Audio Environments by DeytaDreams" />
+    <meta name="twitter:description" content="Fly through stem-separated music in 3D. Mix drums, bass, vocals, synth in real-time with audio-reactive visuals." />
+    <meta name="twitter:image" content="https://jrod.dev/og-image.png" />
+    <meta name="twitter:image:alt" content="Audio Environments 3D music visualization" />
+
+    <!-- Structured Data: WebApplication -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "Audio Environments",
+      "url": "https://jrod.dev/",
+      "description": "Immersive 3D music visualization web app with stem mixing, audio-reactive terrain, and flight mode through procedurally generated environments.",
+      "applicationCategory": "MultimediaApplication",
+      "operatingSystem": "Web Browser",
+      "browserRequirements": "Requires JavaScript, WebAudio API, WebGL",
+      "author": {
+        "@type": "Person",
+        "name": "DeytaDreams",
+        "url": "https://jrod.dev/"
+      },
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "screenshot": "https://jrod.dev/og-image.png"
+    }
+    </script>
+
+    <!-- Structured Data: MusicGroup -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "MusicGroup",
+      "name": "DeytaDreams",
+      "url": "https://jrod.dev/",
+      "genre": ["Electronic", "Experimental"],
+      "track": [
+        { "@type": "MusicRecording", "name": "Terms & Conditions", "byArtist": { "@type": "MusicGroup", "name": "DeytaDreams" }, "url": "https://jrod.dev/" },
+        { "@type": "MusicRecording", "name": "Data Tide", "byArtist": { "@type": "MusicGroup", "name": "DeytaDreams" }, "url": "https://jrod.dev/" },
+        { "@type": "MusicRecording", "name": "Signal Integrity", "byArtist": { "@type": "MusicGroup", "name": "DeytaDreams" }, "url": "https://jrod.dev/" },
+        { "@type": "MusicRecording", "name": "Trade You My Hands", "byArtist": { "@type": "MusicGroup", "name": "DeytaDreams" }, "url": "https://jrod.dev/" },
+        { "@type": "MusicRecording", "name": "Turn Your Phone Face Down", "byArtist": { "@type": "MusicGroup", "name": "DeytaDreams" }, "url": "https://jrod.dev/" }
+      ]
+    }
+    </script>
+
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-NRQ96GQ70K"></script>
     <script>
@@ -13,9 +83,13 @@
       gtag('js', new Date());
       gtag('config', 'G-NRQ96GQ70K');
     </script>
+
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="alternate icon" href="./favicon.svg" />
+    <link rel="apple-touch-icon" href="./favicon.svg" />
+    <link rel="manifest" href="./site.webmanifest" />
     <link rel="stylesheet" href="./styles.css?v=21" />
+
     <script type="importmap">
       {
         "imports": {
@@ -27,7 +101,29 @@
   <body>
     <noscript>
       <div class="noscript">
-        This site needs JavaScript enabled to play audio.
+        <h1>Audio Environments by DeytaDreams</h1>
+        <p>
+          Audio Environments is an immersive, audio-reactive 3D music visualization experience.
+          Fly through procedurally generated landscapes that respond to every beat, bass line,
+          and vocal phrase. Each track features its own unique world built with Three.js and WebAudio API.
+        </p>
+        <h2>Featured Tracks</h2>
+        <ul>
+          <li><strong>Terms &amp; Conditions</strong> &mdash; Digital dystopia with glass towers and holographic contracts</li>
+          <li><strong>Data Tide</strong> &mdash; Underwater bioluminescent ocean with coral towers and jellyfish</li>
+          <li><strong>Signal Integrity</strong> &mdash; Clean technical oscilloscope and data streams</li>
+          <li><strong>Trade You My Hands</strong> &mdash; Metamorphosis and human-AI symbiosis</li>
+          <li><strong>Turn Your Phone Face Down</strong> &mdash; Warm intimate space exploring human connection vs digital life</li>
+        </ul>
+        <h2>Features</h2>
+        <ul>
+          <li>Stem mixer &mdash; independently control drums, bass, vocals, synth, and guitar</li>
+          <li>3D flight mode through audio-reactive environments</li>
+          <li>Real-time lyrics overlay synchronized to music</li>
+          <li>Score and combo system for interactive engagement</li>
+          <li>MIDI-driven visual events for frame-perfect synchronization</li>
+        </ul>
+        <p>Please enable JavaScript to experience Audio Environments. Requires a modern browser with WebAudio API and WebGL support.</p>
       </div>
     </noscript>
 
@@ -136,11 +232,30 @@
 
     <!-- Keyboard hints overlay -->
     <div class="keyboard-hints" aria-hidden="true">
+      <div class="keyboard-hint keyboard-hint--movement">
+        <div class="keyboard-hint__layout">
+          <div class="keyboard-hint__row">
+            <kbd class="kbd--wasd">W</kbd>
+          </div>
+          <div class="keyboard-hint__row">
+            <kbd class="kbd--wasd">A</kbd>
+            <kbd class="kbd--wasd">S</kbd>
+            <kbd class="kbd--wasd">D</kbd>
+          </div>
+        </div>
+        <span class="keyboard-hint__label">Flight</span>
+      </div>
       <div class="keyboard-hint">
         <span class="keyboard-hint__keys">
-          <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>
+          <kbd class="kbd--wide">Shift</kbd>
         </span>
-        <span class="keyboard-hint__label">Flight</span>
+        <span class="keyboard-hint__label">Fast Turn</span>
+      </div>
+      <div class="keyboard-hint">
+        <span class="keyboard-hint__keys">
+          <kbd class="kbd--wide">Space</kbd>
+        </span>
+        <span class="keyboard-hint__label">Boost</span>
       </div>
       <div class="keyboard-hint">
         <span class="keyboard-hint__keys">
@@ -211,6 +326,9 @@
             <a class="ctrl-btn ctrl-btn--docs" href="./docs/audio-reactivity.html" target="_blank" aria-label="Documentation" title="How it works">
               ?
             </a>
+            <button class="ctrl-btn ctrl-btn--sm ctrl-btn--fullscreen" id="fullscreenBtn" type="button" aria-label="Toggle fullscreen" title="Fullscreen">
+              ⛶
+            </button>
           </div>
         </div>
 

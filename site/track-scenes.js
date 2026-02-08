@@ -3381,60 +3381,124 @@ window.TrackScenes = (function() {
 
     scene.add(group);
 
-    // State
-    let lastBassHit = 0;
-    let bassThreshold = 0.5;
-    let lastBassEnergy = 0;
+    // ═══════════════════════════════════════════════════════════════════════
+    // MIDI TRIGGER STATE - Fast decay values driven by MIDI noteOn events
+    // NOTE: Vocals excluded - uses audio analysis only → background/atmosphere
+    // ═══════════════════════════════════════════════════════════════════════
+    const midiTriggers = {
+      drums: 0,      // Instant hit, fast decay → heartbeat pulse
+      bass: 0,       // Sustaining → ripple spawn
+      synth: 0,      // Sustaining → phones + sparks (1:M)
+      guitar: 0,     // Sustaining → thread brightness
+      percussion: 0  // Instant hit → dust burst
+    };
+
+    // Decay rates (per frame ~60fps) - instant hits decay faster
+    const decayRates = {
+      drums: 0.92,      // Fast decay for punchy hits
+      bass: 0.96,       // Slower decay for sustaining notes
+      synth: 0.95,      // Medium decay
+      guitar: 0.96,     // Slower for sustained notes
+      percussion: 0.90  // Fastest decay for snappy hits
+    };
+
     let heartbeatPhase = 0;
     let initialized = false;
+    let lastShipZ = 0;
 
     return {
       group,
       stemEffects: {
-        drums: { target: 'heartbeat', effect: 'pulse', color: '#ffaa66' },
-        bass: { target: 'ripples', effect: 'spawn waves', color: '#ffcc88' },
-        vocals: { target: 'sparks', effect: 'glow intensity', color: '#ffffcc' },
-        synth: { target: 'phones', effect: 'rise speed', color: '#4488ff' },
-        guitar: { target: 'threads', effect: 'brightness', color: '#ffaa66' },
-        percussion: { target: 'dust', effect: 'shimmer', color: '#ffddaa' }
+        drums: { target: 'heartbeat', effect: 'pulse', color: '#ffaa66', midi: true },
+        bass: { target: 'ripples', effect: 'spawn waves', color: '#ffcc88', midi: true },
+        vocals: { target: 'background', effect: 'fog + ambient', color: '#ffddcc', midi: false },
+        synth: { target: 'phones + sparks', effect: 'rise + glow', color: '#4488ff', midi: true },
+        guitar: { target: 'threads', effect: 'brightness', color: '#ffaa66', midi: true },
+        percussion: { target: 'dust', effect: 'shimmer', color: '#ffddaa', midi: true }
       },
+
+      // ═══════════════════════════════════════════════════════════════════
+      // MIDI EVENT HANDLER - Triggers effects on note events
+      // NOTE: Vocals are excluded - they only use audio analysis
+      // ═══════════════════════════════════════════════════════════════════
+      onMidi(event) {
+        if (event.type !== 'noteOn') return;
+        if (event.stemId === 'vocals') return; // Ignore vocal MIDI
+
+        const stemId = event.stemId;
+        const velocity = (event.velocity || 127) / 127; // Normalize 0-1
+
+        // Trigger based on stem
+        switch (stemId) {
+          case 'drums':
+            // Instant heartbeat pulse
+            midiTriggers.drums = Math.min(1, midiTriggers.drums + velocity * 0.8);
+            break;
+
+          case 'bass':
+            // Spawn ripple on note
+            midiTriggers.bass = Math.min(1, midiTriggers.bass + velocity * 0.6);
+            createRipple(velocity);
+            break;
+
+          case 'synth':
+            // Boost phone rise + sparks (1:M mapping)
+            midiTriggers.synth = Math.min(1, midiTriggers.synth + velocity * 0.6);
+            break;
+
+          case 'guitar':
+            // Thread brightness pulse
+            midiTriggers.guitar = Math.min(1, midiTriggers.guitar + velocity * 0.7);
+            break;
+
+          case 'percussion':
+            // Dust burst
+            midiTriggers.percussion = Math.min(1, midiTriggers.percussion + velocity * 0.9);
+            break;
+        }
+      },
+
       update(time, freq, amplitude, shipPos, shipSpeed, audioExtra) {
         const shipZ = shipPos ? shipPos.z : 0;
-
-        // Get stem energies
-        const drumEnergy = getEffectiveStemEnergy('drums', audioExtra?.drums?.energy || 0);
-        const bassEnergy = getEffectiveStemEnergy('bass', audioExtra?.bass?.energy || 0);
-        const vocalEnergy = getEffectiveStemEnergy('vocals', audioExtra?.vocals?.energy || 0);
-        const synthEnergy = getEffectiveStemEnergy('synth', audioExtra?.synth?.energy || 0);
-        const guitarEnergy = getEffectiveStemEnergy('guitar', audioExtra?.guitar?.energy || 0);
-        const percEnergy = getEffectiveStemEnergy('percussion', audioExtra?.percussion?.energy || 0);
+        lastShipZ = shipZ;
 
         // ═══════════════════════════════════════════════════════════════════
-        // DRUMS → Heartbeat pulse
+        // DECAY MIDI TRIGGERS - Smooth falloff each frame
         // ═══════════════════════════════════════════════════════════════════
-        heartbeatPhase += 0.05 + drumEnergy * 0.15;
-        const heartbeat = Math.sin(heartbeatPhase) * 0.5 + 0.5;
-        const drumPulse = 1 + drumEnergy * 1.5;
-
-        heartCore.scale.setScalar(1 + heartbeat * 0.3 * drumPulse);
-        heartMid.scale.setScalar(1 + heartbeat * 0.4 * drumPulse);
-        heartAura.scale.setScalar(1 + heartbeat * 0.5 + drumEnergy * 0.8);
-
-        coreMat.opacity = 0.7 + drumEnergy * 0.3;
-        midMat.opacity = 0.2 + drumEnergy * 0.4;
-        auraMat.opacity = 0.08 + drumEnergy * 0.2;
-        heartLight.intensity = 3 + drumEnergy * 8;
-
-        // ═══════════════════════════════════════════════════════════════════
-        // BASS → Ground ripples
-        // ═══════════════════════════════════════════════════════════════════
-        // Detect bass hits
-        if (bassEnergy > bassThreshold && lastBassEnergy < bassThreshold) {
-          createRipple(bassEnergy);
+        for (const stem in midiTriggers) {
+          midiTriggers[stem] *= decayRates[stem];
+          if (midiTriggers[stem] < 0.01) midiTriggers[stem] = 0;
         }
-        lastBassEnergy = bassEnergy;
 
-        // Update ripples
+        // MIDI triggers (with audio fallback for non-vocal stems)
+        const drumEnergy = midiTriggers.drums || getEffectiveStemEnergy('drums', audioExtra?.drums?.energy || 0) * 0.5;
+        const bassEnergy = midiTriggers.bass || getEffectiveStemEnergy('bass', audioExtra?.bass?.energy || 0) * 0.5;
+        const synthEnergy = midiTriggers.synth || getEffectiveStemEnergy('synth', audioExtra?.synth?.energy || 0) * 0.5;
+        const guitarEnergy = midiTriggers.guitar || getEffectiveStemEnergy('guitar', audioExtra?.guitar?.energy || 0) * 0.5;
+        const percEnergy = midiTriggers.percussion || getEffectiveStemEnergy('percussion', audioExtra?.percussion?.energy || 0) * 0.5;
+
+        // VOCALS: Audio analysis only (no MIDI) → background/atmosphere
+        const vocalEnergy = getEffectiveStemEnergy('vocals', audioExtra?.vocals?.energy || 0);
+
+        // ═══════════════════════════════════════════════════════════════════
+        // DRUMS → Heartbeat pulse (MIDI triggers instant beat)
+        // ═══════════════════════════════════════════════════════════════════
+        heartbeatPhase += 0.03 + drumEnergy * 0.2;
+        const heartbeat = Math.sin(heartbeatPhase) * 0.5 + 0.5;
+        const drumPulse = 1 + drumEnergy * 2;
+
+        heartCore.scale.setScalar(1 + heartbeat * 0.2 + drumEnergy * 0.8);
+        heartMid.scale.setScalar(1 + heartbeat * 0.3 + drumEnergy * 1.2);
+        heartAura.scale.setScalar(1 + heartbeat * 0.4 + drumEnergy * 1.5);
+
+        coreMat.opacity = 0.6 + drumEnergy * 0.4;
+        midMat.opacity = 0.15 + drumEnergy * 0.5;
+        auraMat.opacity = 0.05 + drumEnergy * 0.25;
+        heartLight.intensity = 2 + drumEnergy * 12;
+
+        // ═══════════════════════════════════════════════════════════════════
+        // BASS → Ground ripples (MIDI spawns ripples directly in onMidi)
+        // ═══════════════════════════════════════════════════════════════════
         const dt = 0.016;
         for (let i = ripples.length - 1; i >= 0; i--) {
           const ripple = ripples[i];
@@ -3460,15 +3524,22 @@ window.TrackScenes = (function() {
         }
 
         // ═══════════════════════════════════════════════════════════════════
-        // SYNTH → Phones rise and fade
+        // SYNTH → Phones rise faster on MIDI notes
         // ═══════════════════════════════════════════════════════════════════
         phones.forEach(phone => {
           const data = phone.userData;
 
-          // Rise faster with synth
-          phone.position.y += data.riseSpeed * (1 + synthEnergy * 2);
+          // Rise faster with synth MIDI
+          phone.position.y += data.riseSpeed * (1 + synthEnergy * 3);
           phone.position.x += data.driftX + Math.sin(time + data.phase) * 0.01;
-          phone.rotation.z += data.rotSpeed;
+          phone.rotation.z += data.rotSpeed * (1 + synthEnergy);
+
+          // Screen flickers on synth notes
+          if (synthEnergy > 0.3) {
+            data.screenMat.color.setHex(0x66aaff);
+          } else {
+            data.screenMat.color.setHex(0x4488ff);
+          }
 
           // Fade as it rises
           const fadeProgress = Math.max(0, (phone.position.y - 15) / data.fadeHeight);
@@ -3486,38 +3557,49 @@ window.TrackScenes = (function() {
         });
 
         // ═══════════════════════════════════════════════════════════════════
-        // GUITAR → Connection threads glow
+        // GUITAR → Connection threads pulse on MIDI
         // ═══════════════════════════════════════════════════════════════════
         connectionPoints.forEach((p, i) => {
           const wobble = Math.sin(time * 0.5 + p.phase) * 2;
           p.mesh.position.y = p.y + wobble;
-          p.mat.opacity = 0.3 + guitarEnergy * 0.6;
-          p.mesh.scale.setScalar(1 + guitarEnergy * 0.8);
+          p.mat.opacity = 0.2 + guitarEnergy * 0.8;
+          p.mesh.scale.setScalar(1 + guitarEnergy * 1.2);
         });
 
         threads.forEach(thread => {
-          thread.userData.mat.opacity = thread.userData.baseOpacity + guitarEnergy * 0.4;
+          thread.userData.mat.opacity = thread.userData.baseOpacity + guitarEnergy * 0.6;
         });
 
         // ═══════════════════════════════════════════════════════════════════
-        // VOCALS → Conversation sparks orbit and glow
+        // SYNTH → Sparks orbit and glow (1:M - synth also drives phones)
         // ═══════════════════════════════════════════════════════════════════
         const sPos = sparkGeom.attributes.position.array;
         for (let i = 0; i < sparkCount; i++) {
           const d = sparkData[i];
-          // Orbit around center, faster with vocals
-          d.angle += d.orbitSpeed * 0.02 * (1 + vocalEnergy * 2);
-          const r = d.baseRadius + Math.sin(time * 2 + d.phase) * 1;
+          // Orbit around center, faster with synth MIDI
+          d.angle += d.orbitSpeed * 0.02 * (1 + synthEnergy * 3);
+          const r = d.baseRadius + Math.sin(time * 2 + d.phase) * 1 + synthEnergy * 2;
           sPos[i * 3] = Math.cos(d.angle) * r;
-          sPos[i * 3 + 1] = d.yBase + Math.sin(time * 0.8 + d.phase) * 1.5;
+          sPos[i * 3 + 1] = d.yBase + Math.sin(time * 0.8 + d.phase) * 1.5 + synthEnergy * 2;
           sPos[i * 3 + 2] = Math.sin(d.angle) * r;
         }
         sparkGeom.attributes.position.needsUpdate = true;
-        sparkMat.opacity = 0.3 + vocalEnergy * 0.6;
-        sparkMat.size = 0.12 + vocalEnergy * 0.25;
+        sparkMat.opacity = 0.25 + synthEnergy * 0.7;
+        sparkMat.size = 0.1 + synthEnergy * 0.35;
 
         // ═══════════════════════════════════════════════════════════════════
-        // PERCUSSION → Dust shimmer
+        // VOCALS → Background atmosphere (audio analysis only, no MIDI)
+        // ═══════════════════════════════════════════════════════════════════
+        // Fog density shifts with vocals
+        scene.fog.density = 0.015 + vocalEnergy * 0.008;
+
+        // Ambient lights warm up with vocals
+        warmLight1.intensity = 1.5 + vocalEnergy * 3;
+        warmLight2.intensity = 1 + vocalEnergy * 2.5;
+        ambient.intensity = 0.2 + vocalEnergy * 0.3;
+
+        // ═══════════════════════════════════════════════════════════════════
+        // PERCUSSION → Dust bursts on MIDI hits
         // ═══════════════════════════════════════════════════════════════════
         const dPos = dustGeom.attributes.position.array;
         if (!initialized && shipPos) {
@@ -3529,8 +3611,10 @@ window.TrackScenes = (function() {
 
         for (let i = 0; i < dustCount; i++) {
           const d = dustData[i];
-          dPos[i * 3] += d.driftX + (Math.random() - 0.5) * percEnergy * 0.1;
-          dPos[i * 3 + 1] += d.driftY + Math.sin(time * d.speed + d.phase) * 0.01;
+          // More erratic movement on percussion hits
+          const burstFactor = percEnergy * 0.15;
+          dPos[i * 3] += d.driftX + (Math.random() - 0.5) * burstFactor;
+          dPos[i * 3 + 1] += d.driftY + Math.sin(time * d.speed + d.phase) * 0.01 + burstFactor * 0.5;
 
           // Keep near ship
           if (dPos[i * 3 + 2] < shipZ - 45 || dPos[i * 3 + 2] > shipZ + 45) {
@@ -3540,8 +3624,8 @@ window.TrackScenes = (function() {
           }
         }
         dustGeom.attributes.position.needsUpdate = true;
-        dustMat.opacity = 0.25 + percEnergy * 0.4;
-        dustMat.size = 0.1 + percEnergy * 0.15;
+        dustMat.opacity = 0.2 + percEnergy * 0.6;
+        dustMat.size = 0.08 + percEnergy * 0.25;
 
         // Group follows ship
         group.position.z = shipZ;

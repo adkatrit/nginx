@@ -19,6 +19,7 @@
   const shuffleBtn = $("shuffleBtn");
   const repeatBtn = $("repeatBtn");
   const volumeBtn = $("volumeBtn");
+  const fullscreenBtn = $("fullscreenBtn");
 
   const seek = /** @type {HTMLInputElement|null} */ ($("seek"));
   const volume = /** @type {HTMLInputElement|null} */ ($("volume"));
@@ -1137,34 +1138,29 @@
   const lyricsCurrentEl = document.getElementById("lyricsCurrent");
   const lyricsNextEl = document.getElementById("lyricsNext");
 
+  // Lyrics appear slightly before audio for better sync perception
+  const LYRICS_LEAD_TIME = 0.25;
+
   function updateLyricsDisplay(currentTime) {
     if (!lyricsData || lyricsData.length === 0) {
       if (lyricsOverlay) lyricsOverlay.classList.remove("is-visible");
       return;
     }
 
-    // Find the current lyric based on time
-    // Check both start and end times to handle lyrics with incorrect timestamps
+    // Add lead time so lyrics appear just before the audio
+    const syncedTime = currentTime + LYRICS_LEAD_TIME;
+
+    // Find current lyric: simple single-pass search
     let newIndex = -1;
     for (let i = 0; i < lyricsData.length; i++) {
       const line = lyricsData[i];
-      const lineStart = line.start ?? line.time ?? 0;
-      const lineEnd = line.end ?? (lyricsData[i + 1]?.start ?? lineStart + 10);
-      if (currentTime >= lineStart && currentTime < lineEnd) {
+      const lineStart = Number(line.start ?? line.time ?? 0);
+      const nextLine = lyricsData[i + 1];
+      const lineEnd = line.end != null ? Number(line.end) : (nextLine ? Number(nextLine.start ?? nextLine.time ?? lineStart + 10) : lineStart + 10);
+
+      if (syncedTime >= lineStart && syncedTime < lineEnd) {
         newIndex = i;
         break;
-      }
-    }
-    // Fallback: if no exact match, find the last line that started before current time
-    // but only consider lines with valid sequential timing
-    if (newIndex === -1) {
-      let lastValidStart = -1;
-      for (let i = 0; i < lyricsData.length; i++) {
-        const lineStart = lyricsData[i].start ?? lyricsData[i].time ?? 0;
-        if (lineStart > lastValidStart && currentTime >= lineStart) {
-          newIndex = i;
-          lastValidStart = lineStart;
-        }
       }
     }
 
@@ -3319,7 +3315,11 @@
 
         // Set up MIDI event listener for visualization triggers
         stemPlayer.on('midiNote', (event) => {
-          // Could trigger visual effects based on note events
+          // Forward MIDI events to custom track scene
+          if (currentTrackScene && currentTrackScene.onMidi) {
+            currentTrackScene.onMidi(event);
+          }
+          // Legacy: trigger global beat pulse on drum hits
           if (event.type === 'noteOn' && event.stemId === 'drums') {
             globalBeatPulse = Math.min(globalBeatPulse + 0.4, 1.0);
           }
@@ -3686,6 +3686,16 @@
 
   initMediaSession();
 
+  // ---- Control bar height for lyrics positioning ----
+  function updateControlBarHeight() {
+    if (controlBar) {
+      const height = controlBar.offsetHeight;
+      document.documentElement.style.setProperty('--control-bar-height', `${height}px`);
+    }
+  }
+  updateControlBarHeight();
+  window.addEventListener('resize', updateControlBarHeight);
+
   // ---- Initialize UI ----
   updateButtonsUi();
   updatePlaylistUi();
@@ -3786,6 +3796,28 @@
     setPlaybackCurrentTime(ratio * dur);
     updateTimeUi();
   });
+
+  // Fullscreen toggle
+  if (fullscreenBtn) {
+    fullscreenBtn.addEventListener("click", () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+        fullscreenBtn.textContent = "⛶";
+        fullscreenBtn.setAttribute("aria-pressed", "true");
+      } else {
+        document.exitFullscreen().catch(() => {});
+        fullscreenBtn.textContent = "⛶";
+        fullscreenBtn.setAttribute("aria-pressed", "false");
+      }
+    });
+
+    // Update button state when fullscreen changes (e.g., Escape key)
+    document.addEventListener("fullscreenchange", () => {
+      const isFullscreen = !!document.fullscreenElement;
+      fullscreenBtn.setAttribute("aria-pressed", isFullscreen ? "true" : "false");
+      fullscreenBtn.title = isFullscreen ? "Exit fullscreen" : "Fullscreen";
+    });
+  }
 
   // Playlist modal
   playlistBtn.addEventListener("click", () => {
