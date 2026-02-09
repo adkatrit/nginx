@@ -3749,736 +3749,263 @@ window.TrackScenes = (function() {
   function buildPhoneFaceDown(THREE, scene, audioData) {
     const group = new THREE.Group();
 
-    // Warm evening fog
-    scene.fog = new THREE.FogExp2(0x1a0f08, 0.008);
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // GROUND SHADER - Rippling golden water/sand dunes
-    // ═══════════════════════════════════════════════════════════════════════
-    const groundVertexShader = `
-      varying vec2 vUv;
-      varying vec3 vWorldPos;
-      varying float vHeight;
-
-      uniform float time;
-      uniform float bassEnergy;
-
-      void main() {
-        vUv = uv;
-        vec4 worldPos = modelMatrix * vec4(position, 1.0);
-        vWorldPos = worldPos.xyz;
-
-        // Bass-reactive ripple displacement
-        float ripple = sin(worldPos.x * 0.15 + time * 2.0) * cos(worldPos.z * 0.15 + time * 1.5);
-        float displacement = ripple * bassEnergy * 1.5;
-
-        vec3 newPos = position;
-        newPos.y += displacement;
-        vHeight = displacement;
-
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(newPos, 1.0);
+    // Hide any EffectsManager effects that persist from user settings
+    const hiddenEffects = [];
+    scene.traverse(child => {
+      if (child.name === 'grid-effects' || child.name === 'lightning-effects' ||
+          child.name === 'aurora-effects' || child.name === 'lights-effects' ||
+          child.name === 'ride-path' || child.name === 'parallax-backdrop') {
+        child.visible = false;
+        hiddenEffects.push(child);
       }
-    `;
-
-    const groundFragmentShader = `
-      uniform float time;
-      uniform float bassEnergy;
-      uniform float vocalEnergy;
-      uniform float patternScale;
-      uniform float waveIntensity;
-      uniform float glowIntensity;
-      uniform float reflectionStrength;
-      uniform vec3 baseColor;
-      uniform vec3 glowColor;
-      uniform vec3 horizonColor;
-
-      varying vec2 vUv;
-      varying vec3 vWorldPos;
-      varying float vHeight;
-
-      float hash(vec2 p) {
-        return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-      }
-
-      float noise(vec2 p) {
-        vec2 i = floor(p);
-        vec2 f = fract(p);
-        f = f * f * (3.0 - 2.0 * f);
-        float a = hash(i);
-        float b = hash(i + vec2(1.0, 0.0));
-        float c = hash(i + vec2(0.0, 1.0));
-        float d = hash(i + vec2(1.0, 1.0));
-        return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
-      }
-
-      // Rippling water/sand dune pattern
-      float wavePattern(vec2 p, float t) {
-        float wave1 = sin(p.x * 0.3 + t) * 0.5 + 0.5;
-        float wave2 = sin(p.y * 0.25 + t * 0.7) * 0.5 + 0.5;
-        float wave3 = sin((p.x + p.y) * 0.2 + t * 1.3) * 0.5 + 0.5;
-        return (wave1 + wave2 + wave3) / 3.0;
-      }
-
-      void main() {
-        // World position UVs for scrolling (player flies over pattern)
-        vec2 uv = vWorldPos.xz * patternScale * 0.01;
-
-        // Distance fade from center
-        float dist = length(vUv - 0.5) * 2.0;
-        float fade = smoothstep(0.7, 1.0, dist);
-
-        // === RIPPLING WATER/SAND DUNE EFFECT ===
-        float waves = wavePattern(uv, time * 0.5);
-        float fineWaves = wavePattern(uv * 3.0, time * 0.8) * 0.3;
-
-        // Bass creates expanding ripples
-        float bassRipple = sin(length(uv) * 8.0 - time * 3.0) * bassEnergy;
-        bassRipple *= smoothstep(3.0, 0.0, length(uv));
-
-        // === COLORS ===
-        vec3 groundColorOut = baseColor * (0.7 + noise(uv * 2.0) * 0.5);
-
-        // Warm golden highlights on wave crests
-        float crestGlow = smoothstep(0.6, 0.9, waves) * waveIntensity;
-        groundColorOut += glowColor * crestGlow * (glowIntensity + bassEnergy * 0.5);
-
-        // Fine wave detail
-        groundColorOut += glowColor * fineWaves * 0.2;
-
-        // Bass ripple glow
-        groundColorOut += glowColor * abs(bassRipple) * 0.5;
-
-        // Sunset horizon reflection (distant areas more reflective)
-        float horizonReflect = smoothstep(0.0, 0.5, dist) * reflectionStrength;
-        groundColorOut = mix(groundColorOut, horizonColor * (0.5 + vocalEnergy * 0.5), horizonReflect);
-
-        // Vocal warmth boost
-        groundColorOut *= 1.0 + vocalEnergy * 0.3;
-
-        // Edge fade to darkness
-        groundColorOut = mix(groundColorOut, vec3(0.02, 0.01, 0.005), fade);
-
-        gl_FragColor = vec4(groundColorOut, 1.0);
-      }
-    `;
-
-    const groundUniforms = {
-      time: { value: 0 },
-      bassEnergy: { value: 0 },
-      vocalEnergy: { value: 0 },
-      patternScale: { value: 15 },
-      waveIntensity: { value: 0.4 },
-      glowIntensity: { value: 0.3 },
-      reflectionStrength: { value: 0.2 },
-      baseColor: { value: new THREE.Vector3(0.102, 0.071, 0.047) },
-      glowColor: { value: new THREE.Vector3(1.0, 0.667, 0.333) },
-      horizonColor: { value: new THREE.Vector3(0.8, 0.4, 0.15) }
-    };
-
-    const groundMat = new THREE.ShaderMaterial({
-      vertexShader: groundVertexShader,
-      fragmentShader: groundFragmentShader,
-      uniforms: groundUniforms,
-      side: THREE.DoubleSide
     });
 
-    const groundPlane = new THREE.Mesh(
-      new THREE.PlaneGeometry(1000, 1000, 64, 64),
-      groundMat
-    );
-    groundPlane.rotation.x = -Math.PI / 2;
-    groundPlane.position.y = -8;
-    groundPlane.renderOrder = 1;
-    scene.add(groundPlane);
-
-    // Expose for scene tuner
-    window._phoneFaceDownGround = {
-      uniforms: groundUniforms,
-      material: groundMat
-    };
-    console.log('[Phone Face Down] Ground exposed globally:', window._phoneFaceDownGround);
-
     // ═══════════════════════════════════════════════════════════════════════
-    // SKY SHADER - Golden evening/dusk with stars
+    // SKY — Physically-based atmospheric scattering (Preetham model)
     // ═══════════════════════════════════════════════════════════════════════
     const skyVertexShader = `
+      uniform vec3 sunPosition;
+      uniform float rayleigh;
+      uniform float turbidity;
+      uniform float mieCoefficient;
+      uniform vec3 up;
+
       varying vec3 vWorldPosition;
-      varying vec2 vUv;
+      varying vec3 vSunDirection;
+      varying float vSunfade;
+      varying vec3 vBetaR;
+      varying vec3 vBetaM;
+      varying float vSunE;
+
+      const float e = 2.71828182845904523536028747135266249775724709369995957;
+      const float pi = 3.141592653589793238462643383279502884197169;
+
+      const vec3 lambda = vec3( 680E-9, 550E-9, 450E-9 );
+      const vec3 totalRayleigh = vec3( 5.804542996261093E-6, 1.3562911419845635E-5, 3.0265902468824876E-5 );
+
+      const float v = 4.0;
+      const vec3 K = vec3( 0.686, 0.678, 0.666 );
+      const vec3 MieConst = vec3( 1.8399918514433978E14, 2.7798023919660528E14, 4.0790479543861094E14 );
+
+      const float cutoffAngle = 1.6110731556870734;
+      const float steepness = 1.5;
+      const float EE = 1000.0;
+
+      float sunIntensity( float zenithAngleCos ) {
+        zenithAngleCos = clamp( zenithAngleCos, -1.0, 1.0 );
+        return EE * max( 0.0, 1.0 - pow( e, -( ( cutoffAngle - acos( zenithAngleCos ) ) / steepness ) ) );
+      }
+
+      vec3 totalMie( float T ) {
+        float c = ( 0.2 * T ) * 10E-18;
+        return 0.434 * c * MieConst;
+      }
 
       void main() {
-        vUv = uv;
-        vec4 worldPos = modelMatrix * vec4(position, 1.0);
-        vWorldPosition = worldPos.xyz;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        vec4 worldPosition = modelMatrix * vec4( position, 1.0 );
+        vWorldPosition = worldPosition.xyz;
+
+        gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+        gl_Position.z = gl_Position.w; // render at far plane
+
+        vSunDirection = normalize( sunPosition );
+        vSunE = sunIntensity( dot( vSunDirection, up ) );
+        vSunfade = 1.0 - clamp( 1.0 - exp( ( sunPosition.y / 450000.0 ) ), 0.0, 1.0 );
+
+        float rayleighCoefficient = rayleigh - ( 1.0 * ( 1.0 - vSunfade ) );
+        vBetaR = totalRayleigh * rayleighCoefficient;
+        vBetaM = totalMie( turbidity ) * mieCoefficient;
       }
     `;
 
     const skyFragmentShader = `
-      uniform float time;
-      uniform float vocalEnergy;
-      uniform float synthEnergy;
-      uniform float bassEnergy;
-      uniform float drumEnergy;
-      uniform float luminosityMin;
-      uniform float luminosityRange;
-      uniform float sunGlowIntensity;
-      uniform float horizonIntensity;
-      uniform float starReveal;
-
       varying vec3 vWorldPosition;
-      varying vec2 vUv;
+      varying vec3 vSunDirection;
+      varying float vSunfade;
+      varying vec3 vBetaR;
+      varying vec3 vBetaM;
+      varying float vSunE;
 
-      float hash(vec2 p) {
-        return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+      uniform float mieDirectionalG;
+      uniform vec3 up;
+      uniform float exposure;
+
+      const float pi = 3.141592653589793238462643383279502884197169;
+      const float n = 1.0003;
+      const float N = 2.545E25;
+      const float rayleighZenithLength = 8.4E3;
+      const float mieZenithLength = 1.25E3;
+      const float sunAngularDiameterCos = 0.999956676946448443553574619906976478926848692873900859324;
+
+      const float THREE_OVER_SIXTEENPI = 0.05968310365946075;
+      const float ONE_OVER_FOURPI = 0.07957747154594767;
+
+      float rayleighPhase( float cosTheta ) {
+        return THREE_OVER_SIXTEENPI * ( 1.0 + pow( cosTheta, 2.0 ) );
+      }
+
+      float hgPhase( float cosTheta, float g ) {
+        float g2 = pow( g, 2.0 );
+        float inverse = 1.0 / pow( 1.0 - 2.0 * g * cosTheta + g2, 1.5 );
+        return ONE_OVER_FOURPI * ( ( 1.0 - g2 ) * inverse );
+      }
+
+      // ACES filmic tone mapping
+      vec3 acesFilmic( vec3 x ) {
+        float a = 2.51;
+        float b = 0.03;
+        float c = 2.43;
+        float d = 0.59;
+        float ee = 0.14;
+        return clamp( ( x * ( a * x + b ) ) / ( x * ( c * x + d ) + ee ), 0.0, 1.0 );
       }
 
       void main() {
-        vec3 dir = normalize(vWorldPosition);
-        float y = dir.y;
-        float x = atan(dir.x, dir.z) / 3.14159;
+        vec3 direction = normalize( vWorldPosition - cameraPosition );
 
-        float v = vocalEnergy;
-        float s = synthEnergy;
+        float zenithAngle = acos( max( 0.0, dot( up, direction ) ) );
+        float inverse = 1.0 / ( cos( zenithAngle ) + 0.15 * pow( 93.885 - ( ( zenithAngle * 180.0 ) / pi ), -1.253 ) );
+        float sR = rayleighZenithLength * inverse;
+        float sM = mieZenithLength * inverse;
 
-        // === GROUND COLOR - Matches warm evening floor ===
-        vec3 groundColor = vec3(0.05, 0.025, 0.015);
+        vec3 Fex = exp( -( vBetaR * sR + vBetaM * sM ) );
 
-        // Below horizon = solid ground
-        if (y < -0.05) {
-          float fade = smoothstep(-0.5, -0.05, y);
-          gl_FragColor = vec4(groundColor * (0.3 + fade * 0.7), 1.0);
-          return;
-        }
+        float cosTheta = dot( direction, vSunDirection );
+        float rPhase = rayleighPhase( cosTheta * 0.5 + 0.5 );
+        vec3 betaRTheta = vBetaR * rPhase;
+        float mPhase = hgPhase( cosTheta, mieDirectionalG );
+        vec3 betaMTheta = vBetaM * mPhase;
 
-        // === DUSK/EVENING PALETTE ===
-        vec3 deepPurple = vec3(0.08, 0.03, 0.12);
-        vec3 dustyRose = vec3(0.25, 0.08, 0.1);
-        vec3 amber = vec3(0.6, 0.25, 0.05);
-        vec3 gold = vec3(0.9, 0.55, 0.1);
-        vec3 warmOrange = vec3(0.85, 0.35, 0.08);
+        vec3 Lin = pow( vSunE * ( ( betaRTheta + betaMTheta ) / ( vBetaR + vBetaM ) ) * ( 1.0 - Fex ), vec3( 1.5 ) );
+        Lin *= mix( vec3( 1.0 ), pow( vSunE * ( ( betaRTheta + betaMTheta ) / ( vBetaR + vBetaM ) ) * Fex, vec3( 1.0 / 2.0 ) ), clamp( pow( 1.0 - dot( up, vSunDirection ), 5.0 ), 0.0, 1.0 ) );
 
-        // === BUILD GRADIENT ===
-        vec3 baseColor;
+        vec3 L0 = vec3( 0.1 ) * Fex;
 
-        if (y < 0.05) {
-          float t = (y + 0.05) / 0.1;
-          baseColor = mix(groundColor * 2.0, deepPurple, t);
-        } else if (y < 0.1) {
-          float t = (y - 0.05) / 0.05;
-          baseColor = mix(deepPurple, dustyRose, t);
-        } else if (y < 0.18) {
-          float t = (y - 0.1) / 0.08;
-          baseColor = mix(dustyRose, amber, t);
-        } else if (y < 0.28) {
-          float t = (y - 0.18) / 0.1;
-          baseColor = mix(amber, warmOrange, t);
-        } else if (y < 0.4) {
-          float t = (y - 0.28) / 0.12;
-          baseColor = mix(warmOrange, gold, t);
-        } else {
-          float t = (y - 0.4) / 0.6;
-          baseColor = mix(gold, deepPurple, t);
-        }
+        // Solar disc
+        float sundisk = smoothstep( sunAngularDiameterCos, sunAngularDiameterCos + 0.00002, cosTheta );
+        L0 += ( vSunE * 19000.0 * Fex ) * sundisk;
 
-        // === LUMINOSITY - Vocals brighten the sky ===
-        float luminosity = luminosityMin + v * luminosityRange;
-        vec3 color = baseColor * luminosity;
+        vec3 texColor = ( Lin + L0 ) * 0.04 + vec3( 0.0, 0.0003, 0.00075 );
+        vec3 retColor = pow( texColor, vec3( 1.0 / ( 1.2 + ( 1.2 * vSunfade ) ) ) );
 
-        // === SUN GLOW - Setting sun near horizon ===
-        float sunDist = length(vec2(x, y - 0.12));
-        float sunGlow = smoothstep(0.4, 0.05, sunDist);
-        color += gold * sunGlow * (sunGlowIntensity + v * 0.5) * luminosity;
+        // Tone mapping and sRGB conversion
+        retColor = acesFilmic( retColor * exposure );
+        retColor = pow( retColor, vec3( 1.0 / 2.2 ) );
 
-        // === HORIZON LINE ===
-        float horizonLine = exp(-abs(y - 0.05) * 20.0);
-        color += warmOrange * horizonLine * (horizonIntensity + v * 0.3) * luminosity;
-
-        // === STARS - Reveal with synth (disconnection = seeing stars) ===
-        if (y > 0.3) {
-          float starField = hash(floor(dir.xz * 200.0));
-          float starMask = step(0.995, starField);
-          float starTwinkle = 0.5 + 0.5 * sin(time * 3.0 + starField * 100.0);
-          float starBrightness = starMask * starTwinkle * (starReveal + s * 0.8);
-          starBrightness *= smoothstep(0.3, 0.6, y);
-          color += vec3(1.0, 0.95, 0.8) * starBrightness * 0.5;
-        }
-
-        // === DRUM FLASH ===
-        color *= 1.0 + drumEnergy * 0.3 * smoothstep(0.15, -0.15, y);
-
-        // === BASS - Deep purple at horizon ===
-        color += vec3(0.08, 0.02, 0.12) * bassEnergy * smoothstep(0.1, -0.1, y) * 0.4;
-
-        gl_FragColor = vec4(color, 1.0);
+        gl_FragColor = vec4( retColor, 1.0 );
       }
     `;
 
     const skyUniforms = {
-      time: { value: 0 },
-      vocalEnergy: { value: 0 },
-      synthEnergy: { value: 0 },
-      bassEnergy: { value: 0 },
-      drumEnergy: { value: 0 },
-      luminosityMin: { value: 0.4 },
-      luminosityRange: { value: 1.0 },
-      sunGlowIntensity: { value: 0.2 },
-      horizonIntensity: { value: 0.15 },
-      starReveal: { value: 0.1 }
+      turbidity: { value: 10 },
+      rayleigh: { value: 3 },
+      mieCoefficient: { value: 0.005 },
+      mieDirectionalG: { value: 0.7 },
+      sunPosition: { value: new THREE.Vector3() },
+      up: { value: new THREE.Vector3(0, 1, 0) },
+      exposure: { value: 0.45 }
     };
 
     const skyMat = new THREE.ShaderMaterial({
+      uniforms: skyUniforms,
       vertexShader: skyVertexShader,
       fragmentShader: skyFragmentShader,
-      uniforms: skyUniforms,
-      side: THREE.BackSide
+      side: THREE.BackSide,
+      depthWrite: false
     });
 
-    const skyGeom = new THREE.SphereGeometry(200, 32, 32);
-    const sky = new THREE.Mesh(skyGeom, skyMat);
+    const sky = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), skyMat);
+    sky.scale.setScalar(80);
     scene.add(sky);
 
-    // Expose for scene tuner
-    window._phoneFaceDownSky = {
-      uniforms: skyUniforms,
-      material: skyMat
-    };
-    console.log('[Phone Face Down] Sky exposed globally:', window._phoneFaceDownSky);
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // FLOATING PHONES - Slowly rotating to face down, screens dimming
-    // ═══════════════════════════════════════════════════════════════════════
-    const phones = [];
-    const phoneGroup = new THREE.Group();
-    const PHONE_COUNT = 40;
-
-    function createPhone(x, y, z) {
-      const phoneGrp = new THREE.Group();
-
-      const bodyGeom = new THREE.BoxGeometry(0.6, 1.0, 0.08);
-      const bodyMat = new THREE.MeshStandardMaterial({
-        color: 0x222233,
-        metalness: 0.8,
-        roughness: 0.3,
-        emissive: 0x111122,
-        emissiveIntensity: 0.1
-      });
-      const body = new THREE.Mesh(bodyGeom, bodyMat);
-      phoneGrp.add(body);
-
-      const screenGeom = new THREE.PlaneGeometry(0.5, 0.85);
-      const screenMat = new THREE.MeshBasicMaterial({
-        color: 0x4488ff,
-        transparent: true,
-        opacity: 0.6,
-        blending: THREE.AdditiveBlending
-      });
-      const screen = new THREE.Mesh(screenGeom, screenMat);
-      screen.position.z = 0.041;
-      phoneGrp.add(screen);
-
-      phoneGrp.position.set(x, y, z);
-      phoneGrp.rotation.set(
-        Math.random() * 0.3,
-        Math.random() * Math.PI * 2,
-        Math.random() * 0.3
-      );
-
-      phoneGrp.userData = {
-        bodyMat,
-        screenMat,
-        baseY: y,
-        rotSpeed: 0.1 + Math.random() * 0.2,
-        bobSpeed: 0.3 + Math.random() * 0.4,
-        bobPhase: Math.random() * Math.PI * 2,
-        faceDownProgress: 0,
-        targetFaceDown: Math.random()
-      };
-
-      return phoneGrp;
-    }
-
-    for (let i = 0; i < PHONE_COUNT; i++) {
-      const phone = createPhone(
-        (Math.random() - 0.5) * 60,
-        (Math.random() - 0.5) * 25,
-        Math.random() * 120
-      );
-      phoneGroup.add(phone);
-      phones.push(phone);
-    }
-    scene.add(phoneGroup);
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // FIREFLIES - Warm points of light representing human connection
-    // ═══════════════════════════════════════════════════════════════════════
-    const fireflyCount = 200;
-    const fireflyGeom = new THREE.BufferGeometry();
-    const fireflyPos = new Float32Array(fireflyCount * 3);
-    const fireflyPhases = new Float32Array(fireflyCount);
-
-    for (let i = 0; i < fireflyCount; i++) {
-      fireflyPos[i * 3] = (Math.random() - 0.5) * 80;
-      fireflyPos[i * 3 + 1] = (Math.random() - 0.5) * 30;
-      fireflyPos[i * 3 + 2] = Math.random() * 100;
-      fireflyPhases[i] = Math.random() * Math.PI * 2;
-    }
-    fireflyGeom.setAttribute('position', new THREE.BufferAttribute(fireflyPos, 3));
-
-    const fireflyMat = new THREE.PointsMaterial({
-      color: 0xffdd88,
-      size: 0.2,
-      transparent: true,
-      opacity: 0.6,
-      blending: THREE.AdditiveBlending
-    });
-    const fireflies = new THREE.Points(fireflyGeom, fireflyMat);
-    scene.add(fireflies);
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // WARM GLOW ORB - Pulses with vocals, represents human presence
-    // ═══════════════════════════════════════════════════════════════════════
-    const glowGeom = new THREE.SphereGeometry(3, 32, 32);
-    const glowMat = new THREE.MeshBasicMaterial({
-      color: 0xffaa66,
-      transparent: true,
-      opacity: 0.15,
-      blending: THREE.AdditiveBlending
-    });
-    const glowOrb = new THREE.Mesh(glowGeom, glowMat);
-    glowOrb.position.set(0, 0, 40);
-    group.add(glowOrb);
-
-    const innerGlowGeom = new THREE.SphereGeometry(1.5, 32, 32);
-    const innerGlowMat = new THREE.MeshBasicMaterial({
-      color: 0xffddaa,
-      transparent: true,
-      opacity: 0.3,
-      blending: THREE.AdditiveBlending
-    });
-    const innerGlow = new THREE.Mesh(innerGlowGeom, innerGlowMat);
-    glowOrb.add(innerGlow);
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // TRAILING PARTICLES - Follow guitar energy
-    // ═══════════════════════════════════════════════════════════════════════
-    const trailParticles = [];
-    const trailGroup = new THREE.Group();
-    const MAX_TRAILS = 60;
-
-    function spawnTrailParticle(x, y, z, color) {
-      const geom = new THREE.SphereGeometry(0.15, 8, 8);
-      const mat = new THREE.MeshBasicMaterial({
-        color: color,
-        transparent: true,
-        opacity: 0.8,
-        blending: THREE.AdditiveBlending
-      });
-      const particle = new THREE.Mesh(geom, mat);
-      particle.position.set(x, y, z);
-      particle.userData = {
-        mat,
-        vel: new THREE.Vector3(
-          (Math.random() - 0.5) * 0.3,
-          (Math.random() - 0.5) * 0.2,
-          (Math.random() - 0.5) * 0.3
-        ),
-        life: 1.0
-      };
-      trailGroup.add(particle);
-      trailParticles.push(particle);
-
-      while (trailParticles.length > MAX_TRAILS) {
-        const old = trailParticles.shift();
-        trailGroup.remove(old);
-        old.geometry.dispose();
-        old.material.dispose();
-      }
-    }
-    scene.add(trailGroup);
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // LIGHTING
-    // ═══════════════════════════════════════════════════════════════════════
-    const mainLight = new THREE.PointLight(0xffcc88, 0.4, 100);
-    mainLight.position.set(0, 15, 30);
-    group.add(mainLight);
-
-    const coolLight = new THREE.PointLight(0x6688ff, 0.3, 80);
-    coolLight.position.set(-15, 10, 20);
-    group.add(coolLight);
-
-    const ambientLight = new THREE.AmbientLight(0x2a1a10, 0.3);
-    scene.add(ambientLight);
+    // Sun position: low on the horizon, straight ahead (+Z)
+    const sunElevation = 3;
+    const phi = (90 - sunElevation) * Math.PI / 180;
+    const theta = 0; // +Z direction
+    const sunPos = new THREE.Vector3();
+    sunPos.setFromSphericalCoords(1, phi, theta);
+    skyUniforms.sunPosition.value.copy(sunPos);
 
     scene.add(group);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // SCENE TUNER INTEGRATION
-    // ═══════════════════════════════════════════════════════════════════════
-    if (window.SceneTuner) {
-      window.SceneTuner.onUpdate((section, param, value) => {
-        console.log('[SceneTuner] Phone Face Down Update:', section, param, value);
-
-        // Ground shader parameters
-        if (section === 'ground' && window._phoneFaceDownGround) {
-          const u = window._phoneFaceDownGround.uniforms;
-          if (param === 'patternScale') u.patternScale.value = value;
-          if (param === 'waveIntensity') u.waveIntensity.value = value;
-          if (param === 'glowIntensity') u.glowIntensity.value = value;
-          if (param === 'reflectionStrength') u.reflectionStrength.value = value;
-          if (param === 'baseColorR') u.baseColor.value.x = value;
-          if (param === 'baseColorG') u.baseColor.value.y = value;
-          if (param === 'baseColorB') u.baseColor.value.z = value;
-          if (param === 'glowColorR') u.glowColor.value.x = value;
-          if (param === 'glowColorG') u.glowColor.value.y = value;
-          if (param === 'glowColorB') u.glowColor.value.z = value;
-        }
-
-        // Sky shader parameters
-        if (section === 'sky' && window._phoneFaceDownSky) {
-          const u = window._phoneFaceDownSky.uniforms;
-          if (param === 'luminosityMin') u.luminosityMin.value = value;
-          if (param === 'luminosityRange') u.luminosityRange.value = value;
-          if (param === 'sunGlowIntensity') u.sunGlowIntensity.value = value;
-          if (param === 'horizonIntensity') u.horizonIntensity.value = value;
-          if (param === 'starReveal') u.starReveal.value = value;
-        }
-
-        // Fog parameters
-        if (section === 'fog') {
-          if (param === 'density') scene.fog.density = value;
-        }
-      });
-      console.log('[Phone Face Down] Scene tuner connected - Press T to toggle');
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
     // STATE
     // ═══════════════════════════════════════════════════════════════════════
-    let initialized = false;
-    let lastVocalPulse = 0;
-    let lastDrumPulse = 0;
-    let lastBassPulse = 0;
     let lastSynthPulse = 0;
-    let lastGuitarPulse = 0;
+    let lastVocalPulse = 0;
+    let lastKeyboardPulse = 0;
     let disconnectProgress = 0;
+    const baseSunElevation = 3;
 
     return {
       group,
       stemEffects: {
-        drums: { target: 'phones', effect: 'rotate pulse', color: '#ffaa44' },
-        bass: { target: 'ground', effect: 'ripple', color: '#ffcc88' },
-        vocals: { target: 'atmosphere', effect: 'warmth', color: '#ffcc88' },
-        synth: { target: 'sky', effect: 'stars', color: '#aaccff' },
-        guitar: { target: 'trails', effect: 'spawn', color: '#ffdd66' },
-        keyboard: { target: 'glow', effect: 'color shift', color: '#ffaa88' },
-        percussion: { target: 'fireflies', effect: 'pulse', color: '#ffee88' },
-        fx: { target: 'phones', effect: 'screen flash', color: '#ff88ff' }
+        drums: { target: 'sky', effect: 'pulse', color: '#ffaa44' },
+        bass: { target: 'sky', effect: 'rumble', color: '#ffcc88' },
+        vocals: { target: 'sky', effect: 'glow', color: '#ffcc88' },
+        synth: { target: 'sky + sun', effect: 'elevation', color: '#ffddaa' },
+        guitar: { target: 'sky', effect: 'shimmer', color: '#ffdd66' },
+        keyboard: { target: 'sky turbidity', effect: 'haze', color: '#ffaa88' },
+        percussion: { target: 'sky', effect: 'pulse', color: '#ffee88' },
+        fx: { target: 'sky', effect: 'flash', color: '#ff88ff' }
       },
 
       update(time, freq, amplitude, shipPos, shipSpeed, audioExtra) {
         const shipZ = shipPos ? shipPos.z : 0;
 
-        // ═══════════════════════════════════════════════════════════════════
-        // GET STEM ENERGIES
-        // ═══════════════════════════════════════════════════════════════════
+        // Sky follows player
+        sky.position.set(0, 0, shipZ);
+
+        // Keep EffectsManager grids/effects hidden (they can be rebuilt at runtime)
+        for (const fx of hiddenEffects) fx.visible = false;
+
+        // Get stem energies
         const vocalEnergy = getEffectiveStemEnergy('vocals', audioExtra?.vocals?.energy || 0);
         const backingEnergy = getEffectiveStemEnergy('backing-vocals', audioExtra?.['backing-vocals']?.energy || 0);
-        const drumEnergy = getEffectiveStemEnergy('drums', audioExtra?.drums?.energy || 0);
-        const bassEnergy = getEffectiveStemEnergy('bass', audioExtra?.bass?.energy || 0);
         const synthEnergy = getEffectiveStemEnergy('synth', audioExtra?.synth?.energy || 0);
-        const guitarEnergy = getEffectiveStemEnergy('guitar', audioExtra?.guitar?.energy || 0);
-        const percEnergy = getEffectiveStemEnergy('percussion', audioExtra?.percussion?.energy || 0);
         const keyboardEnergy = getEffectiveStemEnergy('keyboard', audioExtra?.keyboard?.energy || 0);
 
         const combinedVocals = Math.max(vocalEnergy, backingEnergy * 0.7);
 
-        // Smooth pulses
         lastVocalPulse = lastVocalPulse * 0.88 + combinedVocals * 0.12;
-        lastDrumPulse = lastDrumPulse * 0.85 + drumEnergy * 0.15;
-        lastBassPulse = lastBassPulse * 0.92 + bassEnergy * 0.08;
         lastSynthPulse = lastSynthPulse * 0.9 + synthEnergy * 0.1;
-        lastGuitarPulse = lastGuitarPulse * 0.88 + guitarEnergy * 0.12;
+        lastKeyboardPulse = lastKeyboardPulse * 0.9 + keyboardEnergy * 0.1;
 
-        // Disconnect progress slowly builds over time and with vocals
         disconnectProgress = Math.min(1, disconnectProgress + 0.0003 + lastVocalPulse * 0.002);
 
-        // ═══════════════════════════════════════════════════════════════════
-        // UPDATE GROUND SHADER
-        // ═══════════════════════════════════════════════════════════════════
-        groundUniforms.time.value = time;
-        groundUniforms.bassEnergy.value = lastBassPulse;
-        groundUniforms.vocalEnergy.value = lastVocalPulse;
+        // Sky reacts to music
+        const dynElevation = baseSunElevation + lastSynthPulse * 4 + disconnectProgress * 3;
+        const dynPhi = (90 - dynElevation) * Math.PI / 180;
+        sunPos.setFromSphericalCoords(1, dynPhi, 0);
+        skyUniforms.sunPosition.value.copy(sunPos);
 
-        // ═══════════════════════════════════════════════════════════════════
-        // UPDATE SKY SHADER
-        // ═══════════════════════════════════════════════════════════════════
-        skyUniforms.time.value = time;
-        skyUniforms.vocalEnergy.value = lastVocalPulse;
-        skyUniforms.synthEnergy.value = lastSynthPulse;
-        skyUniforms.bassEnergy.value = lastBassPulse;
-        skyUniforms.drumEnergy.value = lastDrumPulse;
-        skyUniforms.starReveal.value = 0.1 + disconnectProgress * 0.4 + lastSynthPulse * 0.3;
+        skyUniforms.turbidity.value = 10 + lastKeyboardPulse * 8;
+        skyUniforms.mieCoefficient.value = 0.005 + lastVocalPulse * 0.015;
+        skyUniforms.exposure.value = 0.4 + disconnectProgress * 0.2 + lastSynthPulse * 0.1;
 
-        // Sky follows player
-        sky.position.set(shipPos?.x || 0, shipPos?.y || 0, shipZ);
-
-        // ═══════════════════════════════════════════════════════════════════
-        // ATMOSPHERE - Fog warms with vocals
-        // ═══════════════════════════════════════════════════════════════════
-        const fogHue = 0.08 - lastVocalPulse * 0.02;
-        scene.fog.color.setHSL(fogHue, 0.4, 0.04 + lastVocalPulse * 0.03);
-        scene.fog.density = 0.01 - lastVocalPulse * 0.005 - disconnectProgress * 0.002;
-
-        // Lights respond
-        mainLight.intensity = 0.3 + lastVocalPulse * 3 + disconnectProgress * 0.5;
-        mainLight.color.setHSL(0.08 + lastVocalPulse * 0.05, 0.7, 0.5 + lastVocalPulse * 0.3);
-        coolLight.intensity = 0.2 + lastSynthPulse * 1.5;
-        ambientLight.intensity = 0.2 + lastVocalPulse * 0.3 + disconnectProgress * 0.1;
-
-        // ═══════════════════════════════════════════════════════════════════
-        // PHONES - Rotate toward face-down, screens dim
-        // ═══════════════════════════════════════════════════════════════════
-        for (let i = phones.length - 1; i >= 0; i--) {
-          const phone = phones[i];
-          const pd = phone.userData;
-
-          phone.position.y = pd.baseY + Math.sin(time * pd.bobSpeed + pd.bobPhase) * 0.5;
-          pd.faceDownProgress = Math.min(pd.targetFaceDown, pd.faceDownProgress + 0.001 + lastVocalPulse * 0.003);
-          phone.rotation.x = pd.faceDownProgress * Math.PI;
-          phone.rotation.z += Math.sin(time * 3 + i) * 0.01 * (1 + lastDrumPulse * 2);
-
-          pd.screenMat.opacity = 0.6 * (1 - pd.faceDownProgress * 0.8) * (1 - lastVocalPulse * 0.3);
-          pd.screenMat.color.setHSL(0.6 - pd.faceDownProgress * 0.1, 0.6, 0.5);
-
-          if (phone.position.z < shipZ - 40) {
-            phone.position.z = shipZ + 80 + Math.random() * 40;
-            phone.position.x = (Math.random() - 0.5) * 60;
-            pd.faceDownProgress = Math.random() * disconnectProgress * 0.5;
-          }
-        }
-
-        // ═══════════════════════════════════════════════════════════════════
-        // FIREFLIES - Pulse with percussion, drift warmly
-        // ═══════════════════════════════════════════════════════════════════
-        const ffPos = fireflyGeom.attributes.position.array;
-        if (!initialized && shipPos) {
-          for (let i = 0; i < fireflyCount; i++) {
-            ffPos[i * 3 + 2] = shipZ - 30 + Math.random() * 100;
-          }
-          initialized = true;
-        }
-
-        for (let i = 0; i < fireflyCount; i++) {
-          const phase = fireflyPhases[i];
-          ffPos[i * 3] += Math.sin(time * 0.5 + phase) * 0.02;
-          ffPos[i * 3 + 1] += Math.cos(time * 0.3 + phase) * 0.015;
-
-          if (ffPos[i * 3 + 2] < shipZ - 40 || ffPos[i * 3 + 2] > shipZ + 80) {
-            ffPos[i * 3 + 2] = shipZ + 60 + Math.random() * 30;
-            ffPos[i * 3] = (Math.random() - 0.5) * 80;
-            ffPos[i * 3 + 1] = (Math.random() - 0.5) * 30;
-          }
-        }
-        fireflyGeom.attributes.position.needsUpdate = true;
-
-        fireflyMat.opacity = 0.3 + percEnergy * 0.5 + lastVocalPulse * 0.4 + disconnectProgress * 0.2;
-        fireflyMat.size = 0.15 + percEnergy * 0.15 + lastVocalPulse * 0.1;
-        fireflyMat.color.setHSL(0.1 + lastVocalPulse * 0.05, 0.6, 0.6 + lastVocalPulse * 0.2);
-
-        // ═══════════════════════════════════════════════════════════════════
-        // WARM GLOW ORB - Pulses with vocals and keyboard
-        // ═══════════════════════════════════════════════════════════════════
-        glowOrb.position.z = shipZ + 40;
-        const orbScale = 1 + lastVocalPulse * 0.5 + keyboardEnergy * 0.3;
-        glowOrb.scale.setScalar(orbScale);
-        glowMat.opacity = 0.1 + lastVocalPulse * 0.25 + disconnectProgress * 0.1;
-        innerGlowMat.opacity = 0.2 + lastVocalPulse * 0.4;
-
-        const orbHue = 0.08 + keyboardEnergy * 0.1;
-        glowMat.color.setHSL(orbHue, 0.7, 0.5);
-        innerGlowMat.color.setHSL(orbHue + 0.02, 0.6, 0.7);
-
-        // ═══════════════════════════════════════════════════════════════════
-        // TRAIL PARTICLES - Spawn with guitar
-        // ═══════════════════════════════════════════════════════════════════
-        if (guitarEnergy > 0.3 && Math.random() < guitarEnergy * 0.4) {
-          const color = new THREE.Color().setHSL(0.1 + Math.random() * 0.1, 0.7, 0.6);
-          spawnTrailParticle(
-            (Math.random() - 0.5) * 20,
-            (Math.random() - 0.5) * 10,
-            shipZ + 20 + Math.random() * 30,
-            color
-          );
-        }
-
-        for (let i = trailParticles.length - 1; i >= 0; i--) {
-          const p = trailParticles[i];
-          p.position.add(p.userData.vel);
-          p.userData.life -= 0.015;
-          p.userData.mat.opacity = p.userData.life * 0.8;
-          p.scale.setScalar(p.userData.life);
-
-          if (p.userData.life <= 0) {
-            trailGroup.remove(p);
-            p.geometry.dispose();
-            p.material.dispose();
-            trailParticles.splice(i, 1);
-          }
-        }
-
-        // ═══════════════════════════════════════════════════════════════════
-        // POSITION UPDATES
-        // ═══════════════════════════════════════════════════════════════════
         group.position.z = shipZ;
-        mainLight.position.z = shipZ + 30;
-        coolLight.position.z = shipZ + 20;
       },
 
       dispose() {
-        // Sky cleanup
+        // Restore hidden effects for other tracks
+        for (const fx of hiddenEffects) fx.visible = true;
+
         scene.remove(sky);
-        skyGeom.dispose();
+        sky.geometry.dispose();
         skyMat.dispose();
 
-        // Ground cleanup
-        scene.remove(groundPlane);
-        groundPlane.geometry.dispose();
-        groundMat.dispose();
-
-        // Phones cleanup
-        scene.remove(phoneGroup);
-        phoneGroup.traverse(c => {
-          if (c.geometry) c.geometry.dispose();
-          if (c.material) c.material.dispose();
-        });
-
-        // Fireflies cleanup
-        scene.remove(fireflies);
-        fireflyGeom.dispose();
-        fireflyMat.dispose();
-
-        // Trails cleanup
-        scene.remove(trailGroup);
-        trailGroup.traverse(c => {
-          if (c.geometry) c.geometry.dispose();
-          if (c.material) c.material.dispose();
-        });
-
-        scene.remove(ambientLight);
         group.traverse(c => {
           if (c.geometry) c.geometry.dispose();
           if (c.material) c.material.dispose();
         });
         scene.remove(group);
-        scene.fog = null;
-
-        // Clean up global references
-        delete window._phoneFaceDownGround;
-        delete window._phoneFaceDownSky;
       }
     };
   }
+
+
+
+
 
   // ═══════════════════════════════════════════════════════════════════════════
   // PUBLIC API - Scene builder registry

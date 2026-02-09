@@ -582,21 +582,29 @@
       this.scene.fog = new THREE.Fog(this.theme.fogColor, this.theme.fogNear, this.theme.fogFar);
       this._baseFogColor = new THREE.Color(this.theme.fogColor);
 
-      this.createSky();
-      this.createGroundPlane();
-      this.createTerrain();
-      this.createRidePath();
-      this.createParallaxBackdrop();
-      this.createPlayer();
-      this.createParticles();
-      this.createLighting();
-      this.createSpeedLines();
-      this.createTrail();
-      this.setupInput();
+      // If the track's custom scene handles ALL visuals, skip default scenery
+      const terrainCfg = this.theme.visualStyle?.terrain;
+      this._sceneOnly = !!(terrainCfg && terrainCfg.noEnvironmentScenery);
+      const sceneOnly = this._sceneOnly;
 
-      for (let i = 0; i < CONFIG.chunksAhead + CONFIG.chunksBehind; i++) {
-        this.generateChunk();
+      if (!sceneOnly) {
+        this.createSky();
+        this.createGroundPlane();
+        this.createTerrain();
+        this.createRidePath();
+        this.createParallaxBackdrop();
+        this.createParticles();
+        this.createSpeedLines();
+        this.createTrail();
+
+        for (let i = 0; i < CONFIG.chunksAhead + CONFIG.chunksBehind; i++) {
+          this.generateChunk();
+        }
       }
+
+      this.createPlayer();
+      this.createLighting();
+      this.setupInput();
 
       // Apply any loaded effects panel tuning (path/parallax/vista)
       this.applyEffectsConfig(this.effectsConfig);
@@ -1041,7 +1049,7 @@
     }
 
     createParallaxBackdrop() {
-      if (!this.world.parallaxEnabled) return;
+      return; // All tracks have custom scene builders — parallax shapes not needed
       const THREE = this.THREE;
 
       if (this.parallaxGroup) {
@@ -2251,19 +2259,21 @@
       this.scene.fog = new THREE.Fog(this.theme.fogColor, this.theme.fogNear, this.theme.fogFar);
       this._baseFogColor = new THREE.Color(this.theme.fogColor);
 
-      this.createSky();
-      this.createGroundPlane();
-      this.createTerrain();
-      if (this.world.pathEnabled) this.createRidePath();
-      if (this.world.parallaxEnabled) this.createParallaxBackdrop();
-      this.createParticles();
-      this.createLighting();
-      this.createSpeedLines();
-      this.createTrail();
+      if (!this._sceneOnly) {
+        this.createSky();
+        this.createGroundPlane();
+        this.createTerrain();
+        if (this.world.pathEnabled) this.createRidePath();
+        if (this.world.parallaxEnabled) this.createParallaxBackdrop();
+        this.createParticles();
+        this.createSpeedLines();
+        this.createTrail();
 
-      for (let i = 0; i < CONFIG.chunksAhead + CONFIG.chunksBehind; i++) {
-        this.generateChunk();
+        for (let i = 0; i < CONFIG.chunksAhead + CONFIG.chunksBehind; i++) {
+          this.generateChunk();
+        }
       }
+      this.createLighting();
 
       if (this.player) {
         this.player.position.set(0, this.altitude, 0);
@@ -2889,8 +2899,14 @@
     }
 
     updateScore(dt) {
-      // Accumulate score based on speed and combo
-      const pointsPerSecond = 10 * this.combo * (this.speed / CONFIG.baseSpeed);
+      // Rhythm bonuses:
+      //   Sync: up to +0.5x when APM matches a BPM harmonic (0.25x–4x)
+      //   Beat: up to +0.25x when tapping at a steady rhythm (any tempo)
+      const sync = typeof window.getRhythmSync === 'function' ? window.getRhythmSync() : 0;
+      const beat = typeof window.getRhythmRegularity === 'function' ? window.getRhythmRegularity() : 0;
+      const rhythmMultiplier = 1 + sync * 0.5 + beat * 0.25;
+      // Accumulate score based on speed, combo, and rhythm
+      const pointsPerSecond = 10 * this.combo * (this.speed / CONFIG.baseSpeed) * rhythmMultiplier;
       this.score += pointsPerSecond * dt;
 
       // Trigger callback
@@ -2932,6 +2948,7 @@
     }
 
     updateChunks() {
+      if (this._sceneOnly) return;
       while (this.nextChunkZ < this.distance + CONFIG.chunkSize * CONFIG.chunksAhead) {
         this.generateChunk();
       }

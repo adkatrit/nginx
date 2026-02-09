@@ -134,7 +134,8 @@ class StemPlayer {
       'loaded': [],
       'partialLoad': [],
       'error': [],
-      'progress': []
+      'progress': [],
+      'ended': []
     };
 
     // MIDI data
@@ -366,6 +367,7 @@ class StemPlayer {
           if (allEnded) {
             this.isPlaying = false;
             this.pauseOffset = 0;
+            this.emit('ended');
           }
         }
       };

@@ -2957,6 +2957,66 @@ input[type="range"]:active::-moz-range-thumb {
   transition: width 0.12s ease;
 }
 
+.tempo-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 1px;
+}
+
+.tempo-label {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.55);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.tempo-value {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.rhythm-multiplier {
+  font-size: 14px;
+  font-weight: 700;
+  font-family: var(--wa-mono);
+  color: rgba(255, 255, 255, 0.9);
+  transition: color 0.3s ease, text-shadow 0.3s ease;
+}
+
+.high-score-modal__stats {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 12px 0;
+  padding: 10px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.stat-val {
+  font-size: 14px;
+  font-weight: 700;
+  font-family: var(--wa-mono);
+  color: rgba(255, 255, 255, 0.9);
+}
+
 .combo-display.pulse {
   transform: scale(1.25);
 }

@@ -84,6 +84,9 @@
   const flowValue = $("flowValue");
   const flowBarFill = $("flowBarFill");
   const gateStreakValue = $("gateStreakValue");
+  const bpmValue = $("bpmValue");
+  const apmValue = $("apmValue");
+  const rhythmMultiplierEl = $("rhythmMultiplier");
 
   // Run summary overlay (Chill Ride)
   const runSummary = $("runSummary");
@@ -99,7 +102,13 @@
   const initialsInput = /** @type {HTMLInputElement|null} */ ($("initialsInput"));
   const saveScoreBtn = $("saveScoreBtn");
   const skipScoreBtn = $("skipScoreBtn");
+  const nextTrackBtn = $("nextTrackBtn");
   const leaderboardDisplay = $("leaderboardDisplay");
+  const modalTitle = $("modalTitle");
+  const initialsSection = $("initialsSection");
+  const finalSync = $("finalSync");
+  const finalBeat = $("finalBeat");
+  const finalRhythmBonus = $("finalRhythmBonus");
 
   // Model settings elements (removed from UI but kept for compatibility)
   const modelSelect = null;
@@ -690,28 +699,34 @@
     guitar: [68, 255, 136],   // green
   };
   const STEM_ORDER = ['drums', 'bass', 'vocals', 'synth', 'guitar'];
+  // Draw order: back-to-front so vocals (most important) render on top
+  const STEM_DRAW_ORDER = ['drums', 'bass', 'synth', 'guitar', 'vocals'];
 
   class WaveformVisualizer {
     constructor(canvas) {
       this.canvas = canvas;
       this.ctx = canvas.getContext('2d');
-      this.barCount = 60;
-      this.smoothedData = new Float32Array(this.barCount);
+      this.slotCount = 400;
       this.resizeObserver = null;
 
-      // ── Time-indexed stem history ──
-      // Stores sampled stem energies for each time slot so that bars
-      // represent the audio at their corresponding position in the track.
-      // Each slot: { drums: energy, bass: energy, ... , total: energy }
-      this.history = new Array(this.barCount).fill(null);
+      // ── Per-stem Float32Array history (400 slots each) ──
+      this.stemHistory = {};
+      for (const stemId of STEM_ORDER) {
+        this.stemHistory[stemId] = new Float32Array(this.slotCount);
+      }
+      this.slotFilled = new Uint8Array(this.slotCount);
+      this.maxFilledSlot = -1;
       this.trackDuration = 0;
 
       this.setupResize();
     }
 
     resetHistory() {
-      this.history = new Array(this.barCount).fill(null);
-      this.smoothedData.fill(0);
+      for (const stemId of STEM_ORDER) {
+        this.stemHistory[stemId].fill(0);
+      }
+      this.slotFilled.fill(0);
+      this.maxFilledSlot = -1;
       this.trackDuration = 0;
     }
 
@@ -720,17 +735,17 @@
       if (!stemData || !duration || duration <= 0) return;
       this.trackDuration = duration;
 
-      const slot = Math.floor((currentTime / duration) * this.barCount);
-      if (slot < 0 || slot >= this.barCount) return;
+      const slot = Math.floor((currentTime / duration) * this.slotCount);
+      if (slot < 0 || slot >= this.slotCount) return;
 
-      const entry = { total: 0 };
       for (const stemId of STEM_ORDER) {
         const a = stemData[stemId];
         const e = a ? (a.energy || 0) : 0;
-        entry[stemId] = e;
-        entry.total += e;
+        // Running max so transient peaks aren't overwritten by quieter samples
+        this.stemHistory[stemId][slot] = Math.max(this.stemHistory[stemId][slot], e);
       }
-      this.history[slot] = entry;
+      this.slotFilled[slot] = 1;
+      if (slot > this.maxFilledSlot) this.maxFilledSlot = slot;
     }
 
     setupResize() {
@@ -753,16 +768,78 @@
       this.displayHeight = rect.height;
     }
 
+    // Fritsch-Carlson monotone cubic interpolation — builds bezier control points
+    // that never overshoot, producing smooth natural curves through data points.
+    // Returns an array of {x, y} points and {cp1x, cp1y, cp2x, cp2y} control points.
+    _monotoneCubicPoints(pts) {
+      const n = pts.length;
+      if (n < 2) return [];
+
+      // Compute slopes (deltas) and tangents
+      const dx = new Float64Array(n - 1);
+      const dy = new Float64Array(n - 1);
+      const m = new Float64Array(n); // tangents
+
+      for (let i = 0; i < n - 1; i++) {
+        dx[i] = pts[i + 1].x - pts[i].x;
+        dy[i] = pts[i + 1].y - pts[i].y;
+      }
+
+      // Slopes of secant lines
+      const slopes = new Float64Array(n - 1);
+      for (let i = 0; i < n - 1; i++) {
+        slopes[i] = dx[i] !== 0 ? dy[i] / dx[i] : 0;
+      }
+
+      // Endpoint tangents
+      m[0] = slopes[0];
+      m[n - 1] = slopes[n - 2];
+
+      // Interior tangents (Fritsch-Carlson)
+      for (let i = 1; i < n - 1; i++) {
+        if (slopes[i - 1] * slopes[i] <= 0) {
+          m[i] = 0;
+        } else {
+          m[i] = (slopes[i - 1] + slopes[i]) / 2;
+        }
+      }
+
+      // Fritsch-Carlson monotonicity constraints
+      for (let i = 0; i < n - 1; i++) {
+        if (Math.abs(slopes[i]) < 1e-10) {
+          m[i] = 0;
+          m[i + 1] = 0;
+        } else {
+          const alpha = m[i] / slopes[i];
+          const beta = m[i + 1] / slopes[i];
+          const s = alpha * alpha + beta * beta;
+          if (s > 9) {
+            const t = 3 / Math.sqrt(s);
+            m[i] = t * alpha * slopes[i];
+            m[i + 1] = t * beta * slopes[i];
+          }
+        }
+      }
+
+      // Build segment data with cubic bezier control points
+      const segments = [];
+      for (let i = 0; i < n - 1; i++) {
+        const d = dx[i] / 3;
+        segments.push({
+          p0: pts[i],
+          p1: pts[i + 1],
+          cp1: { x: pts[i].x + d, y: pts[i].y + m[i] * d },
+          cp2: { x: pts[i + 1].x - d, y: pts[i + 1].y - m[i + 1] * d },
+        });
+      }
+      return segments;
+    }
+
     draw(progress, isPlaying, audioData, stemData) {
-      const { ctx, displayWidth: width, displayHeight: height, barCount } = this;
+      const { ctx, displayWidth: width, displayHeight: height, slotCount } = this;
       if (!width || !height) return;
 
-      const barWidth = width / barCount;
-      const gap = 2;
-      const hasAnyStemHistory = this.history.some(h => h !== null);
-
-      // Get accent color fallback
-      const accentRgb = getCssVar('--wa-accent-rgb', '124, 60, 255').split(',').map(n => parseInt(n.trim()));
+      ctx.clearRect(0, 0, width, height);
 
       // Read which stems are active (not muted) from the mixer buttons
       const activeStems = {};
@@ -773,121 +850,188 @@
         });
       }
 
-      ctx.clearRect(0, 0, width, height);
+      const currentSlot = Math.floor(progress * slotCount);
+      const hasData = this.maxFilledSlot >= 0;
 
-      const progressX = progress * width;
-      // Which slot is currently playing
-      const currentSlot = Math.floor(progress * barCount);
-
-      for (let i = 0; i < barCount; i++) {
-        const x = i * barWidth;
-        const isPast = (x + barWidth / 2) < progressX;
-
-        // Try to get stem data for this bar's time slot from history
-        const slotData = this.history[i];
-        const isCurrentSlot = (i === currentSlot);
-
-        // For the current slot, use live data if available; otherwise use history
-        const useLive = isCurrentSlot && isPlaying && stemData && Object.keys(stemData).length > 1;
-
-        if (slotData || useLive) {
-          // ── Stem-stacked mode: per-time-slot composition ──
-          const stemEnergies = {};
-          let totalEnergy = 0;
-
-          for (const stemId of STEM_ORDER) {
-            let e;
-            if (useLive) {
-              const a = stemData[stemId];
-              e = a ? (a.energy || 0) : 0;
-            } else {
-              e = slotData ? (slotData[stemId] || 0) : 0;
-            }
-
-            const isActive = activeStems[stemId] !== false;
-            if (!isActive) e *= 0.12;
-
-            stemEnergies[stemId] = e;
-            totalEnergy += e;
-          }
-
-          // Bar height from total energy of that time slot
-          const targetHeight = 0.15 + Math.min(totalEnergy / STEM_ORDER.length, 1) * 0.75;
-          // Current slot animates smoothly; historic slots settle quickly
-          const smoothing = isCurrentSlot ? 0.18 : 0.08;
-          this.smoothedData[i] += (targetHeight - this.smoothedData[i]) * smoothing;
-          const barHeight = this.smoothedData[i] * height;
-          const barY = (height - barHeight) / 2;
-
-          // Compute proportions
-          const proportions = {};
-          for (const stemId of STEM_ORDER) {
-            proportions[stemId] = totalEnergy > 0.001
-              ? (stemEnergies[stemId] / totalEnergy)
-              : (1 / STEM_ORDER.length);
-          }
-
-          // Draw stacked segments (bottom to top)
-          const radius = Math.min(barWidth / 3, 3);
-          const bx = x + gap / 2;
-          const bw = barWidth - gap;
-          let drawY = barY + barHeight;
-
-          ctx.save();
-          ctx.beginPath();
-          ctx.roundRect(bx, barY, bw, barHeight, radius);
-          ctx.clip();
-
-          for (let s = 0; s < STEM_ORDER.length; s++) {
-            const stemId = STEM_ORDER[s];
-            const proportion = proportions[stemId] || 0;
-            const segH = proportion * barHeight;
-            if (segH < 0.3) continue;
-
-            const rgb = STEM_COLORS[stemId] || accentRgb;
-            const isActive = activeStems[stemId] !== false;
-
-            let alpha;
-            if (!isActive) {
-              alpha = isPast ? 0.15 : 0.06;
-            } else {
-              alpha = isPast ? 0.88 : 0.2;
-            }
-
-            drawY -= segH;
-            ctx.fillStyle = `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`;
-            ctx.fillRect(bx, drawY, bw, segH);
-          }
-
-          ctx.restore();
-        } else {
-          // ── No history for this slot: fallback mode ──
-          let targetHeight;
-          if (hasAnyStemHistory) {
-            // Track has stems but this slot hasn't been reached yet — show subtle placeholder
-            targetHeight = 0.06 + Math.sin(Date.now() / 1200 + i * 0.25) * 0.02;
-          } else if (isPlaying && audioData) {
-            const freqIndex = Math.floor((i / barCount) * 128);
-            const energy = audioData.frequencyData ? audioData.frequencyData[freqIndex] / 255 : 0.1;
-            targetHeight = 0.15 + energy * 0.7;
-          } else {
-            targetHeight = 0.08 + Math.sin(Date.now() / 1000 + i * 0.3) * 0.04;
-          }
-
-          this.smoothedData[i] += (targetHeight - this.smoothedData[i]) * 0.15;
-          const barHeight = this.smoothedData[i] * height;
-          const y = (height - barHeight) / 2;
-
-          ctx.fillStyle = isPast
-            ? `rgba(${accentRgb[0]}, ${accentRgb[1]}, ${accentRgb[2]}, 0.9)`
-            : `rgba(${accentRgb[0]}, ${accentRgb[1]}, ${accentRgb[2]}, 0.25)`;
-
-          const radius = Math.min(barWidth / 3, 3);
-          ctx.beginPath();
-          ctx.roundRect(x + gap / 2, y, barWidth - gap, barHeight, radius);
-          ctx.fill();
-        }
+      // If no data yet, draw idle shimmer and return
+      if (!hasData) {
+        this._drawIdle(ctx, width, height, progress, isPlaying, audioData);
+        return;
       }
+
+      // Determine the rightmost slot to draw up to (only draw where we have data)
+      const drawUpTo = Math.min(currentSlot, this.maxFilledSlot);
+      if (drawUpTo < 0) return;
+
+      // Collect filled points up to drawUpTo
+      const filledIndices = [];
+      for (let i = 0; i <= drawUpTo; i++) {
+        if (this.slotFilled[i]) filledIndices.push(i);
+      }
+      if (filledIndices.length < 2) return;
+
+      const baseline = height; // draw from bottom
+      const maxMountainHeight = height * 0.92;
+      const n = filledIndices.length;
+
+      // ── Precompute per-stem energies with variance amplification ──
+      // Per-stem power law relative to each stem's own mean:
+      //   e' = μ · (e/μ)^γ    (γ > 1 expands deviations from the mean)
+      // Drums become spiky (snare hits are multiples of drum mean),
+      // smooth pads stay flat (values barely deviate from pad mean).
+      // Proportions preserved on average since means are unchanged.
+      const gamma = 2.0;
+      const stemEnergies = [];
+      for (let s = 0; s < STEM_DRAW_ORDER.length; s++) {
+        const historyBuf = this.stemHistory[STEM_DRAW_ORDER[s]];
+        const energies = new Float32Array(n);
+
+        // First pass: raw energies + mean
+        let sum = 0;
+        for (let k = 0; k < n; k++) {
+          energies[k] = historyBuf[filledIndices[k]];
+          sum += energies[k];
+        }
+        const mean = sum / n;
+
+        // Second pass: amplify variance relative to per-stem mean
+        if (mean > 0.001) {
+          for (let k = 0; k < n; k++) {
+            energies[k] = mean * Math.pow(energies[k] / mean, gamma);
+          }
+        }
+
+        stemEnergies.push(energies);
+      }
+
+      // Cumulative stack: cumY[s][k] = sum of energies for stems 0..s at point k
+      // cumY[s] is the TOP edge of stem s's band (in energy units)
+      // The bottom edge of stem s is cumY[s-1] (or 0 for s=0)
+      const cumY = [];
+      for (let s = 0; s < STEM_DRAW_ORDER.length; s++) {
+        const row = new Float32Array(n);
+        for (let k = 0; k < n; k++) {
+          row[k] = (s > 0 ? cumY[s - 1][k] : 0) + stemEnergies[s][k];
+        }
+        cumY.push(row);
+      }
+
+      // Normalize: find max total stack height across all points, scale so it fills the space
+      let maxStack = 0;
+      const topRow = cumY[STEM_DRAW_ORDER.length - 1];
+      for (let k = 0; k < n; k++) {
+        if (topRow[k] > maxStack) maxStack = topRow[k];
+      }
+      const scale = maxStack > 0.001 ? 1 / maxStack : 1;
+
+      // ── Draw each stem band (bottom to top, so earlier stems are behind) ──
+      for (let s = 0; s < STEM_DRAW_ORDER.length; s++) {
+        const stemId = STEM_DRAW_ORDER[s];
+        const rgb = STEM_COLORS[stemId];
+        const isActive = activeStems[stemId] !== false;
+
+        // Build top-edge points for this stem's band
+        const topPts = [];
+        for (let k = 0; k < n; k++) {
+          const x = (filledIndices[k] / slotCount) * width;
+          const y = baseline - cumY[s][k] * scale * maxMountainHeight;
+          topPts.push({ x, y });
+        }
+
+        // Build bottom-edge points (previous stem's top, or baseline for first stem)
+        const botPts = [];
+        for (let k = 0; k < n; k++) {
+          const x = (filledIndices[k] / slotCount) * width;
+          const y = s > 0
+            ? baseline - cumY[s - 1][k] * scale * maxMountainHeight
+            : baseline;
+          botPts.push({ x, y });
+        }
+
+        const topSegs = this._monotoneCubicPoints(topPts);
+        const botSegs = this._monotoneCubicPoints(botPts);
+
+        if (topSegs.length === 0) continue;
+
+        // ── Filled band between bottom and top curves ──
+        ctx.beginPath();
+        // Trace top edge left-to-right
+        ctx.moveTo(topPts[0].x, topPts[0].y);
+        for (const seg of topSegs) {
+          ctx.bezierCurveTo(seg.cp1.x, seg.cp1.y, seg.cp2.x, seg.cp2.y, seg.p1.x, seg.p1.y);
+        }
+        // Trace bottom edge right-to-left
+        if (botSegs.length > 0) {
+          ctx.lineTo(botPts[n - 1].x, botPts[n - 1].y);
+          for (let j = botSegs.length - 1; j >= 0; j--) {
+            const seg = botSegs[j];
+            ctx.bezierCurveTo(seg.cp2.x, seg.cp2.y, seg.cp1.x, seg.cp1.y, seg.p0.x, seg.p0.y);
+          }
+        } else {
+          // First stem: close to baseline
+          ctx.lineTo(topPts[n - 1].x, baseline);
+          ctx.lineTo(topPts[0].x, baseline);
+        }
+        ctx.closePath();
+
+        const fillAlpha = isActive ? 0.65 : 0.12;
+        ctx.fillStyle = `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${fillAlpha})`;
+        ctx.fill();
+
+        // ── Stroke top edge for definition ──
+        ctx.beginPath();
+        ctx.moveTo(topPts[0].x, topPts[0].y);
+        for (const seg of topSegs) {
+          ctx.bezierCurveTo(seg.cp1.x, seg.cp1.y, seg.cp2.x, seg.cp2.y, seg.p1.x, seg.p1.y);
+        }
+        const strokeAlpha = isActive ? 0.8 : 0.2;
+        ctx.strokeStyle = `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${strokeAlpha})`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+    }
+
+    // Idle/placeholder animation when no stem history exists
+    _drawIdle(ctx, width, height, progress, isPlaying, audioData) {
+      const accentRgb = getCssVar('--wa-accent-rgb', '124, 60, 255').split(',').map(n => parseInt(n.trim()));
+      const pts = [];
+      const count = 40;
+      const baseline = height;
+
+      for (let i = 0; i <= count; i++) {
+        const x = (i / count) * width;
+        let targetH;
+        if (isPlaying && audioData && audioData.frequencyData) {
+          const freqIndex = Math.floor((i / count) * 128);
+          const energy = audioData.frequencyData[freqIndex] / 255;
+          targetH = (0.1 + energy * 0.6) * height;
+        } else {
+          targetH = (0.06 + Math.sin(Date.now() / 1000 + i * 0.3) * 0.04) * height;
+        }
+        pts.push({ x, y: baseline - targetH });
+      }
+
+      if (pts.length < 2) return;
+      const segments = this._monotoneCubicPoints(pts);
+
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, baseline);
+      ctx.lineTo(pts[0].x, pts[0].y);
+      for (const seg of segments) {
+        ctx.bezierCurveTo(seg.cp1.x, seg.cp1.y, seg.cp2.x, seg.cp2.y, seg.p1.x, seg.p1.y);
+      }
+      ctx.lineTo(pts[pts.length - 1].x, baseline);
+      ctx.closePath();
+
+      // Gradient from played (bright) to unplayed (dim)
+      const grad = ctx.createLinearGradient(0, 0, width, 0);
+      grad.addColorStop(0, `rgba(${accentRgb[0]}, ${accentRgb[1]}, ${accentRgb[2]}, 0.5)`);
+      const progressStop = Math.max(0, Math.min(progress, 1));
+      grad.addColorStop(Math.max(progressStop - 0.001, 0), `rgba(${accentRgb[0]}, ${accentRgb[1]}, ${accentRgb[2]}, 0.5)`);
+      grad.addColorStop(Math.min(progressStop + 0.001, 1), `rgba(${accentRgb[0]}, ${accentRgb[1]}, ${accentRgb[2]}, 0.15)`);
+      grad.addColorStop(1, `rgba(${accentRgb[0]}, ${accentRgb[1]}, ${accentRgb[2]}, 0.15)`);
+      ctx.fillStyle = grad;
+      ctx.fill();
     }
 
     destroy() {
@@ -2185,6 +2329,124 @@
     if (gateStreakValue) gateStreakValue.textContent = String(Math.max(0, Number(gateStreak) || 0));
   }
 
+  // ── APM (Actions Per Minute) tracker ──
+  // Counts movement key presses in a 5s rolling window, normalized to per-minute.
+  // Computes rhythm sync: how close APM is to a BPM harmonic (0.25x–4x).
+  const APM_KEYS = new Set([
+    'KeyW', 'KeyA', 'KeyS', 'KeyD',
+    'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+    'ShiftLeft', 'ShiftRight', 'Space',
+  ]);
+  const apmTimestamps = [];
+  let currentApm = 0;
+  let rhythmSync = 0;
+  let rhythmRegularity = 0; // 0-1 how steady the tap intervals are
+
+  window.addEventListener('keydown', (e) => {
+    if (!APM_KEYS.has(e.code)) return;
+    if (e.repeat) return;
+    apmTimestamps.push(performance.now());
+  }, true);
+
+  function computeRhythmSync(apm, bpm) {
+    if (!bpm || bpm <= 0 || apm <= 0) return 0;
+    const ratio = apm / bpm;
+    const harmonics = [0.25, 0.5, 1, 2, 4];
+    let minDist = Infinity;
+    for (const h of harmonics) {
+      const dist = Math.abs(Math.log2(ratio / h));
+      if (dist < minDist) minDist = dist;
+    }
+    return Math.exp(-minDist * minDist * 30);
+  }
+
+  // Regularity: coefficient of variation of inter-tap intervals.
+  // Low CV = steady beat (even if wrong tempo). Returns 0-1.
+  // Needs ≥4 taps in the window to be meaningful.
+  function computeRegularity(now) {
+    const cutoff = now - 5000;
+    // Collect timestamps in window
+    const recent = [];
+    for (let i = apmTimestamps.length - 1; i >= 0; i--) {
+      if (apmTimestamps[i] < cutoff) break;
+      recent.push(apmTimestamps[i]);
+    }
+    if (recent.length < 4) return 0;
+    recent.reverse(); // chronological order
+
+    // Compute inter-tap intervals
+    const intervals = [];
+    for (let i = 1; i < recent.length; i++) {
+      intervals.push(recent[i] - recent[i - 1]);
+    }
+
+    // Mean and standard deviation
+    let sum = 0;
+    for (const iv of intervals) sum += iv;
+    const mean = sum / intervals.length;
+    if (mean < 1) return 0; // degenerate
+
+    let variance = 0;
+    for (const iv of intervals) {
+      const d = iv - mean;
+      variance += d * d;
+    }
+    variance /= intervals.length;
+    const cv = Math.sqrt(variance) / mean; // coefficient of variation
+
+    // Map CV to 0-1 score: CV=0 → 1.0, CV=0.3 → ~0.5, CV>0.8 → ~0
+    return Math.exp(-cv * cv * 8);
+  }
+
+  function updateApm() {
+    const now = performance.now();
+    // Prune timestamps older than 10 minutes
+    while (apmTimestamps.length > 0 && apmTimestamps[0] < now - 600000) {
+      apmTimestamps.shift();
+    }
+
+    // Count presses in last 5s, normalize to per-minute
+    let count = 0;
+    const cutoff = now - 5000;
+    for (let i = apmTimestamps.length - 1; i >= 0; i--) {
+      if (apmTimestamps[i] < cutoff) break;
+      count++;
+    }
+    currentApm = Math.round(count * 12); // count * (60000 / 5000)
+    if (apmValue) apmValue.textContent = String(currentApm);
+
+    // Rhythm sync + regularity → combined multiplier
+    const bpm = stemPlayer?.manifest?.bpm || 0;
+    rhythmSync = computeRhythmSync(currentApm, bpm);
+    rhythmRegularity = computeRegularity(now);
+
+    // Show the actual scoring multiplier so players see the impact
+    const mult = 1 + rhythmSync * 0.5 + rhythmRegularity * 0.25;
+    if (rhythmMultiplierEl) {
+      rhythmMultiplierEl.textContent = `x${mult.toFixed(2)}`;
+      // Color ramps from white (1.0x) through green (1.5x+) to gold (1.75x)
+      if (mult >= 1.5) {
+        rhythmMultiplierEl.style.color = '#ffcc00';
+        rhythmMultiplierEl.style.textShadow = '0 0 8px rgba(255, 200, 0, 0.6)';
+      } else if (mult >= 1.15) {
+        rhythmMultiplierEl.style.color = '#66ff88';
+        rhythmMultiplierEl.style.textShadow = '0 0 6px rgba(100, 255, 130, 0.4)';
+      } else {
+        rhythmMultiplierEl.style.color = 'rgba(255, 255, 255, 0.7)';
+        rhythmMultiplierEl.style.textShadow = 'none';
+      }
+    }
+  }
+
+  function updateBpmDisplay() {
+    const bpm = stemPlayer?.manifest?.bpm;
+    if (bpmValue) bpmValue.textContent = bpm ? String(Math.round(bpm)) : '--';
+  }
+
+  /** Get rhythm scores (0-1 each) for use by scoring systems */
+  function getRhythmSync() { return rhythmSync; }
+  function getRhythmRegularity() { return rhythmRegularity; }
+
   let runSummaryTimer = 0;
   function hideRunSummary() {
     if (!runSummary) return;
@@ -2225,24 +2487,40 @@
   }
 
   function showHighScoreModal(score, trackTitle) {
-    if (!highScoreModal || !EnvironmentMode) return;
+    if (!highScoreModal) return;
 
-    // Check if it's a high score
-    if (!EnvironmentMode.isHighScore(trackTitle, score)) {
-      return;  // Not a high score, skip modal
-    }
+    const isHighScore = EnvironmentMode && EnvironmentMode.isHighScore(trackTitle, score);
+    pendingHighScore = isHighScore ? { score, trackTitle } : null;
 
-    pendingHighScore = { score, trackTitle };
+    // Title changes based on whether it's a new high score
+    if (modalTitle) modalTitle.textContent = isHighScore ? 'NEW HIGH SCORE!' : 'TRACK COMPLETE';
 
     if (finalScoreDisplay) finalScoreDisplay.textContent = String(score);
     if (finalTrackDisplay) finalTrackDisplay.textContent = trackTitle;
+
+    // Show rhythm stats
+    const syncPct = Math.round(rhythmSync * 100);
+    const beatPct = Math.round(rhythmRegularity * 100);
+    const mult = 1 + rhythmSync * 0.5 + rhythmRegularity * 0.25;
+    if (finalSync) finalSync.textContent = `${syncPct}%`;
+    if (finalBeat) finalBeat.textContent = `${beatPct}%`;
+    if (finalRhythmBonus) {
+      finalRhythmBonus.textContent = `x${mult.toFixed(2)}`;
+      finalRhythmBonus.style.color = mult >= 1.5 ? '#ffcc00' : mult >= 1.15 ? '#66ff88' : '';
+    }
+
+    // Only show initials input for high scores
+    if (initialsSection) initialsSection.style.display = isHighScore ? '' : 'none';
+    if (saveScoreBtn) saveScoreBtn.style.display = isHighScore ? '' : 'none';
+    if (skipScoreBtn) skipScoreBtn.style.display = isHighScore ? '' : 'none';
     if (initialsInput) initialsInput.value = '';
 
-    // Show current leaderboard
     updateLeaderboardDisplay(trackTitle);
 
     highScoreModal.hidden = false;
-    if (initialsInput) initialsInput.focus();
+    if (isHighScore && initialsInput) {
+      initialsInput.focus();
+    }
   }
 
   function hideHighScoreModal() {
@@ -2292,6 +2570,13 @@
     skipScoreBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       hideHighScoreModal();
+    });
+  }
+  if (nextTrackBtn) {
+    nextTrackBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      hideHighScoreModal();
+      next({ autoplay: true });
     });
   }
   if (initialsInput) {
@@ -3314,6 +3599,9 @@
         updateTimeUi();
       }
 
+      // Update APM display
+      updateApm();
+
       if (threeReady && bgVizMode !== "off") {
         resizeThreeRenderer();
         drawVizThree(now);
@@ -3466,7 +3754,13 @@
           }
         });
 
+        // Handle stem player track end (mirrors audio "ended" event)
+        stemPlayer.on('ended', () => {
+          handleTrackEnded();
+        });
+
         usingStemPlayer = true;
+        updateBpmDisplay();
         console.log("Stems loaded successfully:", stemPlayer.getStemIds());
 
         // Enable minimal effects for stem visualization to work
@@ -4517,21 +4811,28 @@
     updateVizPauseState();
     setMediaSessionPlaybackState();
   });
-  audio.addEventListener("ended", () => {
-    // Check for high score when track ends
+  // Shared track-ended handler for both <audio> and stem player
+  function handleTrackEnded() {
+    // In environment mode: stop, show score screen, let user choose next
     if (EnvironmentMode && bgVizMode === "environment" && currentTrackTitle) {
-      // Show Chill Ride run summary (rank/flow/gates)
       try {
         const summary = EnvironmentMode.getRunSummary && EnvironmentMode.getRunSummary();
         if (summary) showRunSummary(summary);
       } catch { /* ignore */ }
 
-      const finalScore = EnvironmentMode.getScore();
-      if (finalScore > 0) {
-        showHighScoreModal(finalScore, currentTrackTitle);
+      // Stop playback but keep viz alive for the background
+      audio.pause();
+      if (usingStemPlayer && stemPlayer) {
+        try { stemPlayer.stop(); } catch { /* ignore */ }
       }
+      updatePlayPauseBtn();
+
+      const finalScore = EnvironmentMode.getScore ? EnvironmentMode.getScore() : 0;
+      showHighScoreModal(finalScore, currentTrackTitle);
+      return; // Don't auto-advance — user clicks NEXT TRACK
     }
 
+    // Non-environment mode: auto-advance as before
     if (repeatMode === "one") {
       next({ autoplay: true });
       return;
@@ -4541,7 +4842,9 @@
     } else {
       stop();
     }
-  });
+  }
+
+  audio.addEventListener("ended", handleTrackEnded);
   audio.addEventListener("error", () => {
     updatePlayPauseBtn();
     updateVizPauseState();
@@ -5044,6 +5347,10 @@
 
   // Expose the stem effect override getter for track scenes to use
   window.getStemEffectOverride = getStemEffectOverride;
+
+  // Expose rhythm scores for scoring systems (environments.js)
+  window.getRhythmSync = getRhythmSync;
+  window.getRhythmRegularity = getRhythmRegularity;
 
   if (closeStemDebugBtn) {
     closeStemDebugBtn.addEventListener('click', () => {

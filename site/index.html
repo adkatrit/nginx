@@ -89,12 +89,12 @@
     <link rel="apple-touch-icon" href="./favicon.svg" />
     <link rel="manifest" href="./site.webmanifest" />
     <!-- Preload critical assets -->
-    <link rel="preload" href="./styles.css?v=22" as="style" />
-    <link rel="preload" href="./app.js?v=26" as="script" />
-    <link rel="preload" href="./track-scenes.js?v=35" as="script" />
+    <link rel="preload" href="./styles.css?v=24" as="style" />
+    <link rel="preload" href="./app.js?v=28" as="script" />
+    <link rel="preload" href="./track-scenes.js?v=36" as="script" />
     <link rel="preload" href="./environments.js?v=12" as="script" />
 
-    <link rel="stylesheet" href="./styles.css?v=22" />
+    <link rel="stylesheet" href="./styles.css?v=24" />
 
     <script type="importmap">
       {
@@ -170,6 +170,14 @@
           <span class="gate-label">GATES</span>
           <span class="gate-value" id="gateStreakValue">0</span>
         </div>
+        <div class="tempo-line">
+          <span class="tempo-label">BPM</span>
+          <span class="tempo-value" id="bpmValue">--</span>
+          <span class="tempo-label">APM</span>
+          <span class="tempo-value" id="apmValue">0</span>
+          <span class="rhythm-multiplier" id="rhythmMultiplier">x1.00</span>
+          <span class="tempo-label">RHYTHM</span>
+        </div>
       </div>
       <div class="high-score-display">
         <span class="high-score-label">HIGH</span>
@@ -218,15 +226,21 @@
     <!-- High Score Entry Modal -->
     <div id="highScoreModal" class="high-score-modal" hidden>
       <div class="high-score-modal__content">
-        <h2 class="high-score-modal__title">NEW HIGH SCORE!</h2>
+        <h2 class="high-score-modal__title" id="modalTitle">TRACK COMPLETE</h2>
         <div class="high-score-modal__score" id="finalScoreDisplay">0</div>
         <div class="high-score-modal__track" id="finalTrackDisplay"></div>
-        <div class="high-score-modal__input">
+        <div class="high-score-modal__stats" id="finalStats">
+          <div class="stat-row"><span class="stat-label">Rhythm Sync</span><span class="stat-val" id="finalSync">--</span></div>
+          <div class="stat-row"><span class="stat-label">Beat Regularity</span><span class="stat-val" id="finalBeat">--</span></div>
+          <div class="stat-row"><span class="stat-label">Rhythm Bonus</span><span class="stat-val" id="finalRhythmBonus">x1.00</span></div>
+        </div>
+        <div class="high-score-modal__input" id="initialsSection">
           <label>Enter your initials:</label>
           <input type="text" id="initialsInput" maxlength="3" placeholder="AAA" autocomplete="off" />
         </div>
         <div class="high-score-modal__buttons">
           <button id="saveScoreBtn" class="high-score-modal__btn">SAVE</button>
+          <button id="nextTrackBtn" class="high-score-modal__btn">NEXT TRACK</button>
           <button id="skipScoreBtn" class="high-score-modal__btn high-score-modal__btn--skip">SKIP</button>
         </div>
         <div class="high-score-modal__leaderboard" id="leaderboardDisplay"></div>
@@ -417,14 +431,14 @@
     <script src="./models.js?v=9"></script>
     <script src="./themes.js?v=13"></script>
     <script src="./backgrounds.js?v=10"></script>
-    <script src="./track-scenes.js?v=35"></script>
+    <script src="./track-scenes.js?v=36"></script>
     <script src="./effects-manager.js?v=10"></script>
     <script src="./noise.js?v=9"></script>
     <script src="./terrain.js?v=9"></script>
     <script src="./environments.js?v=12"></script>
-    <script src="./stem-player.js?v=12"></script>
+    <script src="./stem-player.js?v=13"></script>
     <script src="./ios-viz.js?v=9"></script>
     <script src="./scene-tuner.js?v=4"></script>
-    <script src="./app.js?v=26"></script>
+    <script src="./app.js?v=28"></script>
   </body>
 </html>

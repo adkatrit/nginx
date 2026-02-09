@@ -798,8 +798,8 @@ window.TRACK_THEMES = {
       boostPad: 0xffcc88,
       centerMarker: 0xee9955,
       fogColor: 0x1a0f08,
-      fogNear: 25,
-      fogFar: 200,
+      fogNear: 500,
+      fogFar: 1200,
       ambientLight: 0x2a1a10,
       ambientIntensity: 0.5
     },
@@ -810,20 +810,12 @@ window.TRACK_THEMES = {
       particleType: "dust",
       particleDensity: 0.4,
       pulseWithBeat: false,
-      skyGradient: [0x150a05, 0x2a1510],
-      backgroundEffect: {
-        type: "savanna",
-        color1: 0x150a05,
-        color2: 0x2a1510,
-        color3: 0x503820,
-        accent: 0xffaa55,
-        speed: 0.5,
-        intensity: 0.6,
-        scale: 1.0
-      },
+      skyGradient: [0x1a0805, 0x4a1a08],
+      backgroundEffect: null,  // Sky shader in scene handles the sky
       terrain: {
-        enabled: false,      // Custom scene handles ground
-        noGroundPlane: true  // Skip default ground plane
+        enabled: false,
+        noGroundPlane: true,
+        noEnvironmentScenery: true  // Skip ALL default scenery (ground, parallax, chunks, sky dome, etc.)
       }
     }
   }
