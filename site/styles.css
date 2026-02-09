@@ -2016,8 +2016,8 @@ input[type="range"]:active::-moz-range-thumb {
   top: 0;
   bottom: 0;
   width: 2px;
-  background: var(--wa-accent);
-  box-shadow: 0 0 12px rgba(var(--wa-accent-rgb), 0.9), 0 0 4px rgba(var(--wa-accent-rgb), 1);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.7), 0 0 3px rgba(255, 255, 255, 0.9);
   pointer-events: none;
   z-index: 5;
   left: calc(var(--progress, 0) * 100%);
@@ -2025,7 +2025,7 @@ input[type="range"]:active::-moz-range-thumb {
 }
 
 .waveform-container:hover .waveform-playhead {
-  box-shadow: 0 0 16px rgba(var(--wa-accent-rgb), 1), 0 0 6px rgba(var(--wa-accent-rgb), 1);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.9), 0 0 5px rgba(255, 255, 255, 1);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

@@ -1,4 +1,4 @@
-# robots.txt for jrod.dev (Audio Environments by DeytaDreams)
+# robots.txt for jrod.dev (Code from Dream by DeytaDreams)
 User-agent: *
 Allow: /
 Disallow: /_archive/

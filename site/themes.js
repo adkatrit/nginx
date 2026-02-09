@@ -494,18 +494,8 @@ window.TRACK_THEMES = {
         scale: 0.8
       },
       terrain: {
-        enabled: true,
-        scale: 0.04,
-        octaves: 3,
-        persistence: 0.65,
-        amplitude: 2.2,
-        baseHeight: -0.5,
-        ridged: true,
-        colorByHeight: true,
-        lowColor: 0x061208,
-        midColor: 0x0a1a0d,
-        highColor: 0x1a3a2a,
-        peakColor: 0x2a5a4a
+        enabled: false,  // Disabled - custom scene has its own ground/sky
+        noGroundPlane: true  // Also skip default ground plane
       }
     }
   },
@@ -832,18 +822,8 @@ window.TRACK_THEMES = {
         scale: 1.0
       },
       terrain: {
-        enabled: true,
-        scale: 0.025,
-        octaves: 2,
-        persistence: 0.6,
-        amplitude: 2.5,
-        baseHeight: -0.8,
-        ridged: false,
-        colorByHeight: true,
-        lowColor: 0x1a120c,
-        midColor: 0x2a1a12,
-        highColor: 0x4a3020,
-        peakColor: 0x805530
+        enabled: false,      // Custom scene handles ground
+        noGroundPlane: true  // Skip default ground plane
       }
     }
   }

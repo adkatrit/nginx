@@ -681,6 +681,16 @@
   /** @type {WaveformVisualizer|null} */
   let waveformViz = null;
 
+  // Stem colors matching the mixer buttons (RGB arrays)
+  const STEM_COLORS = {
+    drums:  [255, 68, 102],   // coral
+    bass:   [255, 136, 0],    // orange
+    vocals: [0, 221, 255],    // cyan
+    synth:  [170, 68, 255],   // purple
+    guitar: [68, 255, 136],   // green
+  };
+  const STEM_ORDER = ['drums', 'bass', 'vocals', 'synth', 'guitar'];
+
   class WaveformVisualizer {
     constructor(canvas) {
       this.canvas = canvas;
@@ -688,7 +698,39 @@
       this.barCount = 60;
       this.smoothedData = new Float32Array(this.barCount);
       this.resizeObserver = null;
+
+      // ── Time-indexed stem history ──
+      // Stores sampled stem energies for each time slot so that bars
+      // represent the audio at their corresponding position in the track.
+      // Each slot: { drums: energy, bass: energy, ... , total: energy }
+      this.history = new Array(this.barCount).fill(null);
+      this.trackDuration = 0;
+
       this.setupResize();
+    }
+
+    resetHistory() {
+      this.history = new Array(this.barCount).fill(null);
+      this.smoothedData.fill(0);
+      this.trackDuration = 0;
+    }
+
+    // Record stem snapshot into the history slot for the given time
+    recordStemSnapshot(currentTime, duration, stemData) {
+      if (!stemData || !duration || duration <= 0) return;
+      this.trackDuration = duration;
+
+      const slot = Math.floor((currentTime / duration) * this.barCount);
+      if (slot < 0 || slot >= this.barCount) return;
+
+      const entry = { total: 0 };
+      for (const stemId of STEM_ORDER) {
+        const a = stemData[stemId];
+        const e = a ? (a.energy || 0) : 0;
+        entry[stemId] = e;
+        entry.total += e;
+      }
+      this.history[slot] = entry;
     }
 
     setupResize() {
@@ -711,53 +753,140 @@
       this.displayHeight = rect.height;
     }
 
-    draw(progress, isPlaying, audioData) {
+    draw(progress, isPlaying, audioData, stemData) {
       const { ctx, displayWidth: width, displayHeight: height, barCount } = this;
       if (!width || !height) return;
 
       const barWidth = width / barCount;
       const gap = 2;
+      const hasAnyStemHistory = this.history.some(h => h !== null);
 
-      // Get accent color from CSS
+      // Get accent color fallback
       const accentRgb = getCssVar('--wa-accent-rgb', '124, 60, 255').split(',').map(n => parseInt(n.trim()));
+
+      // Read which stems are active (not muted) from the mixer buttons
+      const activeStems = {};
+      if (stemMixer) {
+        const btns = stemMixer.querySelectorAll('.stem-btn');
+        btns.forEach(btn => {
+          activeStems[btn.dataset.stem] = btn.getAttribute('aria-pressed') === 'true';
+        });
+      }
 
       ctx.clearRect(0, 0, width, height);
 
+      const progressX = progress * width;
+      // Which slot is currently playing
+      const currentSlot = Math.floor(progress * barCount);
+
       for (let i = 0; i < barCount; i++) {
-        // Generate or update bar height
-        let targetHeight;
-        if (isPlaying && audioData) {
-          // Use frequency data mapped to bar position
-          const freqIndex = Math.floor((i / barCount) * 128);
-          const energy = audioData.frequencyData ? audioData.frequencyData[freqIndex] / 255 : 0.1;
-          targetHeight = 0.15 + energy * 0.7;
-        } else {
-          // Subtle idle animation
-          targetHeight = 0.08 + Math.sin(Date.now() / 1000 + i * 0.3) * 0.04;
-        }
-
-        // Smooth the data
-        this.smoothedData[i] += (targetHeight - this.smoothedData[i]) * 0.15;
-        const barHeight = this.smoothedData[i] * height;
-
         const x = i * barWidth;
-        const y = (height - barHeight) / 2;
-
-        // Color based on progress
-        const progressX = progress * width;
         const isPast = (x + barWidth / 2) < progressX;
 
-        if (isPast) {
-          ctx.fillStyle = `rgba(${accentRgb[0]}, ${accentRgb[1]}, ${accentRgb[2]}, 0.9)`;
-        } else {
-          ctx.fillStyle = `rgba(${accentRgb[0]}, ${accentRgb[1]}, ${accentRgb[2]}, 0.25)`;
-        }
+        // Try to get stem data for this bar's time slot from history
+        const slotData = this.history[i];
+        const isCurrentSlot = (i === currentSlot);
 
-        // Draw rounded bar
-        const radius = Math.min(barWidth / 3, 3);
-        ctx.beginPath();
-        ctx.roundRect(x + gap / 2, y, barWidth - gap, barHeight, radius);
-        ctx.fill();
+        // For the current slot, use live data if available; otherwise use history
+        const useLive = isCurrentSlot && isPlaying && stemData && Object.keys(stemData).length > 1;
+
+        if (slotData || useLive) {
+          // ── Stem-stacked mode: per-time-slot composition ──
+          const stemEnergies = {};
+          let totalEnergy = 0;
+
+          for (const stemId of STEM_ORDER) {
+            let e;
+            if (useLive) {
+              const a = stemData[stemId];
+              e = a ? (a.energy || 0) : 0;
+            } else {
+              e = slotData ? (slotData[stemId] || 0) : 0;
+            }
+
+            const isActive = activeStems[stemId] !== false;
+            if (!isActive) e *= 0.12;
+
+            stemEnergies[stemId] = e;
+            totalEnergy += e;
+          }
+
+          // Bar height from total energy of that time slot
+          const targetHeight = 0.15 + Math.min(totalEnergy / STEM_ORDER.length, 1) * 0.75;
+          // Current slot animates smoothly; historic slots settle quickly
+          const smoothing = isCurrentSlot ? 0.18 : 0.08;
+          this.smoothedData[i] += (targetHeight - this.smoothedData[i]) * smoothing;
+          const barHeight = this.smoothedData[i] * height;
+          const barY = (height - barHeight) / 2;
+
+          // Compute proportions
+          const proportions = {};
+          for (const stemId of STEM_ORDER) {
+            proportions[stemId] = totalEnergy > 0.001
+              ? (stemEnergies[stemId] / totalEnergy)
+              : (1 / STEM_ORDER.length);
+          }
+
+          // Draw stacked segments (bottom to top)
+          const radius = Math.min(barWidth / 3, 3);
+          const bx = x + gap / 2;
+          const bw = barWidth - gap;
+          let drawY = barY + barHeight;
+
+          ctx.save();
+          ctx.beginPath();
+          ctx.roundRect(bx, barY, bw, barHeight, radius);
+          ctx.clip();
+
+          for (let s = 0; s < STEM_ORDER.length; s++) {
+            const stemId = STEM_ORDER[s];
+            const proportion = proportions[stemId] || 0;
+            const segH = proportion * barHeight;
+            if (segH < 0.3) continue;
+
+            const rgb = STEM_COLORS[stemId] || accentRgb;
+            const isActive = activeStems[stemId] !== false;
+
+            let alpha;
+            if (!isActive) {
+              alpha = isPast ? 0.15 : 0.06;
+            } else {
+              alpha = isPast ? 0.88 : 0.2;
+            }
+
+            drawY -= segH;
+            ctx.fillStyle = `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`;
+            ctx.fillRect(bx, drawY, bw, segH);
+          }
+
+          ctx.restore();
+        } else {
+          // ── No history for this slot: fallback mode ──
+          let targetHeight;
+          if (hasAnyStemHistory) {
+            // Track has stems but this slot hasn't been reached yet — show subtle placeholder
+            targetHeight = 0.06 + Math.sin(Date.now() / 1200 + i * 0.25) * 0.02;
+          } else if (isPlaying && audioData) {
+            const freqIndex = Math.floor((i / barCount) * 128);
+            const energy = audioData.frequencyData ? audioData.frequencyData[freqIndex] / 255 : 0.1;
+            targetHeight = 0.15 + energy * 0.7;
+          } else {
+            targetHeight = 0.08 + Math.sin(Date.now() / 1000 + i * 0.3) * 0.04;
+          }
+
+          this.smoothedData[i] += (targetHeight - this.smoothedData[i]) * 0.15;
+          const barHeight = this.smoothedData[i] * height;
+          const y = (height - barHeight) / 2;
+
+          ctx.fillStyle = isPast
+            ? `rgba(${accentRgb[0]}, ${accentRgb[1]}, ${accentRgb[2]}, 0.9)`
+            : `rgba(${accentRgb[0]}, ${accentRgb[1]}, ${accentRgb[2]}, 0.25)`;
+
+          const radius = Math.min(barWidth / 3, 3);
+          ctx.beginPath();
+          ctx.roundRect(x + gap / 2, y, barWidth - gap, barHeight, radius);
+          ctx.fill();
+        }
       }
     }
 
@@ -777,7 +906,15 @@
   // Update waveform in animation loop
   function updateWaveform(progress, isPlaying, audioData) {
     if (!waveformViz) return;
-    waveformViz.draw(progress, isPlaying, audioData);
+
+    // Record stem energy snapshot into history for the current time position
+    if (isPlaying && stemAnalysisData) {
+      const dur = getPlaybackDuration();
+      const cur = getPlaybackCurrentTime();
+      waveformViz.recordStemSnapshot(cur, dur, stemAnalysisData);
+    }
+
+    waveformViz.draw(progress, isPlaying, audioData, stemAnalysisData);
 
     // Update playhead position
     if (waveformPlayhead) {
@@ -3251,6 +3388,9 @@
 
     seek.value = "0";
     seek.style.setProperty("--progress", "0%");
+
+    // Reset waveform stem history for new track
+    if (waveformViz) waveformViz.resetHistory();
 
     // Clean up previous stem player if exists
     if (stemPlayer) {

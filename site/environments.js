@@ -747,6 +747,12 @@
         return;
       }
 
+      // Skip ground plane if explicitly disabled (for tracks with custom scenes)
+      if (terrainConfig && terrainConfig.enabled === false && terrainConfig.noGroundPlane) {
+        console.log('Ground plane skipped - custom scene handles ground');
+        return;
+      }
+
       const planeSize = CONFIG.viewDistance * 2;
       const floorPattern = this.theme.floorPattern || 'solid';
       const glowIntensity = this.theme.glowIntensity || 0.5;

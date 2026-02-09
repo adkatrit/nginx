@@ -1682,19 +1682,167 @@ window.TrackScenes = (function() {
   function buildTradeHands(THREE, scene, audioData) {
     const group = new THREE.Group();
 
-    // Warm sunrise fog - denser to hide distant edges
-    scene.fog = new THREE.FogExp2(0x1a0808, 0.012);
+    // Very light fog - ground visible
+    scene.fog = new THREE.FogExp2(0x030101, 0.003);
 
-    // === INFINITE GROUND PLANE - Hides terrain edge/sky gap ===
+    // === MYCELIUM NETWORK GROUND ===
+    const terrainVertexShader = `
+      varying vec2 vUv;
+      varying vec3 vWorldPos;
+      varying float vHeight;
+
+      void main() {
+        vUv = uv;
+        vec4 worldPos = modelMatrix * vec4(position, 1.0);
+        vWorldPos = worldPos.xyz;
+        vHeight = 0.0;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `;
+
+    const terrainFragmentShader = `
+      uniform float time;
+      uniform float bassEnergy;
+      uniform float drumEnergy;
+      uniform float patternScale;
+      uniform float veinThickness;
+      uniform float glowIntensity;
+      uniform float dataFlowSpeed;
+      uniform float nodeSize;
+      uniform vec3 baseColor;
+      uniform vec3 glowColor;
+      varying vec2 vUv;
+      varying vec3 vWorldPos;
+      varying float vHeight;
+
+      float hash(vec2 p) {
+        return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+      }
+
+      float noise(vec2 p) {
+        vec2 i = floor(p);
+        vec2 f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        float a = hash(i);
+        float b = hash(i + vec2(1.0, 0.0));
+        float c = hash(i + vec2(0.0, 1.0));
+        float d = hash(i + vec2(1.0, 1.0));
+        return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+      }
+
+      // Voronoi for mycelium network
+      vec2 voronoi(vec2 p) {
+        vec2 n = floor(p);
+        vec2 f = fract(p);
+        float minDist = 8.0;
+        float secondDist = 8.0;
+
+        for(int j = -1; j <= 1; j++) {
+          for(int i = -1; i <= 1; i++) {
+            vec2 g = vec2(float(i), float(j));
+            vec2 o = vec2(hash(n + g), hash(n + g + 100.0));
+            vec2 diff = g + o - f;
+            float d = dot(diff, diff);
+            if(d < minDist) {
+              secondDist = minDist;
+              minDist = d;
+            } else if(d < secondDist) {
+              secondDist = d;
+            }
+          }
+        }
+        return vec2(sqrt(minDist), sqrt(secondDist));
+      }
+
+      void main() {
+        // Use WORLD POSITION so pattern is fixed in space (you fly over it)
+        vec2 uv = vWorldPos.xz * patternScale * 0.02;  // Scale world coords
+
+        // Distance from center for edge fade (based on geometry UV)
+        float dist = length(vUv - 0.5) * 2.0;
+        float fade = smoothstep(0.7, 1.0, dist);
+
+        // === MYCELIUM NETWORK ===
+        vec2 vor = voronoi(uv);
+        float edge = vor.y - vor.x;
+        float veins = smoothstep(0.0, veinThickness, edge) * (1.0 - smoothstep(veinThickness, veinThickness * 2.5, edge));
+
+        // Secondary finer network
+        vec2 vor2 = voronoi(uv * 2.0);
+        float edge2 = vor2.y - vor2.x;
+        float fineVeins = smoothstep(0.0, veinThickness * 0.67, edge2) * (1.0 - smoothstep(veinThickness * 0.67, veinThickness * 1.67, edge2));
+
+        // === DATA STREAMS ===
+        float flow = fract(vor.x * 4.0 - time * dataFlowSpeed);
+        float dataStream = veins * smoothstep(0.0, 0.15, flow) * smoothstep(0.5, 0.25, flow);
+
+        // === COLORS ===
+        vec3 darkSoil = baseColor;
+        vec3 myceliumGlow = glowColor;
+        vec3 dataColor = vec3(0.2, 1.0, 0.9);        // Bright cyan
+        vec3 nodeColor = vec3(0.9, 0.3, 1.0);        // Magenta
+
+        // Base ground
+        vec3 groundColorOut = darkSoil * (0.8 + noise(uv * 3.0) * 0.4);
+
+        // === GLOWING MYCELIUM ===
+        float bassGlow = glowIntensity + bassEnergy * 1.2;
+        groundColorOut += myceliumGlow * veins * bassGlow;
+        groundColorOut += myceliumGlow * fineVeins * bassGlow * 0.4;
+
+        // === FLOWING DATA ===
+        groundColorOut += dataColor * dataStream * (0.6 + bassEnergy);
+
+        // === NODES ===
+        float nodes = smoothstep(nodeSize, 0.0, vor.x);
+        groundColorOut += nodeColor * nodes * (0.4 + drumEnergy * 1.2);
+
+        // === SPOTS ===
+        float spots = smoothstep(0.72, 0.78, noise(uv * 0.5 + time * 0.1));
+        groundColorOut += vec3(0.1, 0.6, 0.4) * spots * (0.3 + bassEnergy * 0.5);
+
+        // Edge fade to dark
+        groundColorOut = mix(groundColorOut, vec3(0.01, 0.005, 0.005), fade);
+
+        gl_FragColor = vec4(groundColorOut, 1.0);
+      }
+    `;
+
+    const groundUniforms = {
+      time: { value: 0 },
+      bassEnergy: { value: 0 },
+      drumEnergy: { value: 0 },
+      patternScale: { value: 25 },
+      veinThickness: { value: 0.09 },
+      glowIntensity: { value: 0 },
+      dataFlowSpeed: { value: 6 },
+      nodeSize: { value: 0.21 },
+      baseColor: { value: new THREE.Vector3(0.105, 0.13, 0.12) },
+      glowColor: { value: new THREE.Vector3(0.3, 0.65, 0.75) }
+    };
+
+    const groundMat = new THREE.ShaderMaterial({
+      vertexShader: terrainVertexShader,
+      fragmentShader: terrainFragmentShader,
+      uniforms: groundUniforms,
+      side: THREE.DoubleSide
+    });
+
+    // EXPOSE GLOBALLY for scene tuner access
+    window._tradeHandsGround = {
+      uniforms: groundUniforms,
+      material: groundMat
+    };
+    console.log('[Trade You My Hands] Ground exposed globally:', window._tradeHandsGround);
+
+    // Large terrain plane with displacement
     const groundPlane = new THREE.Mesh(
-      new THREE.PlaneGeometry(2000, 2000),
-      new THREE.MeshBasicMaterial({
-        color: 0x0a0505,  // Very dark warm brown - matches terrain base
-        side: THREE.DoubleSide
-      })
+      new THREE.PlaneGeometry(1000, 1000, 100, 100),
+      groundMat
     );
     groundPlane.rotation.x = -Math.PI / 2;
-    groundPlane.position.y = -5.5;  // Below terrain base
+    groundPlane.position.y = -1.5;  // Above the grid floor (at y=-2)
+    groundPlane.renderOrder = 1;  // Render after other ground elements
     scene.add(groundPlane);
 
     // === SUNRISE SKY SHADER - Fully Vocal Reactive ===
@@ -1714,6 +1862,10 @@ window.TrackScenes = (function() {
       uniform float vocalEnergy;
       uniform float bassEnergy;
       uniform float drumEnergy;
+      uniform float luminosityMin;
+      uniform float luminosityRange;
+      uniform float sunGlowIntensity;
+      uniform float horizonIntensity;
       varying vec3 vWorldPosition;
       varying vec2 vUv;
 
@@ -1726,9 +1878,8 @@ window.TrackScenes = (function() {
         float b = bassEnergy;
         float d = drumEnergy;
 
-        // === GROUND COLOR - Solid dark for bottom hemisphere ===
-        // This hides any terrain edge fragmentation
-        vec3 groundColor = vec3(0.02, 0.01, 0.01);  // Very dark warm brown
+        // === GROUND COLOR - Matches organic jungle floor ===
+        vec3 groundColor = vec3(0.015, 0.01, 0.008);  // Dark jungle floor
 
         // Below horizon = solid ground (no sky visible through terrain gaps)
         if (y < -0.05) {
@@ -1771,19 +1922,19 @@ window.TrackScenes = (function() {
 
         // === LUMINOSITY CONTROL ===
         // Vocals control brightness, not color
-        // Quiet = dim (0.35x), Singing = bright (1.5x)
-        float luminosity = 0.35 + v * 1.15;
+        // Quiet = dim, Singing = bright (tunable range)
+        float luminosity = luminosityMin + v * luminosityRange;
         vec3 color = baseColor * luminosity;
 
         // === SUN GLOW - Brighter with vocals, same color ===
         float sunDist = length(vec2(x, y - 0.08));
         float sunGlow = smoothstep(0.35, 0.05, sunDist);
         // Sun just gets brighter, keeps gold color
-        color += gold * sunGlow * (0.15 + v * 0.6) * luminosity;
+        color += gold * sunGlow * (sunGlowIntensity + v * 0.6) * luminosity;
 
         // === HORIZON LINE - Brighter with vocals ===
         float horizonLine = exp(-abs(y - 0.03) * 25.0);
-        color += orange * horizonLine * (0.1 + v * 0.4) * luminosity;
+        color += orange * horizonLine * (horizonIntensity + v * 0.4) * luminosity;
 
         // === LIGHT RAYS - Visible when singing loud ===
         if (v > 0.25) {
@@ -1797,8 +1948,9 @@ window.TrackScenes = (function() {
         // === DRUM FLASH - Multiplicative brightness ===
         color *= 1.0 + d * 0.4 * smoothstep(0.2, -0.2, y);
 
-        // === BASS - Adds depth to bottom ===
-        color += deepPurple * b * smoothstep(0.0, -0.35, y) * 0.4;
+        // === BASS - Adds purple depth near horizon ===
+        vec3 bassColor = vec3(0.1, 0.03, 0.15);  // Deep purple
+        color += bassColor * b * smoothstep(0.1, -0.1, y) * 0.5;
 
         gl_FragColor = vec4(color, 1.0);
       }
@@ -1808,7 +1960,11 @@ window.TrackScenes = (function() {
       time: { value: 0 },
       vocalEnergy: { value: 0 },
       bassEnergy: { value: 0 },
-      drumEnergy: { value: 0 }
+      drumEnergy: { value: 0 },
+      luminosityMin: { value: 0.35 },
+      luminosityRange: { value: 1.15 },
+      sunGlowIntensity: { value: 0.15 },
+      horizonIntensity: { value: 0.1 }
     };
 
     const skyMat = new THREE.ShaderMaterial({
@@ -2268,8 +2424,91 @@ window.TrackScenes = (function() {
     let lastDrumPulse = 0;
     let lastBassPulse = 0;
     let lastVocalPulse = 0;
-
     let lastSynthPulse = 0;
+
+    // === TUNABLE AUDIO REACTIVITY MULTIPLIERS ===
+    let bassMultiplier = 6;
+    let synthMultiplier = 4;
+    let drumSmoothing = 0.85;
+    let bassSmoothing = 0.8;
+    let vocalSmoothing = 0.9;
+
+    // === TUNABLE TREE PARAMETERS ===
+    let trunkGlowBase = 0.05;
+    let trunkGlowMult = 1.5;
+    let leafGlowBase = 0.02;
+    let leafGlowMult = 0.5;
+
+    // === TUNABLE FIREFLY PARAMETERS ===
+    let fireflyBaseSize = 0.5;
+    let fireflySizeMult = 0.5;
+    let fireflyBaseOpacity = 0.7;
+    let fireflySwarmIntensity = 1.5;
+
+    // === SCENE TUNER INTEGRATION ===
+    if (window.SceneTuner) {
+      window.SceneTuner.onUpdate((section, param, value) => {
+        console.log('[SceneTuner] Update:', section, param, value);
+
+        // Ground shader parameters - USE GLOBAL REFERENCE
+        if (section === 'ground' && window._tradeHandsGround) {
+          const u = window._tradeHandsGround.uniforms;
+          console.log('[SceneTuner] Ground param via global:', param, '=', value);
+          if (param === 'patternScale') u.patternScale.value = value;
+          if (param === 'veinThickness') u.veinThickness.value = value;
+          if (param === 'glowIntensity') u.glowIntensity.value = value;
+          if (param === 'dataFlowSpeed') u.dataFlowSpeed.value = value;
+          if (param === 'nodeSize') u.nodeSize.value = value;
+          if (param === 'baseColorR') u.baseColor.value.x = value;
+          if (param === 'baseColorG') u.baseColor.value.y = value;
+          if (param === 'baseColorB') u.baseColor.value.z = value;
+          if (param === 'glowColorR') u.glowColor.value.x = value;
+          if (param === 'glowColorG') u.glowColor.value.y = value;
+          if (param === 'glowColorB') u.glowColor.value.z = value;
+          // Verify uniform update worked
+          console.log('[SceneTuner] Uniform values now:', {
+            patternScale: u.patternScale.value,
+            glowIntensity: u.glowIntensity.value,
+            materialUniforms: window._tradeHandsGround.material.uniforms.patternScale.value
+          });
+        }
+        // Audio reactivity
+        if (section === 'audio') {
+          if (param === 'bassMultiplier') bassMultiplier = value;
+          if (param === 'synthMultiplier') synthMultiplier = value;
+          if (param === 'drumSmoothing') drumSmoothing = value;
+          if (param === 'bassSmoothing') bassSmoothing = value;
+          if (param === 'vocalSmoothing') vocalSmoothing = value;
+        }
+        // Fog
+        if (section === 'fog') {
+          if (param === 'density') scene.fog.density = value;
+        }
+        // Sky shader
+        if (section === 'sky') {
+          if (param === 'luminosityMin') skyUniforms.luminosityMin.value = value;
+          if (param === 'luminosityRange') skyUniforms.luminosityRange.value = value;
+          if (param === 'sunGlowIntensity') skyUniforms.sunGlowIntensity.value = value;
+          if (param === 'horizonIntensity') skyUniforms.horizonIntensity.value = value;
+          skyMat.needsUpdate = true;
+        }
+        // Trees
+        if (section === 'trees') {
+          if (param === 'trunkGlowBase') trunkGlowBase = value;
+          if (param === 'trunkGlowMult') trunkGlowMult = value;
+          if (param === 'leafGlowBase') leafGlowBase = value;
+          if (param === 'leafGlowMult') leafGlowMult = value;
+        }
+        // Fireflies
+        if (section === 'fireflies') {
+          if (param === 'baseSize') fireflyBaseSize = value;
+          if (param === 'sizeMultiplier') fireflySizeMult = value;
+          if (param === 'baseOpacity') fireflyBaseOpacity = value;
+          if (param === 'swarmIntensity') fireflySwarmIntensity = value;
+        }
+      });
+      console.log('[Trade You My Hands] Scene tuner connected - Press T to toggle');
+    }
 
     return {
       group,
@@ -2286,15 +2525,19 @@ window.TrackScenes = (function() {
 
         // STRICT 1:1 STEM MAPPING - Only 4 stems
         const drumEnergy = getEffectiveStemEnergy('drums', stemData?.drums?.energy || 0);
-        const bassEnergy = getEffectiveStemEnergy('bass', stemData?.bass?.energy || 0);
+        // Bass is weak in this track - amplify with tunable multiplier
+        const rawBass = getEffectiveStemEnergy('bass', stemData?.bass?.energy || 0);
+        const bassEnergy = Math.min(1.0, rawBass * bassMultiplier);
         const vocalEnergy = getEffectiveStemEnergy('vocals', stemData?.vocals?.energy || 0);
-        const synthEnergy = getEffectiveStemEnergy('synth', stemData?.synth?.energy || 0);
+        // Synth is also minimal - amplify with tunable multiplier
+        const rawSynth = getEffectiveStemEnergy('synth', stemData?.synth?.energy || 0);
+        const synthEnergy = Math.min(1.0, rawSynth * synthMultiplier);
 
-        // Smooth energy transitions
-        lastDrumPulse = lastDrumPulse * 0.85 + drumEnergy * 0.15;
-        lastBassPulse = lastBassPulse * 0.88 + bassEnergy * 0.12;
-        lastVocalPulse = lastVocalPulse * 0.9 + vocalEnergy * 0.1;
-        lastSynthPulse = lastSynthPulse * 0.9 + synthEnergy * 0.1;
+        // Smooth energy transitions - tunable smoothing
+        lastDrumPulse = lastDrumPulse * drumSmoothing + drumEnergy * (1 - drumSmoothing);
+        lastBassPulse = lastBassPulse * bassSmoothing + bassEnergy * (1 - bassSmoothing);
+        lastVocalPulse = lastVocalPulse * vocalSmoothing + vocalEnergy * (1 - vocalSmoothing);
+        lastSynthPulse = lastSynthPulse * bassSmoothing + synthEnergy * (1 - bassSmoothing);
 
         // === SUNRISE SKY & GROUND - Follow player ===
         if (shipPos) {
@@ -2303,19 +2546,24 @@ window.TrackScenes = (function() {
           groundPlane.position.z = shipPos.z;
         }
 
+        // Update ground shader - mycelium reacts to bass, terrain to drums
+        groundUniforms.time.value = time;
+        groundUniforms.bassEnergy.value = lastBassPulse;
+        groundUniforms.drumEnergy.value = lastDrumPulse;
+
         // Update sky shader uniforms - full stem reactivity
         skyUniforms.time.value = time;
         skyUniforms.vocalEnergy.value = lastVocalPulse;
         skyUniforms.bassEnergy.value = lastBassPulse;
         skyUniforms.drumEnergy.value = lastDrumPulse;
 
-        // Fog warms dramatically with vocals - darker base to hide edges
+        // Fog - very light, clears more with vocals
         scene.fog.color.setHSL(
-          0.02 + lastVocalPulse * 0.03,  // Hue shifts warmer with vocals
-          0.3 + lastVocalPulse * 0.3,     // More saturated when singing
-          0.03 + lastVocalPulse * 0.06    // Very dark base, brighter with vocals
+          0.02 + lastVocalPulse * 0.02,
+          0.1 + lastVocalPulse * 0.1,
+          0.015 + lastVocalPulse * 0.02
         );
-        scene.fog.density = 0.012 - lastVocalPulse * 0.004;  // Fog clears when singing
+        scene.fog.density = 0.003 - lastVocalPulse * 0.001;
 
         // === TREE SPAWNING & CLEANUP ===
         const spawnTreeZ = shipZ + TREES_AHEAD * TREE_SPACING;
@@ -2345,34 +2593,28 @@ window.TrackScenes = (function() {
           // Gentle swaying
           tree.rotation.z = Math.sin(time * data.swaySpeed + data.phase) * 0.02;
 
-          // BASS → Circuit bark glow (intense blue pulse)
+          // BASS → Tree trunk glows cyan-blue (bass now amplified)
           if (data.trunkMat) {
-            // Much stronger glow - 0.1 base up to 0.8 with bass
-            data.trunkMat.emissiveIntensity = 0.1 + lastBassPulse * 0.7;
-            // Vivid blue color shift with bass
-            const bassAmt = lastBassPulse;
-            // Blend from teal (0, 1, 0.67) toward bright blue (0.2, 0.5, 1)
-            data.trunkMat.emissive.setRGB(
-              bassAmt * 0.3,
-              0.8 - bassAmt * 0.3,
-              0.7 + bassAmt * 0.3
-            );
+            // Tunable base glow, scales up with bass
+            data.trunkMat.emissiveIntensity = trunkGlowBase + lastBassPulse * trunkGlowMult;
+            data.trunkMat.emissive.setHex(0x00aaff);
           }
 
-          // Animate data vines and nodes inside tree
+          // Animate data vines and nodes - react to amplified bass
           tree.traverse(child => {
             if (child.userData.vineMat) {
-              // BASS → Vine pulse - very bright with bass
-              child.userData.vineMat.opacity = 0.5 + lastBassPulse * 0.5;
+              // Vines glow brighter with bass
+              child.userData.vineMat.opacity = 0.4 + lastBassPulse * 0.6;
             }
             if (child.userData.leafMat) {
-              // Leaves glow brighter with bass
-              child.userData.leafMat.emissiveIntensity = 0.05 + lastBassPulse * 0.25;
+              // Leaves glow cyan with bass - tunable
+              child.userData.leafMat.emissiveIntensity = leafGlowBase + lastBassPulse * leafGlowMult;
+              child.userData.leafMat.emissive.setHex(0x00ffaa);
             }
             if (child.userData.nodeMat) {
-              // Hanging nodes pulse dramatically with bass
+              // Hanging nodes pulse with bass
               const nodePhase = child.userData.phase;
-              child.userData.nodeMat.opacity = 0.6 + Math.sin(time * 3 + nodePhase) * 0.2 + lastBassPulse * 0.4;
+              child.userData.nodeMat.opacity = 0.4 + Math.sin(time * 3 + nodePhase) * 0.2 + lastBassPulse * 0.4;
               child.position.y = child.userData.baseY + Math.sin(time * 2 + nodePhase) * 0.15;
             }
           });
@@ -2424,8 +2666,8 @@ window.TrackScenes = (function() {
         }
 
         // SYNTH → Firefly swarm activity (green-cyan glow)
-        // Strong base movement, synth adds frenzy
-        const swarmIntensity = 1.5 + lastSynthPulse * 4;
+        // Tunable base movement, synth adds frenzy
+        const swarmIntensity = fireflySwarmIntensity + lastSynthPulse * 4;
         for (let i = 0; i < fireflyCount; i++) {
           const d = fireflyData[i];
 
@@ -2446,9 +2688,9 @@ window.TrackScenes = (function() {
           }
         }
         fireflyGeom.attributes.position.needsUpdate = true;
-        // Higher base visibility - synth boosts further
-        fireflyMat.opacity = 0.7 + lastSynthPulse * 0.3;
-        fireflyMat.size = 0.5 + lastSynthPulse * 0.5;
+        // Tunable base visibility - synth boosts further
+        fireflyMat.opacity = fireflyBaseOpacity + lastSynthPulse * 0.3;
+        fireflyMat.size = fireflyBaseSize + lastSynthPulse * fireflySizeMult;
 
         // === ANIMATE CANOPY RAYS ===
         rays.forEach((ray, idx) => {
@@ -2483,16 +2725,15 @@ window.TrackScenes = (function() {
       },
 
       dispose() {
-        // Sunset sky cleanup
+        // Sky cleanup
         scene.remove(sky);
         skyGeom.dispose();
         skyMat.dispose();
-        skyTexture.dispose();
-        scene.remove(sun);
-        sun.traverse(child => {
-          if (child.geometry) child.geometry.dispose();
-          if (child.material) child.material.dispose();
-        });
+
+        // Ground cleanup
+        scene.remove(groundPlane);
+        groundPlane.geometry.dispose();
+        groundMat.dispose();
 
         scene.remove(treeGroup);
         treeGroup.traverse(child => {
@@ -2518,6 +2759,9 @@ window.TrackScenes = (function() {
         });
         scene.remove(group);
         scene.fog = null;
+
+        // Clean up global reference
+        delete window._tradeHandsGround;
       }
     };
   }
@@ -3505,8 +3749,300 @@ window.TrackScenes = (function() {
   function buildPhoneFaceDown(THREE, scene, audioData) {
     const group = new THREE.Group();
 
-    // Start with cool digital darkness, warming as vocals come in
-    scene.fog = new THREE.FogExp2(0x080810, 0.012);
+    // Warm evening fog
+    scene.fog = new THREE.FogExp2(0x1a0f08, 0.008);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // GROUND SHADER - Rippling golden water/sand dunes
+    // ═══════════════════════════════════════════════════════════════════════
+    const groundVertexShader = `
+      varying vec2 vUv;
+      varying vec3 vWorldPos;
+      varying float vHeight;
+
+      uniform float time;
+      uniform float bassEnergy;
+
+      void main() {
+        vUv = uv;
+        vec4 worldPos = modelMatrix * vec4(position, 1.0);
+        vWorldPos = worldPos.xyz;
+
+        // Bass-reactive ripple displacement
+        float ripple = sin(worldPos.x * 0.15 + time * 2.0) * cos(worldPos.z * 0.15 + time * 1.5);
+        float displacement = ripple * bassEnergy * 1.5;
+
+        vec3 newPos = position;
+        newPos.y += displacement;
+        vHeight = displacement;
+
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(newPos, 1.0);
+      }
+    `;
+
+    const groundFragmentShader = `
+      uniform float time;
+      uniform float bassEnergy;
+      uniform float vocalEnergy;
+      uniform float patternScale;
+      uniform float waveIntensity;
+      uniform float glowIntensity;
+      uniform float reflectionStrength;
+      uniform vec3 baseColor;
+      uniform vec3 glowColor;
+      uniform vec3 horizonColor;
+
+      varying vec2 vUv;
+      varying vec3 vWorldPos;
+      varying float vHeight;
+
+      float hash(vec2 p) {
+        return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+      }
+
+      float noise(vec2 p) {
+        vec2 i = floor(p);
+        vec2 f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        float a = hash(i);
+        float b = hash(i + vec2(1.0, 0.0));
+        float c = hash(i + vec2(0.0, 1.0));
+        float d = hash(i + vec2(1.0, 1.0));
+        return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+      }
+
+      // Rippling water/sand dune pattern
+      float wavePattern(vec2 p, float t) {
+        float wave1 = sin(p.x * 0.3 + t) * 0.5 + 0.5;
+        float wave2 = sin(p.y * 0.25 + t * 0.7) * 0.5 + 0.5;
+        float wave3 = sin((p.x + p.y) * 0.2 + t * 1.3) * 0.5 + 0.5;
+        return (wave1 + wave2 + wave3) / 3.0;
+      }
+
+      void main() {
+        // World position UVs for scrolling (player flies over pattern)
+        vec2 uv = vWorldPos.xz * patternScale * 0.01;
+
+        // Distance fade from center
+        float dist = length(vUv - 0.5) * 2.0;
+        float fade = smoothstep(0.7, 1.0, dist);
+
+        // === RIPPLING WATER/SAND DUNE EFFECT ===
+        float waves = wavePattern(uv, time * 0.5);
+        float fineWaves = wavePattern(uv * 3.0, time * 0.8) * 0.3;
+
+        // Bass creates expanding ripples
+        float bassRipple = sin(length(uv) * 8.0 - time * 3.0) * bassEnergy;
+        bassRipple *= smoothstep(3.0, 0.0, length(uv));
+
+        // === COLORS ===
+        vec3 groundColorOut = baseColor * (0.7 + noise(uv * 2.0) * 0.5);
+
+        // Warm golden highlights on wave crests
+        float crestGlow = smoothstep(0.6, 0.9, waves) * waveIntensity;
+        groundColorOut += glowColor * crestGlow * (glowIntensity + bassEnergy * 0.5);
+
+        // Fine wave detail
+        groundColorOut += glowColor * fineWaves * 0.2;
+
+        // Bass ripple glow
+        groundColorOut += glowColor * abs(bassRipple) * 0.5;
+
+        // Sunset horizon reflection (distant areas more reflective)
+        float horizonReflect = smoothstep(0.0, 0.5, dist) * reflectionStrength;
+        groundColorOut = mix(groundColorOut, horizonColor * (0.5 + vocalEnergy * 0.5), horizonReflect);
+
+        // Vocal warmth boost
+        groundColorOut *= 1.0 + vocalEnergy * 0.3;
+
+        // Edge fade to darkness
+        groundColorOut = mix(groundColorOut, vec3(0.02, 0.01, 0.005), fade);
+
+        gl_FragColor = vec4(groundColorOut, 1.0);
+      }
+    `;
+
+    const groundUniforms = {
+      time: { value: 0 },
+      bassEnergy: { value: 0 },
+      vocalEnergy: { value: 0 },
+      patternScale: { value: 15 },
+      waveIntensity: { value: 0.4 },
+      glowIntensity: { value: 0.3 },
+      reflectionStrength: { value: 0.2 },
+      baseColor: { value: new THREE.Vector3(0.102, 0.071, 0.047) },
+      glowColor: { value: new THREE.Vector3(1.0, 0.667, 0.333) },
+      horizonColor: { value: new THREE.Vector3(0.8, 0.4, 0.15) }
+    };
+
+    const groundMat = new THREE.ShaderMaterial({
+      vertexShader: groundVertexShader,
+      fragmentShader: groundFragmentShader,
+      uniforms: groundUniforms,
+      side: THREE.DoubleSide
+    });
+
+    const groundPlane = new THREE.Mesh(
+      new THREE.PlaneGeometry(1000, 1000, 64, 64),
+      groundMat
+    );
+    groundPlane.rotation.x = -Math.PI / 2;
+    groundPlane.position.y = -8;
+    groundPlane.renderOrder = 1;
+    scene.add(groundPlane);
+
+    // Expose for scene tuner
+    window._phoneFaceDownGround = {
+      uniforms: groundUniforms,
+      material: groundMat
+    };
+    console.log('[Phone Face Down] Ground exposed globally:', window._phoneFaceDownGround);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // SKY SHADER - Golden evening/dusk with stars
+    // ═══════════════════════════════════════════════════════════════════════
+    const skyVertexShader = `
+      varying vec3 vWorldPosition;
+      varying vec2 vUv;
+
+      void main() {
+        vUv = uv;
+        vec4 worldPos = modelMatrix * vec4(position, 1.0);
+        vWorldPosition = worldPos.xyz;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `;
+
+    const skyFragmentShader = `
+      uniform float time;
+      uniform float vocalEnergy;
+      uniform float synthEnergy;
+      uniform float bassEnergy;
+      uniform float drumEnergy;
+      uniform float luminosityMin;
+      uniform float luminosityRange;
+      uniform float sunGlowIntensity;
+      uniform float horizonIntensity;
+      uniform float starReveal;
+
+      varying vec3 vWorldPosition;
+      varying vec2 vUv;
+
+      float hash(vec2 p) {
+        return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+      }
+
+      void main() {
+        vec3 dir = normalize(vWorldPosition);
+        float y = dir.y;
+        float x = atan(dir.x, dir.z) / 3.14159;
+
+        float v = vocalEnergy;
+        float s = synthEnergy;
+
+        // === GROUND COLOR - Matches warm evening floor ===
+        vec3 groundColor = vec3(0.05, 0.025, 0.015);
+
+        // Below horizon = solid ground
+        if (y < -0.05) {
+          float fade = smoothstep(-0.5, -0.05, y);
+          gl_FragColor = vec4(groundColor * (0.3 + fade * 0.7), 1.0);
+          return;
+        }
+
+        // === DUSK/EVENING PALETTE ===
+        vec3 deepPurple = vec3(0.08, 0.03, 0.12);
+        vec3 dustyRose = vec3(0.25, 0.08, 0.1);
+        vec3 amber = vec3(0.6, 0.25, 0.05);
+        vec3 gold = vec3(0.9, 0.55, 0.1);
+        vec3 warmOrange = vec3(0.85, 0.35, 0.08);
+
+        // === BUILD GRADIENT ===
+        vec3 baseColor;
+
+        if (y < 0.05) {
+          float t = (y + 0.05) / 0.1;
+          baseColor = mix(groundColor * 2.0, deepPurple, t);
+        } else if (y < 0.1) {
+          float t = (y - 0.05) / 0.05;
+          baseColor = mix(deepPurple, dustyRose, t);
+        } else if (y < 0.18) {
+          float t = (y - 0.1) / 0.08;
+          baseColor = mix(dustyRose, amber, t);
+        } else if (y < 0.28) {
+          float t = (y - 0.18) / 0.1;
+          baseColor = mix(amber, warmOrange, t);
+        } else if (y < 0.4) {
+          float t = (y - 0.28) / 0.12;
+          baseColor = mix(warmOrange, gold, t);
+        } else {
+          float t = (y - 0.4) / 0.6;
+          baseColor = mix(gold, deepPurple, t);
+        }
+
+        // === LUMINOSITY - Vocals brighten the sky ===
+        float luminosity = luminosityMin + v * luminosityRange;
+        vec3 color = baseColor * luminosity;
+
+        // === SUN GLOW - Setting sun near horizon ===
+        float sunDist = length(vec2(x, y - 0.12));
+        float sunGlow = smoothstep(0.4, 0.05, sunDist);
+        color += gold * sunGlow * (sunGlowIntensity + v * 0.5) * luminosity;
+
+        // === HORIZON LINE ===
+        float horizonLine = exp(-abs(y - 0.05) * 20.0);
+        color += warmOrange * horizonLine * (horizonIntensity + v * 0.3) * luminosity;
+
+        // === STARS - Reveal with synth (disconnection = seeing stars) ===
+        if (y > 0.3) {
+          float starField = hash(floor(dir.xz * 200.0));
+          float starMask = step(0.995, starField);
+          float starTwinkle = 0.5 + 0.5 * sin(time * 3.0 + starField * 100.0);
+          float starBrightness = starMask * starTwinkle * (starReveal + s * 0.8);
+          starBrightness *= smoothstep(0.3, 0.6, y);
+          color += vec3(1.0, 0.95, 0.8) * starBrightness * 0.5;
+        }
+
+        // === DRUM FLASH ===
+        color *= 1.0 + drumEnergy * 0.3 * smoothstep(0.15, -0.15, y);
+
+        // === BASS - Deep purple at horizon ===
+        color += vec3(0.08, 0.02, 0.12) * bassEnergy * smoothstep(0.1, -0.1, y) * 0.4;
+
+        gl_FragColor = vec4(color, 1.0);
+      }
+    `;
+
+    const skyUniforms = {
+      time: { value: 0 },
+      vocalEnergy: { value: 0 },
+      synthEnergy: { value: 0 },
+      bassEnergy: { value: 0 },
+      drumEnergy: { value: 0 },
+      luminosityMin: { value: 0.4 },
+      luminosityRange: { value: 1.0 },
+      sunGlowIntensity: { value: 0.2 },
+      horizonIntensity: { value: 0.15 },
+      starReveal: { value: 0.1 }
+    };
+
+    const skyMat = new THREE.ShaderMaterial({
+      vertexShader: skyVertexShader,
+      fragmentShader: skyFragmentShader,
+      uniforms: skyUniforms,
+      side: THREE.BackSide
+    });
+
+    const skyGeom = new THREE.SphereGeometry(200, 32, 32);
+    const sky = new THREE.Mesh(skyGeom, skyMat);
+    scene.add(sky);
+
+    // Expose for scene tuner
+    window._phoneFaceDownSky = {
+      uniforms: skyUniforms,
+      material: skyMat
+    };
+    console.log('[Phone Face Down] Sky exposed globally:', window._phoneFaceDownSky);
 
     // ═══════════════════════════════════════════════════════════════════════
     // FLOATING PHONES - Slowly rotating to face down, screens dimming
@@ -3518,7 +4054,6 @@ window.TrackScenes = (function() {
     function createPhone(x, y, z) {
       const phoneGrp = new THREE.Group();
 
-      // Phone body (dark with slight glow)
       const bodyGeom = new THREE.BoxGeometry(0.6, 1.0, 0.08);
       const bodyMat = new THREE.MeshStandardMaterial({
         color: 0x222233,
@@ -3530,7 +4065,6 @@ window.TrackScenes = (function() {
       const body = new THREE.Mesh(bodyGeom, bodyMat);
       phoneGrp.add(body);
 
-      // Screen (glowing, will dim over time)
       const screenGeom = new THREE.PlaneGeometry(0.5, 0.85);
       const screenMat = new THREE.MeshBasicMaterial({
         color: 0x4488ff,
@@ -3556,14 +4090,13 @@ window.TrackScenes = (function() {
         rotSpeed: 0.1 + Math.random() * 0.2,
         bobSpeed: 0.3 + Math.random() * 0.4,
         bobPhase: Math.random() * Math.PI * 2,
-        faceDownProgress: 0, // 0 = screen up, 1 = screen down
-        targetFaceDown: Math.random() // How far it will rotate
+        faceDownProgress: 0,
+        targetFaceDown: Math.random()
       };
 
       return phoneGrp;
     }
 
-    // Spawn initial phones
     for (let i = 0; i < PHONE_COUNT; i++) {
       const phone = createPhone(
         (Math.random() - 0.5) * 60,
@@ -3577,19 +4110,16 @@ window.TrackScenes = (function() {
 
     // ═══════════════════════════════════════════════════════════════════════
     // FIREFLIES - Warm points of light representing human connection
-    // Spawn more when vocals are active
     // ═══════════════════════════════════════════════════════════════════════
     const fireflyCount = 200;
     const fireflyGeom = new THREE.BufferGeometry();
     const fireflyPos = new Float32Array(fireflyCount * 3);
-    const fireflySizes = new Float32Array(fireflyCount);
     const fireflyPhases = new Float32Array(fireflyCount);
 
     for (let i = 0; i < fireflyCount; i++) {
       fireflyPos[i * 3] = (Math.random() - 0.5) * 80;
       fireflyPos[i * 3 + 1] = (Math.random() - 0.5) * 30;
       fireflyPos[i * 3 + 2] = Math.random() * 100;
-      fireflySizes[i] = 0.1 + Math.random() * 0.15;
       fireflyPhases[i] = Math.random() * Math.PI * 2;
     }
     fireflyGeom.setAttribute('position', new THREE.BufferAttribute(fireflyPos, 3));
@@ -3605,60 +4135,6 @@ window.TrackScenes = (function() {
     scene.add(fireflies);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // STARS - Reveal themselves as you "disconnect"
-    // Synth drives star brightness
-    // ═══════════════════════════════════════════════════════════════════════
-    const starCount = 300;
-    const starGeom = new THREE.BufferGeometry();
-    const starPos = new Float32Array(starCount * 3);
-    const starColors = new Float32Array(starCount * 3);
-
-    for (let i = 0; i < starCount; i++) {
-      // Stars in a dome above
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.random() * Math.PI * 0.4; // Upper hemisphere
-      const r = 80 + Math.random() * 40;
-      starPos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-      starPos[i * 3 + 1] = r * Math.cos(phi) + 20;
-      starPos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
-
-      // Varied star colors (warm white to cool blue)
-      const temp = Math.random();
-      const col = new THREE.Color().setHSL(0.1 + temp * 0.5, 0.3, 0.7 + temp * 0.3);
-      starColors[i * 3] = col.r;
-      starColors[i * 3 + 1] = col.g;
-      starColors[i * 3 + 2] = col.b;
-    }
-    starGeom.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
-    starGeom.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
-
-    const starMat = new THREE.PointsMaterial({
-      size: 0.4,
-      vertexColors: true,
-      transparent: true,
-      opacity: 0.3,
-      blending: THREE.AdditiveBlending
-    });
-    const stars = new THREE.Points(starGeom, starMat);
-    scene.add(stars);
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // GROUND PLANE - Soft reflective surface with ripples from bass
-    // ═══════════════════════════════════════════════════════════════════════
-    const groundGeom = new THREE.PlaneGeometry(200, 200, 32, 32);
-    const groundMat = new THREE.MeshStandardMaterial({
-      color: 0x151520,
-      metalness: 0.6,
-      roughness: 0.4,
-      transparent: true,
-      opacity: 0.8
-    });
-    const ground = new THREE.Mesh(groundGeom, groundMat);
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -15;
-    group.add(ground);
-
-    // ═══════════════════════════════════════════════════════════════════════
     // WARM GLOW ORB - Pulses with vocals, represents human presence
     // ═══════════════════════════════════════════════════════════════════════
     const glowGeom = new THREE.SphereGeometry(3, 32, 32);
@@ -3672,7 +4148,6 @@ window.TrackScenes = (function() {
     glowOrb.position.set(0, 0, 40);
     group.add(glowOrb);
 
-    // Inner glow
     const innerGlowGeom = new THREE.SphereGeometry(1.5, 32, 32);
     const innerGlowMat = new THREE.MeshBasicMaterial({
       color: 0xffddaa,
@@ -3732,10 +4207,50 @@ window.TrackScenes = (function() {
     coolLight.position.set(-15, 10, 20);
     group.add(coolLight);
 
-    const ambientLight = new THREE.AmbientLight(0x111118, 0.15);
+    const ambientLight = new THREE.AmbientLight(0x2a1a10, 0.3);
     scene.add(ambientLight);
 
     scene.add(group);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // SCENE TUNER INTEGRATION
+    // ═══════════════════════════════════════════════════════════════════════
+    if (window.SceneTuner) {
+      window.SceneTuner.onUpdate((section, param, value) => {
+        console.log('[SceneTuner] Phone Face Down Update:', section, param, value);
+
+        // Ground shader parameters
+        if (section === 'ground' && window._phoneFaceDownGround) {
+          const u = window._phoneFaceDownGround.uniforms;
+          if (param === 'patternScale') u.patternScale.value = value;
+          if (param === 'waveIntensity') u.waveIntensity.value = value;
+          if (param === 'glowIntensity') u.glowIntensity.value = value;
+          if (param === 'reflectionStrength') u.reflectionStrength.value = value;
+          if (param === 'baseColorR') u.baseColor.value.x = value;
+          if (param === 'baseColorG') u.baseColor.value.y = value;
+          if (param === 'baseColorB') u.baseColor.value.z = value;
+          if (param === 'glowColorR') u.glowColor.value.x = value;
+          if (param === 'glowColorG') u.glowColor.value.y = value;
+          if (param === 'glowColorB') u.glowColor.value.z = value;
+        }
+
+        // Sky shader parameters
+        if (section === 'sky' && window._phoneFaceDownSky) {
+          const u = window._phoneFaceDownSky.uniforms;
+          if (param === 'luminosityMin') u.luminosityMin.value = value;
+          if (param === 'luminosityRange') u.luminosityRange.value = value;
+          if (param === 'sunGlowIntensity') u.sunGlowIntensity.value = value;
+          if (param === 'horizonIntensity') u.horizonIntensity.value = value;
+          if (param === 'starReveal') u.starReveal.value = value;
+        }
+
+        // Fog parameters
+        if (section === 'fog') {
+          if (param === 'density') scene.fog.density = value;
+        }
+      });
+      console.log('[Phone Face Down] Scene tuner connected - Press T to toggle');
+    }
 
     // ═══════════════════════════════════════════════════════════════════════
     // STATE
@@ -3746,16 +4261,15 @@ window.TrackScenes = (function() {
     let lastBassPulse = 0;
     let lastSynthPulse = 0;
     let lastGuitarPulse = 0;
-    let totalEnergy = 0;
-    let disconnectProgress = 0; // 0-1, how "disconnected" the scene is
+    let disconnectProgress = 0;
 
     return {
       group,
       stemEffects: {
         drums: { target: 'phones', effect: 'rotate pulse', color: '#ffaa44' },
-        bass: { target: 'ground', effect: 'ripple', color: '#8866ff' },
+        bass: { target: 'ground', effect: 'ripple', color: '#ffcc88' },
         vocals: { target: 'atmosphere', effect: 'warmth', color: '#ffcc88' },
-        synth: { target: 'stars', effect: 'brightness', color: '#aaccff' },
+        synth: { target: 'sky', effect: 'stars', color: '#aaccff' },
         guitar: { target: 'trails', effect: 'spawn', color: '#ffdd66' },
         keyboard: { target: 'glow', effect: 'color shift', color: '#ffaa88' },
         percussion: { target: 'fireflies', effect: 'pulse', color: '#ffee88' },
@@ -3764,7 +4278,6 @@ window.TrackScenes = (function() {
 
       update(time, freq, amplitude, shipPos, shipSpeed, audioExtra) {
         const shipZ = shipPos ? shipPos.z : 0;
-        const dt = 0.016;
 
         // ═══════════════════════════════════════════════════════════════════
         // GET STEM ENERGIES
@@ -3787,32 +4300,41 @@ window.TrackScenes = (function() {
         lastSynthPulse = lastSynthPulse * 0.9 + synthEnergy * 0.1;
         lastGuitarPulse = lastGuitarPulse * 0.88 + guitarEnergy * 0.12;
 
-        // Total energy
-        let energySum = 0;
-        if (audioExtra) {
-          Object.values(audioExtra).forEach(stem => {
-            if (stem && stem.energy) energySum += stem.energy;
-          });
-        }
-        totalEnergy = totalEnergy * 0.92 + (energySum / 8) * 0.08;
-
         // Disconnect progress slowly builds over time and with vocals
         disconnectProgress = Math.min(1, disconnectProgress + 0.0003 + lastVocalPulse * 0.002);
 
         // ═══════════════════════════════════════════════════════════════════
-        // ATMOSPHERE - Warms with vocals
+        // UPDATE GROUND SHADER
         // ═══════════════════════════════════════════════════════════════════
-        // Fog warms and clears
-        const fogHue = 0.7 - lastVocalPulse * 0.15; // Blue to warmer
-        scene.fog.color.setHSL(fogHue, 0.3, 0.04 + lastVocalPulse * 0.03);
-        scene.fog.density = 0.015 - lastVocalPulse * 0.008 - disconnectProgress * 0.003;
+        groundUniforms.time.value = time;
+        groundUniforms.bassEnergy.value = lastBassPulse;
+        groundUniforms.vocalEnergy.value = lastVocalPulse;
+
+        // ═══════════════════════════════════════════════════════════════════
+        // UPDATE SKY SHADER
+        // ═══════════════════════════════════════════════════════════════════
+        skyUniforms.time.value = time;
+        skyUniforms.vocalEnergy.value = lastVocalPulse;
+        skyUniforms.synthEnergy.value = lastSynthPulse;
+        skyUniforms.bassEnergy.value = lastBassPulse;
+        skyUniforms.drumEnergy.value = lastDrumPulse;
+        skyUniforms.starReveal.value = 0.1 + disconnectProgress * 0.4 + lastSynthPulse * 0.3;
+
+        // Sky follows player
+        sky.position.set(shipPos?.x || 0, shipPos?.y || 0, shipZ);
+
+        // ═══════════════════════════════════════════════════════════════════
+        // ATMOSPHERE - Fog warms with vocals
+        // ═══════════════════════════════════════════════════════════════════
+        const fogHue = 0.08 - lastVocalPulse * 0.02;
+        scene.fog.color.setHSL(fogHue, 0.4, 0.04 + lastVocalPulse * 0.03);
+        scene.fog.density = 0.01 - lastVocalPulse * 0.005 - disconnectProgress * 0.002;
 
         // Lights respond
         mainLight.intensity = 0.3 + lastVocalPulse * 3 + disconnectProgress * 0.5;
         mainLight.color.setHSL(0.08 + lastVocalPulse * 0.05, 0.7, 0.5 + lastVocalPulse * 0.3);
-
         coolLight.intensity = 0.2 + lastSynthPulse * 1.5;
-        ambientLight.intensity = 0.1 + lastVocalPulse * 0.3 + disconnectProgress * 0.1;
+        ambientLight.intensity = 0.2 + lastVocalPulse * 0.3 + disconnectProgress * 0.1;
 
         // ═══════════════════════════════════════════════════════════════════
         // PHONES - Rotate toward face-down, screens dim
@@ -3821,21 +4343,14 @@ window.TrackScenes = (function() {
           const phone = phones[i];
           const pd = phone.userData;
 
-          // Gentle bob
           phone.position.y = pd.baseY + Math.sin(time * pd.bobSpeed + pd.bobPhase) * 0.5;
-
-          // Slowly rotate toward face-down based on disconnect progress
           pd.faceDownProgress = Math.min(pd.targetFaceDown, pd.faceDownProgress + 0.001 + lastVocalPulse * 0.003);
-          phone.rotation.x = pd.faceDownProgress * Math.PI; // Flip over
-
-          // Drum hits cause rotation pulses
+          phone.rotation.x = pd.faceDownProgress * Math.PI;
           phone.rotation.z += Math.sin(time * 3 + i) * 0.01 * (1 + lastDrumPulse * 2);
 
-          // Screen dims as it faces down
           pd.screenMat.opacity = 0.6 * (1 - pd.faceDownProgress * 0.8) * (1 - lastVocalPulse * 0.3);
           pd.screenMat.color.setHSL(0.6 - pd.faceDownProgress * 0.1, 0.6, 0.5);
 
-          // Recycle phones that fall behind
           if (phone.position.z < shipZ - 40) {
             phone.position.z = shipZ + 80 + Math.random() * 40;
             phone.position.x = (Math.random() - 0.5) * 60;
@@ -3855,12 +4370,10 @@ window.TrackScenes = (function() {
         }
 
         for (let i = 0; i < fireflyCount; i++) {
-          // Gentle drift
           const phase = fireflyPhases[i];
           ffPos[i * 3] += Math.sin(time * 0.5 + phase) * 0.02;
           ffPos[i * 3 + 1] += Math.cos(time * 0.3 + phase) * 0.015;
 
-          // Keep near player
           if (ffPos[i * 3 + 2] < shipZ - 40 || ffPos[i * 3 + 2] > shipZ + 80) {
             ffPos[i * 3 + 2] = shipZ + 60 + Math.random() * 30;
             ffPos[i * 3] = (Math.random() - 0.5) * 80;
@@ -3869,33 +4382,9 @@ window.TrackScenes = (function() {
         }
         fireflyGeom.attributes.position.needsUpdate = true;
 
-        // Fireflies glow more with percussion and vocals
         fireflyMat.opacity = 0.3 + percEnergy * 0.5 + lastVocalPulse * 0.4 + disconnectProgress * 0.2;
         fireflyMat.size = 0.15 + percEnergy * 0.15 + lastVocalPulse * 0.1;
         fireflyMat.color.setHSL(0.1 + lastVocalPulse * 0.05, 0.6, 0.6 + lastVocalPulse * 0.2);
-
-        // ═══════════════════════════════════════════════════════════════════
-        // STARS - Reveal with synth, twinkle
-        // ═══════════════════════════════════════════════════════════════════
-        stars.position.z = shipZ;
-        starMat.opacity = 0.1 + lastSynthPulse * 0.5 + disconnectProgress * 0.4;
-        starMat.size = 0.3 + lastSynthPulse * 0.3;
-
-        // ═══════════════════════════════════════════════════════════════════
-        // GROUND - Ripples with bass
-        // ═══════════════════════════════════════════════════════════════════
-        const gPos = groundGeom.attributes.position.array;
-        for (let i = 0; i < gPos.length; i += 3) {
-          const x = gPos[i];
-          const y = gPos[i + 1];
-          const wave = Math.sin(x * 0.1 + time * 2) * Math.cos(y * 0.1 + time * 1.5);
-          gPos[i + 2] = wave * lastBassPulse * 2;
-        }
-        groundGeom.attributes.position.needsUpdate = true;
-        ground.position.z = shipZ;
-
-        // Ground color warms with vocals
-        groundMat.color.setHSL(0.7 - lastVocalPulse * 0.1, 0.3 + lastVocalPulse * 0.2, 0.08 + lastVocalPulse * 0.05);
 
         // ═══════════════════════════════════════════════════════════════════
         // WARM GLOW ORB - Pulses with vocals and keyboard
@@ -3906,7 +4395,6 @@ window.TrackScenes = (function() {
         glowMat.opacity = 0.1 + lastVocalPulse * 0.25 + disconnectProgress * 0.1;
         innerGlowMat.opacity = 0.2 + lastVocalPulse * 0.4;
 
-        // Color shifts with keyboard
         const orbHue = 0.08 + keyboardEnergy * 0.1;
         glowMat.color.setHSL(orbHue, 0.7, 0.5);
         innerGlowMat.color.setHSL(orbHue + 0.02, 0.6, 0.7);
@@ -3924,7 +4412,6 @@ window.TrackScenes = (function() {
           );
         }
 
-        // Update trail particles
         for (let i = trailParticles.length - 1; i >= 0; i--) {
           const p = trailParticles[i];
           p.position.add(p.userData.vel);
@@ -3949,22 +4436,35 @@ window.TrackScenes = (function() {
       },
 
       dispose() {
+        // Sky cleanup
+        scene.remove(sky);
+        skyGeom.dispose();
+        skyMat.dispose();
+
+        // Ground cleanup
+        scene.remove(groundPlane);
+        groundPlane.geometry.dispose();
+        groundMat.dispose();
+
+        // Phones cleanup
         scene.remove(phoneGroup);
         phoneGroup.traverse(c => {
           if (c.geometry) c.geometry.dispose();
           if (c.material) c.material.dispose();
         });
+
+        // Fireflies cleanup
         scene.remove(fireflies);
         fireflyGeom.dispose();
         fireflyMat.dispose();
-        scene.remove(stars);
-        starGeom.dispose();
-        starMat.dispose();
+
+        // Trails cleanup
         scene.remove(trailGroup);
         trailGroup.traverse(c => {
           if (c.geometry) c.geometry.dispose();
           if (c.material) c.material.dispose();
         });
+
         scene.remove(ambientLight);
         group.traverse(c => {
           if (c.geometry) c.geometry.dispose();
@@ -3972,6 +4472,10 @@ window.TrackScenes = (function() {
         });
         scene.remove(group);
         scene.fog = null;
+
+        // Clean up global references
+        delete window._phoneFaceDownGround;
+        delete window._phoneFaceDownSky;
       }
     };
   }
