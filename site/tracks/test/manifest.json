@@ -1,0 +1,37 @@
+{
+  "title": "Test",
+  "artist": "DeytaDreams",
+  "bpm": 120,
+  "duration": null,
+  "lyrics": null,
+  "stems": {
+    "drums": {
+      "audio": "../terms-and-conditions/drums.mp3",
+      "midi": "../terms-and-conditions/drums.mid"
+    },
+    "bass": {
+      "audio": "../terms-and-conditions/bass.mp3",
+      "midi": "../terms-and-conditions/bass.mid"
+    },
+    "guitar": {
+      "audio": "../terms-and-conditions/guitar.mp3",
+      "midi": "../terms-and-conditions/guitar.mid"
+    },
+    "vocals": {
+      "audio": "../terms-and-conditions/vocals.mp3",
+      "midi": "../terms-and-conditions/vocals.mid"
+    },
+    "backing-vocals": {
+      "audio": "../terms-and-conditions/backing-vocals.mp3",
+      "midi": "../terms-and-conditions/backing-vocals.mid"
+    },
+    "synth": {
+      "audio": "../terms-and-conditions/synth.mp3",
+      "midi": "../terms-and-conditions/synth.mid"
+    },
+    "fx": {
+      "audio": "../terms-and-conditions/fx.mp3",
+      "midi": "../terms-and-conditions/fx.mid"
+    }
+  }
+}

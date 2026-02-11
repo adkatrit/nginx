@@ -36,6 +36,12 @@ window.TRACKS = [
     url: null,
     stemsManifest: "./tracks/turn-your-phone-face-down/manifest.json"
   },
+  {
+    title: "Test",
+    artist: "DeytaDreams",
+    url: null,
+    stemsManifest: "./tracks/test/manifest.json"
+  },
   // --- Tracks without stems (mix only) - disabled for now ---
   // { title: "Soft Systems", artist: "DeytaDreams", stemsManifest: "./tracks/soft-systems/manifest.json" },
   // { title: "The Last Dragon", artist: "DeytaDreams", stemsManifest: "./tracks/the-last-dragon/manifest.json" },

@@ -102,4 +102,15 @@ window.MODELS = [
     rotation: [0, 3.14, 0],
     animationSpeed: 1.0
   },
+
+  // === BIRD (fly-by) ===
+  {
+    id: "stork",
+    name: "Stork",
+    url: "./models/fly-by-bird/scene.gltf",
+    scale: 0.015,
+    position: [0, 0, 0],
+    rotation: [0, 0, 0],
+    animationSpeed: 1.0
+  },
 ];

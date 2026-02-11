@@ -1,7 +1,8 @@
 /*
-  ANIMATED BACKGROUND SYSTEM
-  --------------------------
-  Shader-based animated backgrounds for each track theme.
+  ANIMATED BACKGROUND SYSTEM (TSL / NodeMaterial)
+  ------------------------------------------------
+  TSL-based animated backgrounds for each track theme.
+  Uses MeshBasicNodeMaterial with colorNode instead of GLSL ShaderMaterial.
 
   Background Types:
   - topo: Topographic/contour map lines (morphing elevation)
@@ -29,36 +30,479 @@ class AnimatedBackground {
     this.audioMid = 0;
     this.audioTreble = 0;
     this.beatPulse = 0;
-    this.audioReactivity = 1.0; // Global multiplier for all audio effects (0-1)
+    this.audioReactivity = 1.0;
 
     this.create();
   }
 
   create() {
+    const TSL = window._TSL;
+    if (!TSL) {
+      console.warn("AnimatedBackground: window._TSL not available yet");
+      return;
+    }
+    const {
+      Fn, float, vec2, vec3, vec4, uniform, uv: tslUV,
+      mix: tslMix, sin: tslSin, cos: tslCos, abs: tslAbs, pow: tslPow,
+      step: tslStep, smoothstep: tslSmoothstep, clamp: tslClamp,
+      fract: tslFract, floor: tslFloor, mod: tslMod,
+      length: tslLength, dot: tslDot, normalize: tslNormalize,
+      atan2: tslAtan2, exp: tslExp, max: tslMax, min: tslMin,
+      mx_noise_float, mx_fractal_noise_float,
+    } = TSL;
+
     const geometry = new this.THREE.PlaneGeometry(2, 2);
 
-    this.material = new this.THREE.ShaderMaterial({
-      uniforms: {
-        uTime: { value: 0 },
-        uResolution: { value: new this.THREE.Vector2(window.innerWidth, window.innerHeight) },
-        uColor1: { value: new this.THREE.Color(this.config.color1 || 0x000510) },
-        uColor2: { value: new this.THREE.Color(this.config.color2 || 0x001830) },
-        uColor3: { value: new this.THREE.Color(this.config.color3 || 0x003366) },
-        uAccent: { value: new this.THREE.Color(this.config.accent || 0x00ffff) },
-        uSpeed: { value: this.config.speed || 1.0 },
-        uIntensity: { value: this.config.intensity || 0.5 },
-        uScale: { value: this.config.scale || 1.0 },
-        uAudioEnergy: { value: 0 },
-        uAudioBass: { value: 0 },
-        uAudioMid: { value: 0 },
-        uAudioTreble: { value: 0 },
-        uBeatPulse: { value: 0 },
-        uAudioReactivity: { value: 1.0 }
-      },
-      vertexShader: this.getVertexShader(),
-      fragmentShader: this.getFragmentShader(this.config.type || 'topo'),
+    // TSL uniforms
+    this.uTime = uniform(0);
+    this.uColor1 = uniform(new this.THREE.Color(this.config.color1 || 0x000510));
+    this.uColor2 = uniform(new this.THREE.Color(this.config.color2 || 0x001830));
+    this.uColor3 = uniform(new this.THREE.Color(this.config.color3 || 0x003366));
+    this.uAccent = uniform(new this.THREE.Color(this.config.accent || 0x00ffff));
+    this.uSpeed = uniform(this.config.speed || 1.0);
+    this.uIntensity = uniform(this.config.intensity || 0.5);
+    this.uScale = uniform(this.config.scale || 1.0);
+    this.uAudioEnergy = uniform(0);
+    this.uAudioBass = uniform(0);
+    this.uAudioMid = uniform(0);
+    this.uAudioTreble = uniform(0);
+    this.uBeatPulse = uniform(0);
+
+    // Sun uniforms (configurable per track)
+    this.uSunX = uniform(this.config.sunX ?? 0.5);
+    this.uSunY = uniform(this.config.sunY ?? 0.82);
+    this.uSunSize = uniform(this.config.sunSize ?? 0.12);
+    this.uSunColor = uniform(new this.THREE.Color(this.config.sunColor || this.config.accent || 0xffdd44));
+    this.uSunIntensity = uniform(this.config.sunIntensity ?? 1.0);
+    this.uAudioReactivity = uniform(1.0);
+
+    // Shorthand audio accessors (TSL nodes)
+    const aEnergy = () => this.uAudioEnergy.mul(this.uAudioReactivity);
+    const aBass = () => this.uAudioBass.mul(this.uAudioReactivity);
+    const aMid = () => this.uAudioMid.mul(this.uAudioReactivity);
+    const aTreble = () => this.uAudioTreble.mul(this.uAudioReactivity);
+    const aBeat = () => this.uBeatPulse.mul(this.uAudioReactivity);
+
+    // Audio helpers
+    const audioScale = (uvVal) => {
+      const centered = uvVal.sub(0.5);
+      const pulse = float(1).sub(aBass().mul(0.20)).sub(aBeat().mul(0.15));
+      return centered.mul(pulse).add(0.5);
+    };
+
+    const audioBrightness = () => {
+      return float(1).add(aBeat().mul(0.5)).add(aEnergy().mul(0.4));
+    };
+
+    const beatGlow = (colorVal, uvVal) => {
+      const centered = uvVal.sub(0.5);
+      const dist = tslLength(centered);
+      const glow = tslExp(dist.negate().mul(2)).mul(aBeat()).mul(0.8);
+      return colorVal.add(vec3(this.uAccent).mul(glow));
+    };
+
+    const audioSaturate = (colorVal) => {
+      const gray = tslDot(colorVal, vec3(0.299, 0.587, 0.114));
+      const satBoost = float(1).add(aEnergy().mul(0.3)).add(aBeat().mul(0.2));
+      return tslMix(vec3(gray, gray, gray), colorVal, satBoost);
+    };
+
+    // Noise helpers using mx_noise_float: returns [0,1], remap to [-1,1] for snoise equivalent
+    const snoise = (p) => mx_noise_float(p).mul(2).sub(1);
+    const fbm = (p, octaves) => mx_fractal_noise_float(p, octaves, float(2.0), float(0.5));
+
+    // Hash function for procedural patterns
+    const hash = (p) => tslFract(tslSin(tslDot(p, vec2(12.9898, 78.233))).mul(43758.5453));
+
+    // Build shader for the selected type
+    const shaderType = this.config.type || 'topo';
+
+    const colorNode = Fn(() => {
+      const rawUV = tslUV();
+      const uvScaled = audioScale(rawUV);
+
+      // ── Shared sun effect (horizon sun for all background types) ──
+      const sunPos = vec2(this.uSunX, this.uSunY);
+      const sunDist = tslLength(uvScaled.sub(sunPos));
+      const sunSize = this.uSunSize.add(aBeat().mul(0.05)).add(aBass().mul(0.03));
+      const sunCore = tslSmoothstep(sunSize, float(0), sunDist);
+      const sunGlowSize = this.uSunSize.mul(2.5).add(aEnergy().mul(0.2)).add(aBeat().mul(0.15));
+      const sunGlow = tslSmoothstep(sunGlowSize, float(0), sunDist).mul(float(0.3).add(aBeat().mul(0.4)));
+      const sunEffect = vec3(this.uSunColor).mul(sunCore.add(sunGlow)).mul(audioBrightness()).mul(this.uSunIntensity);
+
+      if (shaderType === 'topo') {
+        const t = this.uTime.mul(this.uSpeed).mul(0.15);
+        const p = vec3(uvScaled.mul(this.uScale).mul(3), t);
+        const elevation = fbm(p, 5).add(snoise(vec3(uvScaled.mul(this.uScale).mul(6), t.mul(0.5))).mul(0.3))
+          .add(aBass().mul(0.4)).add(aBeat().mul(0.3)).toVar();
+        const contourDensity = float(8).add(aEnergy().mul(8)).add(aMid().mul(4));
+        const contours = tslFract(elevation.mul(contourDensity));
+        const line1 = tslSmoothstep(float(0), float(0.08), contours).mul(tslSmoothstep(float(0.15), float(0.08), contours));
+        const line2 = tslSmoothstep(float(0), float(0.03), contours).mul(tslSmoothstep(float(0.05), float(0.03), contours)).mul(0.5);
+        const line = line1.add(line2).mul(float(1).add(aBeat().mul(0.5)));
+        const baseColor = tslMix(tslMix(this.uColor1, this.uColor2, elevation.mul(0.5).add(0.5)),
+          this.uColor3, tslSmoothstep(float(0.3), float(0.7), elevation));
+        const lineColor = tslMix(this.uAccent, this.uColor3, float(0.3).sub(aEnergy().mul(0.2)));
+        const c = tslMix(baseColor, lineColor, line.mul(this.uIntensity)).toVar();
+        const peak = tslSmoothstep(float(0.5), float(0.8), elevation);
+        c.addAssign(vec3(this.uAccent).mul(peak).mul(0.3).mul(audioBrightness()));
+        c.addAssign(sunEffect);
+        c.assign(beatGlow(c, rawUV));
+        c.assign(audioSaturate(c));
+        c.mulAssign(audioBrightness());
+        return vec4(c, 1);
+
+      } else if (shaderType === 'ocean') {
+        const t = this.uTime.mul(this.uSpeed).mul(0.2);
+        const waveAmp = float(1).add(aBass().mul(0.8)).add(aBeat().mul(0.5));
+        const wave1 = snoise(vec3(uvScaled.mul(this.uScale).mul(2).add(vec2(t, 0)), t.mul(0.3))).mul(waveAmp);
+        const wave2 = snoise(vec3(uvScaled.mul(this.uScale).mul(4).sub(vec2(t.mul(0.7), t.mul(0.3))), t.mul(0.2))).mul(0.5).mul(waveAmp);
+        const wave3 = snoise(vec3(uvScaled.mul(this.uScale).mul(8).add(vec2(t.mul(0.5), t.negate().mul(0.4))), t.mul(0.1))).mul(0.25).mul(waveAmp);
+        const waves = wave1.add(wave2).add(wave3).add(aBass().mul(0.5)).add(aBeat().mul(0.4)).toVar();
+        const causticIntensity = this.uScale.mul(12).add(aTreble().mul(4));
+        const causticN = snoise(vec3(uvScaled.mul(causticIntensity).add(vec2(waves.mul(0.5), 0)), t.mul(0.5)));
+        const caustic = tslPow(tslAbs(causticN), float(2)).mul(float(0.5).add(aMid().mul(0.5)));
+        const c = tslMix(tslMix(this.uColor1, this.uColor2, uvScaled.y.add(waves.mul(0.2))),
+          this.uColor3, tslSmoothstep(float(-0.2), float(0.5), waves)).toVar();
+        c.addAssign(vec3(this.uAccent).mul(caustic).mul(this.uIntensity).mul(audioBrightness()));
+        const shimmer = tslPow(tslMax(float(0), waves), float(3)).mul(0.5).mul(float(1).add(aBeat().mul(1.5)).add(aEnergy()));
+        c.addAssign(vec3(shimmer, shimmer, shimmer));
+        c.addAssign(sunEffect);
+        c.assign(beatGlow(c, rawUV));
+        c.assign(audioSaturate(c));
+        c.mulAssign(audioBrightness());
+        return vec4(c, 1);
+
+      } else if (shaderType === 'nebula') {
+        const t = this.uTime.mul(this.uSpeed).mul(0.1);
+        const center = vec2(0.5);
+        const toCenter = uvScaled.sub(center);
+        const angle = tslAtan2(toCenter.y, toCenter.x);
+        const dist = tslLength(toCenter);
+        const spiralSpeed = float(3).add(aBass().mul(2));
+        const spiral = angle.add(dist.mul(spiralSpeed)).sub(t.mul(float(1).add(aEnergy().mul(0.5))));
+        const distortAmount = float(0.1).add(aBass().mul(0.2)).add(aBeat().mul(0.15));
+        const distortedUv = uvScaled.add(vec2(tslCos(spiral), tslSin(spiral)).mul(distortAmount));
+        const cloudScale = this.uScale.mul(float(1).add(aMid().mul(0.3)));
+        const cloud1 = fbm(vec3(distortedUv.mul(cloudScale).mul(2), t), 5);
+        const cloud2 = fbm(vec3(distortedUv.mul(cloudScale).mul(4).add(10), t.mul(0.7)), 4);
+        const cloud3 = fbm(vec3(distortedUv.mul(cloudScale), t.mul(0.3)), 3);
+        const nebula = cloud1.mul(0.5).add(cloud2.mul(0.3)).add(cloud3.mul(0.2))
+          .add(aEnergy().mul(0.4)).add(aBeat().mul(0.3)).toVar();
+        const colorShift = aMid().mul(0.2);
+        const c = tslMix(this.uColor1, this.uColor2,
+          tslSmoothstep(float(-0.3).sub(colorShift), float(0.3).add(colorShift), nebula)).toVar();
+        c.assign(tslMix(c, this.uColor3, tslSmoothstep(float(0.2).sub(colorShift), float(0.6).add(colorShift), nebula)));
+        c.assign(tslMix(c, this.uAccent, tslSmoothstep(float(0.4), float(0.8), nebula).mul(this.uIntensity).mul(float(1).add(aBeat()))));
+        const starScale = float(50).add(aTreble().mul(20));
+        const stars = tslPow(snoise(vec3(uvScaled.mul(starScale), t.mul(0.1))), float(20))
+          .mul(float(1).add(aBeat().mul(2)).add(aTreble()));
+        c.addAssign(vec3(stars, stars, stars).mul(0.8));
+        const coreGlow = tslExp(dist.negate().mul(3)).mul(aBeat().mul(0.8).add(aEnergy().mul(0.4)));
+        c.addAssign(vec3(this.uAccent).mul(coreGlow));
+        c.addAssign(sunEffect);
+        c.assign(beatGlow(c, rawUV));
+        c.assign(audioSaturate(c));
+        c.mulAssign(audioBrightness());
+        return vec4(c, 1);
+
+      } else if (shaderType === 'matrix') {
+        const t = this.uTime.mul(this.uSpeed);
+        const cellSize = float(0.03).div(this.uScale).div(float(1).add(aMid().mul(0.3)));
+        const cell = tslFloor(uvScaled.div(cellSize));
+        const cellUv = tslFract(uvScaled.div(cellSize));
+        const speed = hash(vec2(cell.x, 0)).mul(2).add(0.5)
+          .mul(float(1).add(aEnergy().mul(1.5)).add(aBeat().mul(0.5)));
+        const offset = hash(vec2(cell.x, 1));
+        const drop = tslFract(t.mul(speed).mul(0.3).add(offset));
+        const trailLength = float(0.7).add(aBass().mul(0.2));
+        const trail = tslSmoothstep(float(0), trailLength, float(1).sub(drop))
+          .mul(tslSmoothstep(float(1), float(0.8), float(1).sub(drop)));
+        const charThreshold = float(0.3).sub(aEnergy().mul(0.15));
+        const charNoise = hash(cell.add(tslFloor(t.mul(speed))));
+        const char = tslStep(charThreshold, charNoise).mul(tslStep(charNoise, float(0.9)));
+        const brightness = float(1).sub(uvScaled.y).mul(trail).mul(char)
+          .mul(float(1).add(aBeat().mul(1.5)).add(aEnergy().mul(0.8)));
+        // Unrolled connection loop (3 iterations: i=-1,0,1)
+        const connections = (() => {
+          let conn = float(0).toVar();
+          for (let i = -1; i <= 1; i++) {
+            const neighborCell = cell.add(vec2(i, 0));
+            const neighborActive = tslStep(float(0.5).sub(aBass().mul(0.3)), hash(neighborCell.add(tslFloor(t.mul(0.5)))));
+            const lineVal = float(1).sub(tslAbs(cellUv.x.sub(0.5)).mul(2));
+            conn.addAssign(lineVal.mul(neighborActive).mul(float(0.1).add(aBass().mul(0.2))));
+          }
+          return conn;
+        })();
+        const c = tslMix(this.uColor1, this.uColor2, uvScaled.y).toVar();
+        c.addAssign(vec3(this.uAccent).mul(brightness).mul(this.uIntensity).mul(audioBrightness()));
+        c.addAssign(vec3(this.uColor3).mul(connections).mul(float(1).add(aBass().mul(2))));
+        const scanlineSpeed = float(10).add(aTreble().mul(20));
+        const scanline = tslSin(uvScaled.y.mul(200).add(t.mul(scanlineSpeed))).mul(float(0.02).add(aBeat().mul(0.05)));
+        c.addAssign(vec3(scanline, scanline, scanline));
+        c.addAssign(vec3(this.uAccent).mul(aBeat()).mul(0.3));
+        c.addAssign(sunEffect);
+        c.assign(beatGlow(c, rawUV));
+        c.assign(audioSaturate(c));
+        return vec4(c, 1);
+
+      } else if (shaderType === 'aurora') {
+        const t = this.uTime.mul(this.uSpeed).mul(0.15);
+        const bassAmp = aBass().mul(0.2).add(aBeat().mul(0.15));
+        // Unrolled 4 aurora ribbon layers
+        const aurora = (() => {
+          let aur = float(0).toVar();
+          for (let i = 0; i < 4; i++) {
+            const fi = float(i);
+            const ribbonOffset = fi.mul(0.2);
+            const freq = float(2).add(fi.mul(0.5)).add(aMid());
+            const amp = float(0.15).sub(fi.mul(0.03)).add(bassAmp);
+            const wave = tslSin(uvScaled.x.mul(freq).mul(this.uScale).add(t).add(ribbonOffset)).mul(amp)
+              .add(snoise(vec3(uvScaled.x.mul(this.uScale).mul(3), t.mul(0.5), fi)).mul(float(0.1).add(aTreble().mul(0.1))));
+            const ribbonY = float(0.3).add(aBeat().mul(0.1));
+            const ribbonBase = uvScaled.y.sub(ribbonY).sub(wave).sub(ribbonOffset.mul(0.3));
+            const ribbon = tslSmoothstep(float(0), float(0.1), ribbonBase)
+              .mul(tslSmoothstep(float(0.3).add(aBass().mul(0.1)), float(0.15), ribbonBase));
+            aur.addAssign(ribbon.mul(float(1).sub(fi.mul(0.2))));
+          }
+          return aur;
+        })();
+        const auroraScaled = aurora.mul(float(1).add(aEnergy().mul(1.5)).add(aBeat()))
+          .add(aBass().mul(0.3)).toVar();
+        const shimmerSpeed = float(2).add(aTreble().mul(3));
+        const shimmer = snoise(vec3(uvScaled.mul(this.uScale).mul(10), t.mul(shimmerSpeed))).mul(0.3).add(0.7)
+          .add(aBeat().mul(0.2));
+        auroraScaled.mulAssign(shimmer);
+        const colorShift = aMid().mul(0.3);
+        const auroraColor = tslMix(
+          tslMix(this.uColor3, this.uAccent, snoise(vec3(uvScaled.x.mul(5).add(colorShift), t, 0)).mul(0.5).add(0.5)),
+          this.uColor2, uvScaled.y
+        ).mul(audioBrightness());
+        const sky = tslMix(this.uColor1, vec3(this.uColor2).mul(0.5), uvScaled.y);
+        const starBrightness = tslPow(snoise(vec3(uvScaled.mul(80), t.mul(0.05))), float(25))
+          .mul(float(1).sub(auroraScaled))
+          .mul(float(1).add(aTreble().mul(2)).add(aBeat()));
+        const c = tslMix(sky, auroraColor, auroraScaled.mul(this.uIntensity)).toVar();
+        c.addAssign(vec3(starBrightness, starBrightness, starBrightness).mul(0.5));
+        const bottomGlow = tslExp(uvScaled.y.negate().mul(4)).mul(aBeat()).mul(0.4);
+        c.addAssign(vec3(this.uAccent).mul(bottomGlow));
+        c.addAssign(sunEffect);
+        c.assign(beatGlow(c, rawUV));
+        c.assign(audioSaturate(c));
+        return vec4(c, 1);
+
+      } else if (shaderType === 'forge') {
+        const t = this.uTime.mul(this.uSpeed).mul(0.2);
+        const distortAmount = float(0.02).add(aBass().mul(0.05)).add(aBeat().mul(0.03));
+        const distort = vec2(
+          snoise(vec3(uvScaled.mul(this.uScale).mul(5), t)).mul(distortAmount),
+          snoise(vec3(uvScaled.mul(this.uScale).mul(5).add(100), t)).mul(distortAmount)
+        );
+        const distortedUv = uvScaled.add(distort.mul(float(1).add(aBass().mul(2))));
+        // Unrolled 3 crack layers
+        const cracks = (() => {
+          let cr = float(0).toVar();
+          for (let i = 0; i < 3; i++) {
+            const fi = float(i);
+            const scale = float(3).add(fi.mul(2)).add(aMid());
+            const crack = tslAbs(snoise(vec3(distortedUv.mul(this.uScale).mul(scale), t.mul(0.3).add(fi))));
+            const crackPower = tslMax(float(4), float(8).add(fi.mul(4)).sub(aBass().mul(2)));
+            cr.addAssign(tslPow(float(1).sub(crack), crackPower).mul(float(1).sub(fi.mul(0.25))));
+          }
+          return cr;
+        })();
+        const cracksScaled = cracks.mul(float(1).add(aEnergy().mul(1.5)).add(aBeat().mul(2))).toVar();
+        const heatIntensity = float(0.5).add(aBass().mul(0.5)).add(aBeat().mul(0.4));
+        const heatGlow = tslPow(float(1).sub(uvScaled.y), float(2)).mul(heatIntensity)
+          .add(snoise(vec3(uvScaled.x.mul(this.uScale).mul(10), t.mul(2), 0)).mul(0.15).mul(float(1).sub(uvScaled.y)))
+          .mul(audioBrightness());
+        const c = tslMix(
+          tslMix(tslMix(this.uColor1, this.uColor2, heatGlow.mul(float(1).add(aBeat().mul(0.5)))),
+            this.uColor3, cracksScaled.mul(0.5)),
+          this.uAccent, cracksScaled.mul(this.uIntensity).mul(audioBrightness())
+        ).toVar();
+        // Sparks
+        const sparkDensity = float(50).add(aEnergy().mul(30));
+        const sparkSpeed = float(10).add(aTreble().mul(15));
+        const sparks = tslPow(hash(tslFloor(uvScaled.mul(sparkDensity)).add(tslFloor(t.mul(sparkSpeed)))), float(12))
+          .mul(tslStep(float(0.5).sub(aEnergy().mul(0.3)), uvScaled.y))
+          .mul(aEnergy().add(aBeat().mul(1.5)));
+        c.addAssign(vec3(this.uAccent).mul(sparks).mul(3));
+        // Embers on beats
+        const embers = tslPow(hash(tslFloor(uvScaled.mul(30).add(t.mul(5)))), float(20)).mul(aBeat()).mul(2);
+        c.addAssign(vec3(this.uAccent).add(vec3(this.uColor3)).mul(0.5).mul(embers));
+        c.addAssign(sunEffect);
+        c.assign(beatGlow(c, rawUV));
+        c.assign(audioSaturate(c));
+        return vec4(c, 1);
+
+      } else if (shaderType === 'sakura') {
+        const t = this.uTime.mul(this.uSpeed).mul(0.1);
+        const bgScale = this.uScale.mul(1.5).mul(float(1).add(aMid().mul(0.2)));
+        const bg = fbm(vec3(uvScaled.mul(bgScale), t.mul(0.2)), 3).add(aBeat().mul(0.15));
+        const petalSpeed = float(0.05).mul(float(1).add(aEnergy().mul(1.5)));
+        // Unrolled 5 petal layers
+        const petals = (() => {
+          let pet = float(0).toVar();
+          for (let i = 0; i < 5; i++) {
+            const fi = float(i);
+            const drift = tslSin(t.mul(0.3).add(fi)).mul(float(0.1).add(aBass().mul(0.15)));
+            const px = tslFract(uvScaled.x.add(drift).add(fi.mul(0.2)));
+            const py = tslFract(uvScaled.y.sub(t.mul(petalSpeed).mul(float(1).add(fi.mul(0.2)))).add(fi.mul(0.2)));
+            const petalSize = float(1).add(aBeat().mul(0.3));
+            const dx = px.sub(0.5).div(petalSize);
+            const dy = py.sub(0.5).mul(2).div(petalSize);
+            const d = tslLength(vec2(dx, dy));
+            const petal = tslSmoothstep(float(0.15), float(0.1), d)
+              .mul(tslSmoothstep(float(0), float(0.05), py.sub(0.3)));
+            pet.addAssign(petal.mul(float(0.8).sub(fi.mul(0.1))));
+          }
+          return pet;
+        })();
+        const petalsScaled = petals.mul(float(1).add(aEnergy().mul(0.8)).add(aBeat().mul(0.6)));
+        const c = tslMix(this.uColor1, this.uColor2, uvScaled.y.add(bg.mul(0.2))).toVar();
+        c.assign(tslMix(c, this.uColor3, petalsScaled.mul(0.5).mul(audioBrightness())));
+        c.assign(tslMix(c, this.uAccent, petalsScaled.mul(this.uIntensity).mul(0.7).mul(audioBrightness())));
+        const bloom = tslSmoothstep(float(0.3), float(0.7), bg).mul(float(0.1).add(aBeat().mul(0.2)));
+        c.addAssign(vec3(this.uAccent).mul(bloom).mul(audioBrightness()));
+        const sparkle = tslPow(snoise(vec3(uvScaled.mul(40), t.mul(2))), float(15))
+          .mul(petalsScaled).mul(aTreble()).mul(2);
+        c.addAssign(vec3(1, 0.9, 0.95).mul(sparkle));
+        c.addAssign(sunEffect);
+        c.assign(beatGlow(c, rawUV));
+        c.assign(audioSaturate(c));
+        return vec4(c, 1);
+
+      } else if (shaderType === 'circuit') {
+        const t = this.uTime.mul(this.uSpeed).mul(0.5);
+        const gridSize = float(0.05).div(this.uScale).div(float(1).add(aMid().mul(0.3)));
+        const cell = tslFloor(uvScaled.div(gridSize));
+        const cellUv = tslFract(uvScaled.div(gridSize));
+        const traceThreshold = float(0.5).sub(aEnergy().mul(0.2));
+        // Horizontal traces
+        const hRand = hash(vec2(cell.y, 0));
+        const traceWidth = float(0.3).add(aBass().mul(0.1));
+        const hTrace = tslStep(traceThreshold, hRand)
+          .mul(tslSmoothstep(float(0), float(0.1), cellUv.y))
+          .mul(tslSmoothstep(traceWidth, float(0.2), cellUv.y));
+        // Vertical traces
+        const vRand = hash(vec2(cell.x, 1));
+        const vTrace = tslStep(traceThreshold, vRand)
+          .mul(tslSmoothstep(float(0), float(0.1), cellUv.x))
+          .mul(tslSmoothstep(traceWidth, float(0.2), cellUv.x));
+        const trace = hTrace.add(vTrace);
+        // Nodes
+        const nodeThreshold = float(0.7).sub(aEnergy().mul(0.3));
+        const nodeDist = tslLength(cellUv.sub(0.5));
+        const node = tslSmoothstep(float(0.15), float(0.1), nodeDist)
+          .mul(tslStep(nodeThreshold, hash(cell)))
+          .mul(float(1).add(aBeat().mul(1.5)));
+        // Pulse
+        const pulseSpeed = float(2).add(aEnergy().mul(3));
+        const pulse = tslPow(
+          tslSin(cell.x.mul(0.5).add(cell.y.mul(0.3)).sub(t.mul(pulseSpeed))).mul(0.5).add(0.5),
+          tslMax(float(1), float(4).sub(aBass().mul(2)))
+        ).mul(float(1).add(aEnergy().mul(2)).add(aBeat().mul(1.5)));
+        const bassPulse = aBass().mul(tslStep(float(0.6).sub(aEnergy().mul(0.3)), hash(cell.add(tslFloor(t)))))
+          .mul(float(1).add(aBeat().mul(2)));
+        // Data packets
+        const packetPos = tslFract(cell.x.mul(0.1).add(cell.y.mul(0.1)).add(t.mul(float(1).add(aEnergy()))));
+        const packets = tslSmoothstep(float(0), float(0.1), packetPos)
+          .mul(tslSmoothstep(float(0.2), float(0.1), packetPos))
+          .mul(trace).mul(aBeat()).mul(2);
+        // Color
+        const c = tslMix(this.uColor1, this.uColor2, trace.mul(0.5)).toVar();
+        c.addAssign(vec3(this.uColor3).mul(trace).mul(pulse).mul(0.5).mul(audioBrightness()));
+        c.addAssign(vec3(this.uAccent).mul(
+          trace.mul(pulse).add(node).add(bassPulse).add(packets)
+        ).mul(this.uIntensity).mul(audioBrightness()));
+        const glow = trace.mul(pulse).mul(float(0.2).add(aBeat().mul(0.4)));
+        c.addAssign(vec3(this.uAccent).mul(glow));
+        c.addAssign(vec3(this.uAccent).mul(trace).mul(aBeat()).mul(0.3));
+        c.addAssign(sunEffect);
+        c.assign(beatGlow(c, rawUV));
+        c.assign(audioSaturate(c));
+        return vec4(c, 1);
+
+      } else if (shaderType === 'glacier') {
+        const t = this.uTime.mul(this.uSpeed).mul(0.08);
+        const iceScale = this.uScale.mul(float(1).add(aBass().mul(0.3)));
+        const ice1 = tslAbs(snoise(vec3(uvScaled.mul(iceScale).mul(3), t)));
+        const ice2 = tslAbs(snoise(vec3(uvScaled.mul(iceScale).mul(6), t.mul(0.7))));
+        const ice3 = tslAbs(snoise(vec3(uvScaled.mul(iceScale).mul(12), t.mul(0.5))));
+        const sharpness1 = tslMax(float(0.1), float(0.5).sub(aBass().mul(0.2)));
+        const sharpness2 = tslMax(float(0.1), float(0.7).sub(aMid().mul(0.2)));
+        const crystals = tslPow(ice1, sharpness1).mul(0.5).add(tslPow(ice2, sharpness2).mul(0.3)).add(tslPow(ice3, float(0.9)).mul(0.2))
+          .add(aBass().mul(0.3)).add(aBeat().mul(0.2)).toVar();
+        const frostDetail = this.uScale.mul(20).add(aTreble().mul(10));
+        const frost = tslSmoothstep(float(0.3).sub(aTreble().mul(0.1)), float(0.5),
+          tslAbs(snoise(vec3(uvScaled.mul(frostDetail), t.mul(0.3)))))
+          .mul(float(1).add(aBeat().mul(0.3)));
+        const crackScale = this.uScale.mul(8).add(aBass().mul(3));
+        const crackNoise = tslPow(snoise(vec3(uvScaled.mul(crackScale), t.mul(0.1))), float(2));
+        const crackLine = tslSmoothstep(float(0.7).sub(aBeat().mul(0.2)), float(0.9), float(1).sub(crackNoise))
+          .mul(float(1).add(aBeat()));
+        const c = tslMix(
+          tslMix(tslMix(this.uColor1, this.uColor2, crystals.mul(audioBrightness())),
+            this.uColor3, frost.mul(0.3).mul(audioBrightness())),
+          this.uAccent, crackLine.mul(this.uIntensity).mul(0.5).mul(audioBrightness())
+        ).toVar();
+        const shimmerSpeed = float(3).add(aTreble().mul(5));
+        const shimmerVal = tslPow(snoise(vec3(uvScaled.mul(30), t.mul(shimmerSpeed))).mul(0.5).add(0.5),
+          tslMax(float(2), float(8).sub(aEnergy().mul(3))))
+          .mul(float(1).add(aEnergy().mul(1.5)).add(aBeat()));
+        c.addAssign(vec3(0.8, 0.9, 1.0).mul(shimmerVal).mul(0.4));
+        const peaks = tslSmoothstep(float(0.7), float(1), crystals).mul(float(0.2).add(aBeat().mul(0.4)));
+        c.addAssign(vec3(1, 1, 1).mul(peaks));
+        c.addAssign(vec3(0.7, 0.85, 1.0).mul(aBeat()).mul(0.2));
+        c.addAssign(sunEffect);
+        c.assign(beatGlow(c, rawUV));
+        c.assign(audioSaturate(c));
+        return vec4(c, 1);
+
+      } else if (shaderType === 'savanna') {
+        const t = this.uTime.mul(this.uSpeed).mul(0.15);
+        const shimmerIntensity = float(1).add(aBass().mul(2)).add(aBeat().mul(1.5));
+        const shimmerX = tslSin(uvScaled.y.mul(20).add(t.mul(2))).mul(0.003).mul(shimmerIntensity);
+        const shimmerY = tslCos(uvScaled.x.mul(15).add(t.mul(1.5))).mul(0.002).mul(shimmerIntensity);
+        const shimmerVec = vec2(shimmerX, shimmerY).mul(float(1).sub(uvScaled.y).mul(2));
+        const distortedUv = uvScaled.add(shimmerVec);
+        const dustSpeed1 = float(0.2).add(aEnergy().mul(0.3));
+        const dustSpeed2 = float(0.3).add(aEnergy().mul(0.4));
+        const dust1 = snoise(vec3(distortedUv.mul(this.uScale).mul(2).add(vec2(t.mul(dustSpeed1), 0)), t.mul(0.1)));
+        const dust2 = snoise(vec3(distortedUv.mul(this.uScale).mul(4).add(vec2(t.mul(dustSpeed2), 0)), t.mul(0.15)));
+        const dust = dust1.mul(0.6).add(dust2.mul(0.4)).add(aBass().mul(0.4)).add(aBeat().mul(0.3));
+        const gradientPos = uvScaled.y.add(dust.mul(0.1));
+        const colorPulse = aBeat().mul(0.1);
+        const c = tslMix(this.uAccent, tslMix(this.uColor3,
+          tslMix(this.uColor2, this.uColor1,
+            tslSmoothstep(float(0).sub(colorPulse), float(0.4).add(colorPulse), gradientPos)),
+          tslSmoothstep(float(0).sub(colorPulse), float(0.25).add(colorPulse), gradientPos)),
+          tslSmoothstep(float(0).sub(colorPulse), float(0.15).add(colorPulse), gradientPos)).toVar();
+        // Dust particles
+        const particleDensity = float(50).add(aTreble().mul(30));
+        const particles = tslPow(snoise(vec3(uvScaled.mul(particleDensity), t)),
+          tslMax(float(5), float(15).sub(aEnergy().mul(5))))
+          .mul(float(1).sub(uvScaled.y))
+          .mul(float(1).add(aBeat().mul(2)).add(aEnergy()));
+        c.addAssign(vec3(this.uColor3).mul(particles));
+        const heatWave = float(1).sub(uvScaled.y).mul(aBeat()).mul(0.3);
+        c.addAssign(vec3(this.uAccent).mul(heatWave));
+        c.addAssign(sunEffect);
+        c.assign(beatGlow(c, rawUV));
+        c.assign(audioSaturate(c));
+        c.mulAssign(audioBrightness());
+        return vec4(c, 1);
+      }
+
+      // Fallback: dark color
+      return vec4(this.uColor1, 1);
+    })();
+
+    this.material = new TSL.MeshBasicNodeMaterial({
       depthWrite: false,
-      depthTest: false
+      depthTest: false,
+      colorNode: colorNode,
     });
 
     this.mesh = new this.THREE.Mesh(geometry, this.material);
@@ -71,795 +515,11 @@ class AnimatedBackground {
     this.bgScene.add(this.mesh);
   }
 
-  getVertexShader() {
-    return `
-      varying vec2 vUv;
-      void main() {
-        vUv = uv;
-        gl_Position = vec4(position.xy, 0.0, 1.0);
-      }
-    `;
-  }
-
-  getFragmentShader(type) {
-    const common = `
-      precision highp float;
-
-      uniform float uTime;
-      uniform vec2 uResolution;
-      uniform vec3 uColor1;
-      uniform vec3 uColor2;
-      uniform vec3 uColor3;
-      uniform vec3 uAccent;
-      uniform float uSpeed;
-      uniform float uIntensity;
-      uniform float uScale;
-      uniform float uAudioEnergy;
-      uniform float uAudioBass;
-      uniform float uAudioMid;
-      uniform float uAudioTreble;
-      uniform float uBeatPulse;
-      uniform float uAudioReactivity;
-
-      varying vec2 vUv;
-
-      // Standardized audio values - all backgrounds use the same reactivity
-      float aEnergy() { return uAudioEnergy * uAudioReactivity; }
-      float aBass() { return uAudioBass * uAudioReactivity; }
-      float aMid() { return uAudioMid * uAudioReactivity; }
-      float aTreble() { return uAudioTreble * uAudioReactivity; }
-      float aBeat() { return uBeatPulse * uAudioReactivity; }
-
-      // Audio-reactive scale - creates zoom/pulse effect with bass
-      // Standardized: 20% zoom on bass, 15% on beat
-      vec2 audioScale(vec2 uv) {
-        vec2 centered = uv - 0.5;
-        float pulse = 1.0 - aBass() * 0.20 - aBeat() * 0.15;
-        return centered * pulse + 0.5;
-      }
-
-      // Audio-reactive brightness boost
-      // Standardized: 50% boost on beat, 40% on energy
-      float audioBrightness() {
-        return 1.0 + aBeat() * 0.5 + aEnergy() * 0.4;
-      }
-
-      // Vignette that pulses with music
-      // Standardized: vignette opens 50% with energy
-      float audioVignette(vec2 uv) {
-        vec2 centered = uv - 0.5;
-        float dist = length(centered);
-        float vignette = 1.0 - dist * (0.7 - aEnergy() * 0.5);
-        return clamp(vignette, 0.0, 1.0);
-      }
-
-      // Glow overlay for beat hits
-      // Standardized: 80% glow intensity on beats
-      vec3 beatGlow(vec3 color, vec2 uv) {
-        vec2 centered = uv - 0.5;
-        float dist = length(centered);
-        float glow = exp(-dist * 2.0) * aBeat() * 0.8;
-        return color + uAccent * glow;
-      }
-
-      // Color saturation boost with energy
-      vec3 audioSaturate(vec3 color) {
-        float gray = dot(color, vec3(0.299, 0.587, 0.114));
-        float satBoost = 1.0 + aEnergy() * 0.3 + aBeat() * 0.2;
-        return mix(vec3(gray), color, satBoost);
-      }
-
-      // Noise functions
-      vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
-      vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
-      vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
-      vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
-
-      float snoise(vec3 v) {
-        const vec2 C = vec2(1.0/6.0, 1.0/3.0);
-        const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
-
-        vec3 i = floor(v + dot(v, C.yyy));
-        vec3 x0 = v - i + dot(i, C.xxx);
-
-        vec3 g = step(x0.yzx, x0.xyz);
-        vec3 l = 1.0 - g;
-        vec3 i1 = min(g.xyz, l.zxy);
-        vec3 i2 = max(g.xyz, l.zxy);
-
-        vec3 x1 = x0 - i1 + C.xxx;
-        vec3 x2 = x0 - i2 + C.yyy;
-        vec3 x3 = x0 - D.yyy;
-
-        i = mod289(i);
-        vec4 p = permute(permute(permute(
-          i.z + vec4(0.0, i1.z, i2.z, 1.0))
-          + i.y + vec4(0.0, i1.y, i2.y, 1.0))
-          + i.x + vec4(0.0, i1.x, i2.x, 1.0));
-
-        float n_ = 0.142857142857;
-        vec3 ns = n_ * D.wyz - D.xzx;
-
-        vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
-
-        vec4 x_ = floor(j * ns.z);
-        vec4 y_ = floor(j - 7.0 * x_);
-
-        vec4 x = x_ * ns.x + ns.yyyy;
-        vec4 y = y_ * ns.x + ns.yyyy;
-        vec4 h = 1.0 - abs(x) - abs(y);
-
-        vec4 b0 = vec4(x.xy, y.xy);
-        vec4 b1 = vec4(x.zw, y.zw);
-
-        vec4 s0 = floor(b0) * 2.0 + 1.0;
-        vec4 s1 = floor(b1) * 2.0 + 1.0;
-        vec4 sh = -step(h, vec4(0.0));
-
-        vec4 a0 = b0.xzyw + s0.xzyw * sh.xxyy;
-        vec4 a1 = b1.xzyw + s1.xzyw * sh.zzww;
-
-        vec3 p0 = vec3(a0.xy, h.x);
-        vec3 p1 = vec3(a0.zw, h.y);
-        vec3 p2 = vec3(a1.xy, h.z);
-        vec3 p3 = vec3(a1.zw, h.w);
-
-        vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
-        p0 *= norm.x;
-        p1 *= norm.y;
-        p2 *= norm.z;
-        p3 *= norm.w;
-
-        vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
-        m = m * m;
-        return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
-      }
-
-      float fbm(vec3 p, int octaves) {
-        float value = 0.0;
-        float amplitude = 0.5;
-        float frequency = 1.0;
-        for (int i = 0; i < 6; i++) {
-          if (i >= octaves) break;
-          value += amplitude * snoise(p * frequency);
-          amplitude *= 0.5;
-          frequency *= 2.0;
-        }
-        return value;
-      }
-    `;
-
-    const shaders = {
-      // DEBUG: Simple test shader - bright magenta
-      debug: `
-        ${common}
-        void main() {
-          gl_FragColor = vec4(1.0, 0.0, 1.0, 1.0); // Bright magenta
-        }
-      `,
-
-      // Topographic contour map - morphing elevation lines
-      topo: `
-        ${common}
-        void main() {
-          vec2 uv = audioScale(vUv);
-          float t = uTime * uSpeed * 0.15;
-
-          // Create morphing elevation field with bass-driven distortion
-          vec3 p = vec3(uv * uScale * 3.0, t);
-          float elevation = fbm(p, 5);
-          elevation += 0.3 * snoise(vec3(uv * uScale * 6.0, t * 0.5));
-
-          // Audio reactivity affects elevation - standardized
-          elevation += aBass() * 0.4 + aBeat() * 0.3;
-
-          // Create contour lines - more lines appear with energy
-          float contourDensity = 8.0 + aEnergy() * 8.0 + aMid() * 4.0;
-          float contours = fract(elevation * contourDensity);
-          float line = smoothstep(0.0, 0.08, contours) * smoothstep(0.15, 0.08, contours);
-          line += smoothstep(0.0, 0.03, contours) * smoothstep(0.05, 0.03, contours) * 0.5;
-
-          // Line thickness pulses with beat
-          line *= 1.0 + aBeat() * 0.5;
-
-          // Color based on elevation
-          vec3 baseColor = mix(uColor1, uColor2, elevation * 0.5 + 0.5);
-          baseColor = mix(baseColor, uColor3, smoothstep(0.3, 0.7, elevation));
-
-          // Add contour line color - brighter with energy
-          vec3 lineColor = mix(uAccent, uColor3, 0.3 - aEnergy() * 0.2);
-          vec3 color = mix(baseColor, lineColor, line * uIntensity);
-
-          // Glow at peaks pulses with music
-          float peak = smoothstep(0.5, 0.8, elevation);
-          color += uAccent * peak * 0.3 * audioBrightness();
-
-          // Add beat glow and vignette
-          color = beatGlow(color, vUv);
-          color = audioSaturate(color);
-          color *= audioVignette(vUv);
-          color *= audioBrightness();
-
-          gl_FragColor = vec4(color, 1.0);
-        }
-      `,
-
-      // Ocean waves - flowing water surface
-      ocean: `
-        ${common}
-        void main() {
-          vec2 uv = audioScale(vUv);
-          float t = uTime * uSpeed * 0.2;
-
-          // Wave intensity driven by audio - standardized
-          float waveAmp = 1.0 + aBass() * 0.8 + aBeat() * 0.5;
-
-          // Multiple wave layers - amplitude increases with bass
-          float wave1 = snoise(vec3(uv * uScale * 2.0 + vec2(t, 0.0), t * 0.3)) * waveAmp;
-          float wave2 = snoise(vec3(uv * uScale * 4.0 - vec2(t * 0.7, t * 0.3), t * 0.2)) * 0.5 * waveAmp;
-          float wave3 = snoise(vec3(uv * uScale * 8.0 + vec2(t * 0.5, -t * 0.4), t * 0.1)) * 0.25 * waveAmp;
-
-          float waves = wave1 + wave2 + wave3;
-          waves += aBass() * 0.5 + aBeat() * 0.4;
-
-          // Caustic-like patterns - more intense with treble
-          float causticIntensity = uScale * 12.0 + aTreble() * 4.0;
-          float caustic = snoise(vec3(uv * causticIntensity + waves * 0.5, t * 0.5));
-          caustic = pow(abs(caustic), 2.0) * (0.5 + aMid() * 0.5);
-
-          // Deep to surface color gradient
-          vec3 color = mix(uColor1, uColor2, uv.y + waves * 0.2);
-          color = mix(color, uColor3, smoothstep(-0.2, 0.5, waves));
-
-          // Add caustics and highlights - pulse with beat
-          color += uAccent * caustic * uIntensity * audioBrightness();
-
-          // Surface shimmer pulses dramatically
-          float shimmer = pow(max(0.0, waves), 3.0) * 0.5;
-          shimmer *= 1.0 + aBeat() * 1.5 + aEnergy();
-          color += vec3(shimmer);
-
-          // Beat glow and brightness
-          color = beatGlow(color, vUv);
-          color = audioSaturate(color);
-          color *= audioVignette(vUv);
-          color *= audioBrightness();
-
-          gl_FragColor = vec4(color, 1.0);
-        }
-      `,
-
-      // Nebula - cosmic gas clouds
-      nebula: `
-        ${common}
-        void main() {
-          vec2 uv = audioScale(vUv);
-          float t = uTime * uSpeed * 0.1;
-
-          // Swirling nebula clouds
-          vec2 center = vec2(0.5);
-          vec2 toCenter = uv - center;
-          float angle = atan(toCenter.y, toCenter.x);
-          float dist = length(toCenter);
-
-          // Spiral distortion - driven by bass and beat - standardized
-          float spiralSpeed = 3.0 + aBass() * 2.0;
-          float spiral = angle + dist * spiralSpeed - t * (1.0 + aEnergy() * 0.5);
-          float distortAmount = 0.1 + aBass() * 0.2 + aBeat() * 0.15;
-          vec2 distortedUv = uv + vec2(cos(spiral), sin(spiral)) * distortAmount;
-
-          // Layered cloud noise - intensity varies with audio
-          float cloudScale = uScale * (1.0 + aMid() * 0.3);
-          float cloud1 = fbm(vec3(distortedUv * cloudScale * 2.0, t), 5);
-          float cloud2 = fbm(vec3(distortedUv * cloudScale * 4.0 + 10.0, t * 0.7), 4);
-          float cloud3 = fbm(vec3(distortedUv * cloudScale * 1.0, t * 0.3), 3);
-
-          // Combine clouds - more dramatic with audio
-          float nebula = cloud1 * 0.5 + cloud2 * 0.3 + cloud3 * 0.2;
-          nebula += aEnergy() * 0.4 + aBeat() * 0.3;
-
-          // Color mapping - shifts with audio
-          vec3 color = uColor1;
-          float colorShift = aMid() * 0.2;
-          color = mix(color, uColor2, smoothstep(-0.3 - colorShift, 0.3 + colorShift, nebula));
-          color = mix(color, uColor3, smoothstep(0.2 - colorShift, 0.6 + colorShift, nebula));
-          color = mix(color, uAccent, smoothstep(0.4, 0.8, nebula) * uIntensity * (1.0 + aBeat()));
-
-          // Star points - twinkle with treble
-          float starScale = 50.0 + aTreble() * 20.0;
-          float stars = pow(snoise(vec3(uv * starScale, t * 0.1)), 20.0);
-          stars *= 1.0 + aBeat() * 2.0 + aTreble();
-          color += vec3(stars) * 0.8;
-
-          // Add pulsing core glow
-          float coreGlow = exp(-dist * 3.0) * (aBeat() * 0.8 + aEnergy() * 0.4);
-          color += uAccent * coreGlow;
-
-          // Beat glow and brightness
-          color = beatGlow(color, vUv);
-          color = audioSaturate(color);
-          color *= audioVignette(vUv);
-          color *= audioBrightness();
-
-          gl_FragColor = vec4(color, 1.0);
-        }
-      `,
-
-      // Matrix - digital rain / neural network
-      matrix: `
-        ${common}
-
-        float random(vec2 st) {
-          return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
-        }
-
-        void main() {
-          vec2 uv = audioScale(vUv);
-          float t = uTime * uSpeed;
-
-          // Grid cells - density changes with audio - standardized
-          float cellSize = 0.03 / uScale / (1.0 + aMid() * 0.3);
-          vec2 cell = floor(uv / cellSize);
-          vec2 cellUv = fract(uv / cellSize);
-
-          // Rain drops falling faster with energy
-          float speed = random(vec2(cell.x, 0.0)) * 2.0 + 0.5;
-          speed *= 1.0 + aEnergy() * 1.5 + aBeat() * 0.5;
-          float offset = random(vec2(cell.x, 1.0));
-          float drop = fract(t * speed * 0.3 + offset);
-
-          // Trail effect - longer trails with bass
-          float trailLength = 0.7 + aBass() * 0.2;
-          float trail = smoothstep(0.0, trailLength, 1.0 - drop);
-          trail *= smoothstep(1.0, 0.8, 1.0 - drop);
-
-          // Character-like blocks - more active with audio
-          float charThreshold = 0.3 - aEnergy() * 0.15;
-          float charNoise = random(cell + floor(t * speed));
-          float char = step(charThreshold, charNoise) * step(charNoise, 0.9);
-
-          // Vertical position affects brightness - pulses with beat
-          float brightness = (1.0 - uv.y) * trail * char;
-          brightness *= 1.0 + aBeat() * 1.5 + aEnergy() * 0.8;
-
-          // Connection lines (neural network) - more active with bass
-          float connections = 0.0;
-          for (int i = -1; i <= 1; i++) {
-            vec2 neighborCell = cell + vec2(float(i), 0.0);
-            float neighborActive = step(0.5 - aBass() * 0.3, random(neighborCell + floor(t * 0.5)));
-            float line = 1.0 - abs(cellUv.x - 0.5) * 2.0;
-            connections += line * neighborActive * (0.1 + aBass() * 0.2);
-          }
-
-          // Color
-          vec3 color = uColor1;
-          color = mix(color, uColor2, uv.y);
-          color += uAccent * brightness * uIntensity * audioBrightness();
-          color += uColor3 * connections * (1.0 + aBass() * 2.0);
-
-          // Scanline effect - pulses with treble
-          float scanlineSpeed = 10.0 + aTreble() * 20.0;
-          float scanline = sin(uv.y * 200.0 + t * scanlineSpeed) * (0.02 + aBeat() * 0.05);
-          color += vec3(scanline);
-
-          // Flash on big beats
-          color += uAccent * aBeat() * 0.3;
-
-          // Beat glow and vignette
-          color = beatGlow(color, vUv);
-          color = audioSaturate(color);
-          color *= audioVignette(vUv);
-
-          gl_FragColor = vec4(color, 1.0);
-        }
-      `,
-
-      // Aurora - northern lights ribbons
-      aurora: `
-        ${common}
-        void main() {
-          vec2 uv = audioScale(vUv);
-          float t = uTime * uSpeed * 0.15;
-
-          // Multiple aurora ribbons - wave amplitude driven by bass - standardized
-          float aurora = 0.0;
-          float bassAmp = aBass() * 0.2 + aBeat() * 0.15;
-
-          for (int i = 0; i < 4; i++) {
-            float fi = float(i);
-            float offset = fi * 0.2;
-            float freq = 2.0 + fi * 0.5 + aMid() * 1.0;
-            float amp = 0.15 - fi * 0.03 + bassAmp;
-
-            float wave = sin(uv.x * freq * uScale + t + offset) * amp;
-            wave += snoise(vec3(uv.x * uScale * 3.0, t * 0.5, fi)) * (0.1 + aTreble() * 0.1);
-
-            // Ribbon height pulses with beat
-            float ribbonY = 0.3 + aBeat() * 0.1;
-            float ribbon = smoothstep(0.0, 0.1, uv.y - ribbonY - wave - offset * 0.3);
-            ribbon *= smoothstep(0.3 + aBass() * 0.1, 0.15, uv.y - ribbonY - wave - offset * 0.3);
-
-            aurora += ribbon * (1.0 - fi * 0.2);
-          }
-
-          // Dramatically increase aurora brightness with audio
-          aurora *= 1.0 + aEnergy() * 1.5 + aBeat() * 1.0;
-          aurora += aBass() * 0.3;
-
-          // Shimmer intensity varies with treble
-          float shimmerSpeed = 2.0 + aTreble() * 3.0;
-          float shimmer = snoise(vec3(uv * uScale * 10.0, t * shimmerSpeed)) * 0.3 + 0.7;
-          shimmer += aBeat() * 0.2;
-          aurora *= shimmer;
-
-          // Color gradient through the aurora - shifts with audio
-          float colorShift = aMid() * 0.3;
-          vec3 auroraColor = mix(uColor3, uAccent, snoise(vec3(uv.x * 5.0 + colorShift, t, 0.0)) * 0.5 + 0.5);
-          auroraColor = mix(auroraColor, uColor2, uv.y);
-          auroraColor *= audioBrightness();
-
-          // Base sky gradient
-          vec3 sky = mix(uColor1, uColor2 * 0.5, uv.y);
-
-          // Stars twinkle more with treble
-          float starBrightness = pow(snoise(vec3(uv * 80.0, t * 0.05)), 25.0) * (1.0 - aurora);
-          starBrightness *= 1.0 + aTreble() * 2.0 + aBeat();
-
-          vec3 color = mix(sky, auroraColor, aurora * uIntensity);
-          color += vec3(starBrightness) * 0.5;
-
-          // Beat glow from bottom
-          float bottomGlow = exp(-(uv.y) * 4.0) * aBeat() * 0.4;
-          color += uAccent * bottomGlow;
-
-          // Beat glow and vignette
-          color = beatGlow(color, vUv);
-          color = audioSaturate(color);
-          color *= audioVignette(vUv);
-
-          gl_FragColor = vec4(color, 1.0);
-        }
-      `,
-
-      // Forge - industrial heat/molten metal
-      forge: `
-        ${common}
-
-        float random(vec2 st) {
-          return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
-        }
-
-        void main() {
-          vec2 uv = audioScale(vUv);
-          float t = uTime * uSpeed * 0.2;
-
-          // Heat distortion - standardized
-          float distortAmount = 0.02 + aBass() * 0.05 + aBeat() * 0.03;
-          vec2 distort = vec2(
-            snoise(vec3(uv * uScale * 5.0, t)) * distortAmount,
-            snoise(vec3(uv * uScale * 5.0 + 100.0, t)) * distortAmount
-          );
-          vec2 distortedUv = uv + distort * (1.0 + aBass() * 2.0);
-
-          // Molten cracks - glow more intensely with audio
-          float cracks = 0.0;
-          for (int i = 0; i < 3; i++) {
-            float fi = float(i);
-            float scale = 3.0 + fi * 2.0 + aMid();
-            float crack = abs(snoise(vec3(distortedUv * uScale * scale, t * 0.3 + fi)));
-            float crackPower = 8.0 + fi * 4.0 - aBass() * 2.0;
-            crack = pow(1.0 - crack, max(4.0, crackPower));
-            cracks += crack * (1.0 - fi * 0.25);
-          }
-
-          // Cracks pulse dramatically with beat
-          cracks *= 1.0 + aEnergy() * 1.5 + aBeat() * 2.0;
-
-          // Heat glow from bottom - pulses with bass
-          float heatIntensity = 0.5 + aBass() * 0.5 + aBeat() * 0.4;
-          float heatGlow = pow(1.0 - uv.y, 2.0) * heatIntensity;
-          heatGlow += snoise(vec3(uv.x * uScale * 10.0, t * 2.0, 0.0)) * 0.15 * (1.0 - uv.y);
-          heatGlow *= audioBrightness();
-
-          // Color: dark metal to glowing orange - shifts with energy
-          vec3 color = uColor1;
-          color = mix(color, uColor2, heatGlow * (1.0 + aBeat() * 0.5));
-          color = mix(color, uColor3, cracks * 0.5);
-          color = mix(color, uAccent, cracks * uIntensity * audioBrightness());
-
-          // Spark particles - standardized
-          float sparkDensity = 50.0 + aEnergy() * 30.0;
-          float sparkSpeed = 10.0 + aTreble() * 15.0;
-          float sparks = pow(random(floor(uv * sparkDensity) + floor(t * sparkSpeed)), 12.0);
-          sparks *= step(0.5 - aEnergy() * 0.3, uv.y);
-          sparks *= (aEnergy() + aBeat() * 1.5);
-          color += uAccent * sparks * 3.0;
-
-          // Ember burst on beats
-          float embers = random(floor(uv * 30.0 + t * 5.0));
-          embers = pow(embers, 20.0) * aBeat() * 2.0;
-          color += (uAccent + uColor3) * 0.5 * embers;
-
-          // Beat glow and vignette
-          color = beatGlow(color, vUv);
-          color = audioSaturate(color);
-          color *= audioVignette(vUv);
-
-          gl_FragColor = vec4(color, 1.0);
-        }
-      `,
-
-      // Sakura - soft floating petal patterns
-      sakura: `
-        ${common}
-        void main() {
-          vec2 uv = audioScale(vUv);
-          float t = uTime * uSpeed * 0.1;
-
-          // Soft flowing background - swirls with audio - standardized
-          float bgScale = uScale * 1.5 * (1.0 + aMid() * 0.2);
-          float bg = fbm(vec3(uv * bgScale, t * 0.2), 3);
-          bg += aBeat() * 0.15;
-
-          // Petal-like shapes floating - more and faster with audio
-          float petals = 0.0;
-          float petalSpeed = 0.05 * (1.0 + aEnergy() * 1.5);
-
-          for (int i = 0; i < 5; i++) {
-            float fi = float(i);
-            vec2 petalUv = uv;
-
-            // Drift motion - swirls with bass
-            float drift = sin(t * 0.3 + fi) * (0.1 + aBass() * 0.15);
-            petalUv.x += drift;
-            petalUv.y -= t * petalSpeed * (1.0 + fi * 0.2);
-            petalUv = fract(petalUv + fi * 0.2);
-
-            // Petal shape - size pulses with beat
-            vec2 center = vec2(0.5);
-            float petalSize = 1.0 + aBeat() * 0.3;
-            float d = length((petalUv - center) * vec2(1.0, 2.0) / petalSize);
-            float petal = smoothstep(0.15, 0.1, d);
-            petal *= smoothstep(0.0, 0.05, petalUv.y - 0.3);
-
-            petals += petal * (0.8 - fi * 0.1);
-          }
-
-          // Petals glow more with audio
-          petals *= 1.0 + aEnergy() * 0.8 + aBeat() * 0.6;
-
-          // Gentle color gradient
-          vec3 color = mix(uColor1, uColor2, uv.y + bg * 0.2);
-          color = mix(color, uColor3, petals * 0.5 * audioBrightness());
-          color = mix(color, uAccent, petals * uIntensity * 0.7 * audioBrightness());
-
-          // Soft bloom - pulses with music
-          float bloom = smoothstep(0.3, 0.7, bg) * (0.1 + aBeat() * 0.2);
-          color += uAccent * bloom * audioBrightness();
-
-          // Sparkle on petals with treble
-          float sparkle = pow(snoise(vec3(uv * 40.0, t * 2.0)), 15.0);
-          sparkle *= petals * aTreble() * 2.0;
-          color += vec3(1.0, 0.9, 0.95) * sparkle;
-
-          // Beat glow and vignette
-          color = beatGlow(color, vUv);
-          color = audioSaturate(color);
-          color *= audioVignette(vUv);
-
-          gl_FragColor = vec4(color, 1.0);
-        }
-      `,
-
-      // Circuit - pulsing circuit board traces
-      circuit: `
-        ${common}
-
-        float random(vec2 st) {
-          return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
-        }
-
-        void main() {
-          vec2 uv = audioScale(vUv);
-          float t = uTime * uSpeed * 0.5;
-
-          // Grid - density increases with mid frequencies - standardized
-          float gridSize = 0.05 / uScale / (1.0 + aMid() * 0.3);
-          vec2 cell = floor(uv / gridSize);
-          vec2 cellUv = fract(uv / gridSize);
-
-          // Traces - more appear with audio energy
-          float trace = 0.0;
-          float traceThreshold = 0.5 - aEnergy() * 0.2;
-
-          // Horizontal traces
-          float hRand = random(vec2(cell.y, 0.0));
-          if (hRand > traceThreshold) {
-            float traceWidth = 0.3 + aBass() * 0.1;
-            trace += smoothstep(0.0, 0.1, cellUv.y) * smoothstep(traceWidth, 0.2, cellUv.y);
-          }
-
-          // Vertical traces
-          float vRand = random(vec2(cell.x, 1.0));
-          if (vRand > traceThreshold) {
-            float traceWidth = 0.3 + aBass() * 0.1;
-            trace += smoothstep(0.0, 0.1, cellUv.x) * smoothstep(traceWidth, 0.2, cellUv.x);
-          }
-
-          // Nodes at intersections - more with energy
-          float node = length(cellUv - 0.5);
-          float nodeThreshold = 0.7 - aEnergy() * 0.3;
-          node = smoothstep(0.15, 0.1, node) * step(nodeThreshold, random(cell));
-          node *= 1.0 + aBeat() * 1.5;
-
-          // Pulse traveling along traces - faster and brighter with audio
-          float pulseSpeed = 2.0 + aEnergy() * 3.0;
-          float pulse = sin(cell.x * 0.5 + cell.y * 0.3 - t * pulseSpeed) * 0.5 + 0.5;
-          pulse = pow(pulse, 4.0 - aBass() * 2.0);
-
-          // Audio reactive pulse - dramatically more intense
-          pulse *= 1.0 + aEnergy() * 2.0 + aBeat() * 1.5;
-          float bassPulse = aBass() * step(0.6 - aEnergy() * 0.3, random(cell + floor(t)));
-          bassPulse *= 1.0 + aBeat() * 2.0;
-
-          // Data packets traveling on beats
-          float packets = 0.0;
-          float packetPos = fract(cell.x * 0.1 + cell.y * 0.1 + t * (1.0 + aEnergy()));
-          packets = smoothstep(0.0, 0.1, packetPos) * smoothstep(0.2, 0.1, packetPos);
-          packets *= trace * aBeat() * 2.0;
-
-          // Color
-          vec3 color = uColor1;
-          color = mix(color, uColor2, trace * 0.5);
-          color += uColor3 * trace * pulse * 0.5 * audioBrightness();
-          color += uAccent * (trace * pulse + node + bassPulse + packets) * uIntensity * audioBrightness();
-
-          // Glow - pulses strongly with beat
-          float glow = trace * pulse * (0.2 + aBeat() * 0.4);
-          color += uAccent * glow;
-
-          // Flash whole circuit on big beats
-          color += uAccent * trace * aBeat() * 0.3;
-
-          // Beat glow and vignette
-          color = beatGlow(color, vUv);
-          color = audioSaturate(color);
-          color *= audioVignette(vUv);
-
-          gl_FragColor = vec4(color, 1.0);
-        }
-      `,
-
-      // Glacier - ice crystal formations
-      glacier: `
-        ${common}
-        void main() {
-          vec2 uv = audioScale(vUv);
-          float t = uTime * uSpeed * 0.08;
-
-          // Ice crystal noise (sharp, angular) - pulses with bass - standardized
-          float iceScale = uScale * (1.0 + aBass() * 0.3);
-          float ice1 = abs(snoise(vec3(uv * iceScale * 3.0, t)));
-          float ice2 = abs(snoise(vec3(uv * iceScale * 6.0, t * 0.7)));
-          float ice3 = abs(snoise(vec3(uv * iceScale * 12.0, t * 0.5)));
-
-          // Combine for crystal structure - sharpness varies with audio
-          float sharpness1 = 0.5 - aBass() * 0.2;
-          float sharpness2 = 0.7 - aMid() * 0.2;
-          float crystals = pow(ice1, sharpness1) * 0.5 + pow(ice2, sharpness2) * 0.3 + pow(ice3, 0.9) * 0.2;
-          crystals += aBass() * 0.3 + aBeat() * 0.2;
-
-          // Frost patterns (finer detail) - more visible with treble
-          float frostDetail = uScale * 20.0 + aTreble() * 10.0;
-          float frost = snoise(vec3(uv * frostDetail, t * 0.3));
-          frost = smoothstep(0.3 - aTreble() * 0.1, 0.5, abs(frost));
-          frost *= 1.0 + aBeat() * 0.3;
-
-          // Cracks in ice - spread with bass hits
-          float crackScale = uScale * 8.0 + aBass() * 3.0;
-          float cracks = 1.0 - pow(snoise(vec3(uv * crackScale, t * 0.1)), 2.0);
-          cracks = smoothstep(0.7 - aBeat() * 0.2, 0.9, cracks);
-          cracks *= 1.0 + aBeat() * 1.0;
-
-          // Deep blue to white gradient - shifts with energy
-          vec3 color = uColor1;
-          color = mix(color, uColor2, crystals * audioBrightness());
-          color = mix(color, uColor3, frost * 0.3 * audioBrightness());
-          color = mix(color, uAccent, cracks * uIntensity * 0.5 * audioBrightness());
-
-          // Ice shimmer - sparkles more with audio
-          float shimmerSpeed = 3.0 + aTreble() * 5.0;
-          float shimmer = pow(snoise(vec3(uv * 30.0, t * shimmerSpeed)) * 0.5 + 0.5, 8.0 - aEnergy() * 3.0);
-          shimmer *= 1.0 + aEnergy() * 1.5 + aBeat() * 1.0;
-          color += vec3(0.8, 0.9, 1.0) * shimmer * 0.4;
-
-          // White peaks glow with beats
-          float peaks = smoothstep(0.7, 1.0, crystals) * (0.2 + aBeat() * 0.4);
-          color += vec3(1.0) * peaks;
-
-          // Ice flash on beats
-          color += vec3(0.7, 0.85, 1.0) * aBeat() * 0.2;
-
-          // Beat glow and vignette
-          color = beatGlow(color, vUv);
-          color = audioSaturate(color);
-          color *= audioVignette(vUv);
-
-          gl_FragColor = vec4(color, 1.0);
-        }
-      `,
-
-      // Savanna - heat shimmer and dust waves
-      savanna: `
-        ${common}
-        void main() {
-          vec2 uv = audioScale(vUv);
-          float t = uTime * uSpeed * 0.15;
-
-          // Heat shimmer distortion - standardized
-          float shimmerIntensity = 1.0 + aBass() * 2.0 + aBeat() * 1.5;
-          vec2 shimmer = vec2(
-            sin(uv.y * 20.0 + t * 2.0) * 0.003 * shimmerIntensity,
-            cos(uv.x * 15.0 + t * 1.5) * 0.002 * shimmerIntensity
-          );
-          shimmer *= (1.0 - uv.y) * 2.0;
-          vec2 distortedUv = uv + shimmer;
-
-          // Dust layers - more intense and faster with audio
-          float dustSpeed1 = 0.2 + aEnergy() * 0.3;
-          float dustSpeed2 = 0.3 + aEnergy() * 0.4;
-          float dust1 = snoise(vec3(distortedUv * uScale * 2.0 + vec2(t * dustSpeed1, 0.0), t * 0.1));
-          float dust2 = snoise(vec3(distortedUv * uScale * 4.0 + vec2(t * dustSpeed2, 0.0), t * 0.15));
-          float dust = dust1 * 0.6 + dust2 * 0.4;
-          dust += aBass() * 0.4 + aBeat() * 0.3;
-
-          // Sunset gradient - colors shift with audio
-          float gradientPos = uv.y + dust * 0.1;
-          float colorPulse = aBeat() * 0.1;
-          vec3 color = uColor1;
-          color = mix(uColor2, color, smoothstep(0.0 - colorPulse, 0.4 + colorPulse, gradientPos));
-          color = mix(uColor3, color, smoothstep(0.0 - colorPulse, 0.25 + colorPulse, gradientPos));
-          color = mix(uAccent, color, smoothstep(0.0 - colorPulse, 0.15 + colorPulse, gradientPos));
-
-          // Sun glow - PULSES dramatically with music
-          vec2 sunPos = vec2(0.5, 0.1);
-          float sunDist = length(uv - sunPos);
-          float sunSize = 0.15 + aBeat() * 0.05 + aBass() * 0.03;
-          float sun = smoothstep(sunSize, 0.0, sunDist);
-          float sunGlowSize = 0.4 + aEnergy() * 0.2 + aBeat() * 0.15;
-          float sunGlow = smoothstep(sunGlowSize, 0.0, sunDist) * (0.3 + aBeat() * 0.4);
-          color += uAccent * (sun + sunGlow) * audioBrightness();
-
-          // Dust particles - more and brighter with audio
-          float particleDensity = 50.0 + aTreble() * 30.0;
-          float particles = pow(snoise(vec3(uv * particleDensity, t)), 15.0 - aEnergy() * 5.0);
-          particles *= (1.0 - uv.y);
-          particles *= 1.0 + aBeat() * 2.0 + aEnergy();
-          color += uColor3 * particles;
-
-          // Heat wave flash on beats
-          float heatWave = (1.0 - uv.y) * aBeat() * 0.3;
-          color += uAccent * heatWave;
-
-          // Beat glow and vignette
-          color = beatGlow(color, vUv);
-          color = audioSaturate(color);
-          color *= audioVignette(vUv);
-          color *= audioBrightness();
-
-          gl_FragColor = vec4(color, 1.0);
-        }
-      `
-    };
-
-    return shaders[type] || shaders.topo;
-  }
-
   update(deltaTime, audioData = {}) {
     if (!this.material) return;
 
     this.time += deltaTime;
-    this.material.uniforms.uTime.value = this.time;
+    this.uTime.value = this.time;
 
     // Smooth audio values with different smoothing rates for responsiveness
     const targetEnergy = audioData.energy || 0;
@@ -879,71 +539,47 @@ class AnimatedBackground {
     // Background pulse driven ONLY by VOCALS stem
     this.beatPulse += (vocalEnergy - this.beatPulse) * 0.2;
 
-    // Apply to shader uniforms
-    this.material.uniforms.uAudioEnergy.value = this.audioEnergy;
-    this.material.uniforms.uAudioBass.value = this.audioBass;
-    this.material.uniforms.uAudioMid.value = this.audioMid;
-    this.material.uniforms.uAudioTreble.value = this.audioTreble;
-    this.material.uniforms.uBeatPulse.value = this.beatPulse;
+    // Apply to TSL uniforms
+    this.uAudioEnergy.value = this.audioEnergy;
+    this.uAudioBass.value = this.audioBass;
+    this.uAudioMid.value = this.audioMid;
+    this.uAudioTreble.value = this.audioTreble;
+    this.uBeatPulse.value = this.beatPulse;
   }
 
   render(renderer) {
-    if (!this.bgScene || !this.bgCamera) {
-      console.warn("AnimatedBackground.render: missing bgScene or bgCamera");
-      return;
-    }
-    if (!renderer) {
-      console.warn("AnimatedBackground.render: no renderer provided");
-      return;
-    }
-
-    // Render background with clearing enabled (clears canvas and draws background)
-    // Main scene should then render with autoClearColor = false to preserve this
-    renderer.render(this.bgScene, this.bgCamera);
+    // No-op: PostProcessing pipeline handles rendering both background and scene passes.
+    // bgScene and bgCamera are exposed as public properties for the pipeline to use.
   }
 
   setColors(config) {
     if (!this.material) return;
 
-    if (config.color1 !== undefined) {
-      this.material.uniforms.uColor1.value.set(config.color1);
-    }
-    if (config.color2 !== undefined) {
-      this.material.uniforms.uColor2.value.set(config.color2);
-    }
-    if (config.color3 !== undefined) {
-      this.material.uniforms.uColor3.value.set(config.color3);
-    }
-    if (config.accent !== undefined) {
-      this.material.uniforms.uAccent.value.set(config.accent);
-    }
-    if (config.speed !== undefined) {
-      this.material.uniforms.uSpeed.value = config.speed;
-    }
-    if (config.intensity !== undefined) {
-      this.material.uniforms.uIntensity.value = config.intensity;
-    }
-    if (config.scale !== undefined) {
-      this.material.uniforms.uScale.value = config.scale;
-    }
-    if (config.audioReactivity !== undefined) {
-      this.setAudioReactivity(config.audioReactivity);
-    }
+    if (config.color1 !== undefined) this.uColor1.value.set(config.color1);
+    if (config.color2 !== undefined) this.uColor2.value.set(config.color2);
+    if (config.color3 !== undefined) this.uColor3.value.set(config.color3);
+    if (config.accent !== undefined) this.uAccent.value.set(config.accent);
+    if (config.speed !== undefined) this.uSpeed.value = config.speed;
+    if (config.intensity !== undefined) this.uIntensity.value = config.intensity;
+    if (config.scale !== undefined) this.uScale.value = config.scale;
+    if (config.audioReactivity !== undefined) this.setAudioReactivity(config.audioReactivity);
+    // Sun settings
+    if (config.sunX !== undefined) this.uSunX.value = config.sunX;
+    if (config.sunY !== undefined) this.uSunY.value = config.sunY;
+    if (config.sunSize !== undefined) this.uSunSize.value = config.sunSize;
+    if (config.sunColor !== undefined) this.uSunColor.value.set(config.sunColor);
+    if (config.sunIntensity !== undefined) this.uSunIntensity.value = config.sunIntensity;
   }
 
-  // Set global audio reactivity level (0-1, default 1.0)
-  // All backgrounds use the same standardized reactivity
   setAudioReactivity(level) {
     this.audioReactivity = Math.max(0, Math.min(1, level));
     if (this.material) {
-      this.material.uniforms.uAudioReactivity.value = this.audioReactivity;
+      this.uAudioReactivity.value = this.audioReactivity;
     }
   }
 
   resize(width, height) {
-    if (this.material) {
-      this.material.uniforms.uResolution.value.set(width, height);
-    }
+    // No longer needed — TSL uses screenUV / uv() which are resolution-independent
   }
 
   dispose() {

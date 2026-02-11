@@ -1,7 +1,7 @@
 /**
- * Scene Tuner - Real-time visual parameter tuning
+ * Scene Tuner - Test Track Controls
  * Press 'T' to toggle the tuning panel
- * Adjust sliders/inputs to tune visuals, then copy config
+ * Controls Preetham sky, atmosphere, lighting, and fog
  */
 window.SceneTuner = (function() {
   'use strict';
@@ -11,58 +11,26 @@ window.SceneTuner = (function() {
   let currentConfig = {};
   let updateCallbacks = [];
 
-  // Default tunable parameters (tuned for Trade You My Hands)
   const defaultParams = {
-    // Ground shader
-    ground: {
-      patternScale: { value: 25, min: 1, max: 100, step: 1, label: 'Pattern Scale' },
-      veinThickness: { value: 0.09, min: 0.01, max: 0.5, step: 0.01, label: 'Vein Thickness' },
-      glowIntensity: { value: 0, min: 0, max: 3, step: 0.1, label: 'Glow Intensity' },
-      dataFlowSpeed: { value: 6, min: 0, max: 10, step: 0.5, label: 'Data Flow Speed' },
-      nodeSize: { value: 0.21, min: 0.01, max: 0.3, step: 0.01, label: 'Node Size' },
-      baseColorR: { value: 0.105, min: 0, max: 0.5, step: 0.005, label: 'Base R' },
-      baseColorG: { value: 0.13, min: 0, max: 0.5, step: 0.005, label: 'Base G' },
-      baseColorB: { value: 0.12, min: 0, max: 0.5, step: 0.005, label: 'Base B' },
-      glowColorR: { value: 0.3, min: 0, max: 1, step: 0.05, label: 'Glow R' },
-      glowColorG: { value: 0.65, min: 0, max: 1, step: 0.05, label: 'Glow G' },
-      glowColorB: { value: 0.75, min: 0, max: 1, step: 0.05, label: 'Glow B' },
+    sun: {
+      elevation: { value: 5, min: -5, max: 90, step: 0.5, label: 'Elevation °' },
+      azimuth: { value: 0, min: -180, max: 180, step: 1, label: 'Azimuth °' },
     },
-    // Audio reactivity
-    audio: {
-      bassMultiplier: { value: 6, min: 1, max: 20, step: 0.5, label: 'Bass Multiplier' },
-      synthMultiplier: { value: 4, min: 1, max: 20, step: 0.5, label: 'Synth Multiplier' },
-      drumSmoothing: { value: 0.85, min: 0.5, max: 0.99, step: 0.01, label: 'Drum Smoothing' },
-      bassSmoothing: { value: 0.8, min: 0.5, max: 0.99, step: 0.01, label: 'Bass Smoothing' },
-      vocalSmoothing: { value: 0.9, min: 0.5, max: 0.99, step: 0.01, label: 'Vocal Smoothing' },
+    atmosphere: {
+      turbidity: { value: 4, min: 1, max: 20, step: 0.5, label: 'Turbidity' },
+      rayleigh: { value: 2, min: 0, max: 10, step: 0.25, label: 'Rayleigh' },
+      mieCoefficient: { value: 0.005, min: 0, max: 0.1, step: 0.001, label: 'Mie Coeff' },
+      mieDirectionalG: { value: 0.8, min: 0, max: 0.999, step: 0.01, label: 'Mie Dir G' },
+      exposure: { value: 0.5, min: 0, max: 2, step: 0.05, label: 'Exposure' },
     },
-    // Fog
+    lighting: {
+      sunIntensity: { value: 2.0, min: 0, max: 5, step: 0.1, label: 'Sun Light' },
+      ambientIntensity: { value: 0.6, min: 0, max: 2, step: 0.1, label: 'Ambient' },
+    },
     fog: {
-      density: { value: 0.003, min: 0, max: 0.02, step: 0.001, label: 'Fog Density' },
-      colorH: { value: 0.02, min: 0, max: 1, step: 0.01, label: 'Fog Hue' },
-      colorS: { value: 0.1, min: 0, max: 1, step: 0.05, label: 'Fog Saturation' },
-      colorL: { value: 0.015, min: 0, max: 0.1, step: 0.005, label: 'Fog Lightness' },
+      near: { value: 100, min: 0, max: 400, step: 10, label: 'Fog Near' },
+      far: { value: 500, min: 100, max: 1500, step: 50, label: 'Fog Far' },
     },
-    // Sky
-    sky: {
-      luminosityMin: { value: 0.35, min: 0.1, max: 1, step: 0.05, label: 'Luminosity Min' },
-      luminosityRange: { value: 1.15, min: 0, max: 2, step: 0.1, label: 'Luminosity Range' },
-      sunGlowIntensity: { value: 0.15, min: 0, max: 1, step: 0.05, label: 'Sun Glow' },
-      horizonIntensity: { value: 0.1, min: 0, max: 1, step: 0.05, label: 'Horizon Glow' },
-    },
-    // Trees
-    trees: {
-      trunkGlowBase: { value: 0.05, min: 0, max: 0.5, step: 0.01, label: 'Trunk Glow Base' },
-      trunkGlowMult: { value: 1.5, min: 0, max: 5, step: 0.1, label: 'Trunk Glow Mult' },
-      leafGlowBase: { value: 0.02, min: 0, max: 0.3, step: 0.01, label: 'Leaf Glow Base' },
-      leafGlowMult: { value: 0.5, min: 0, max: 2, step: 0.1, label: 'Leaf Glow Mult' },
-    },
-    // Fireflies
-    fireflies: {
-      baseSize: { value: 0.5, min: 0.1, max: 2, step: 0.1, label: 'Base Size' },
-      sizeMultiplier: { value: 0.5, min: 0, max: 2, step: 0.1, label: 'Size Multiplier' },
-      baseOpacity: { value: 0.7, min: 0, max: 1, step: 0.05, label: 'Base Opacity' },
-      swarmIntensity: { value: 1.5, min: 0.5, max: 5, step: 0.25, label: 'Swarm Intensity' },
-    }
   };
 
   function createPanel() {
@@ -137,7 +105,7 @@ window.SceneTuner = (function() {
           height: 4px;
         }
         #scene-tuner .param .value {
-          flex: 0 0 45px;
+          flex: 0 0 50px;
           text-align: right;
           color: #0fa;
         }
@@ -267,6 +235,10 @@ window.SceneTuner = (function() {
     updateCallbacks.push(callback);
   }
 
+  function offUpdate(callback) {
+    updateCallbacks = updateCallbacks.filter(cb => cb !== callback);
+  }
+
   function getConfig() {
     return { ...currentConfig };
   }
@@ -278,7 +250,6 @@ window.SceneTuner = (function() {
   function setParam(section, param, value) {
     if (currentConfig[section]) {
       currentConfig[section][param] = value;
-      // Update slider if panel exists
       const input = panel?.querySelector(`input[data-section="${section}"][data-param="${param}"]`);
       if (input) {
         input.value = value;
@@ -317,6 +288,7 @@ window.SceneTuner = (function() {
     show,
     hide,
     onUpdate,
+    offUpdate,
     getConfig,
     getParam,
     setParam,

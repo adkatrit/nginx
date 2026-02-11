@@ -86,7 +86,12 @@ window.TRACK_THEMES = {
         accent: 0x00bfff,
         speed: 0.8,
         intensity: 0.6,
-        scale: 1.2
+        scale: 1.2,
+        sunX: 0.5,
+        sunY: 0.82,
+        sunSize: 0.15,
+        sunColor: 0xff6b35,
+        sunIntensity: 0.8
       },
       terrain: {
         enabled: true,
@@ -153,7 +158,12 @@ window.TRACK_THEMES = {
         accent: 0xffccee,
         speed: 0.4,
         intensity: 0.4,
-        scale: 0.8
+        scale: 0.8,
+        sunX: 0.5,
+        sunY: 0.78,
+        sunSize: 0.12,
+        sunColor: 0xffd700,
+        sunIntensity: 0.7
       },
       terrain: {
         enabled: true,
@@ -220,7 +230,12 @@ window.TRACK_THEMES = {
         accent: 0xff4400,
         speed: 1.5,
         intensity: 0.9,
-        scale: 1.0
+        scale: 1.0,
+        sunX: 0.8,
+        sunY: 0.85,
+        sunSize: 0.18,
+        sunColor: 0xff3333,
+        sunIntensity: 1.2
       },
       terrain: {
         enabled: true,
@@ -288,7 +303,12 @@ window.TRACK_THEMES = {
         accent: 0xff00ff,
         speed: 1.2,
         intensity: 0.8,
-        scale: 1.5
+        scale: 1.5,
+        sunX: 0.3,
+        sunY: 0.80,
+        sunSize: 0.14,
+        sunColor: 0xff1493,
+        sunIntensity: 0.9
       },
       terrain: {
         enabled: true,
@@ -356,7 +376,12 @@ window.TRACK_THEMES = {
         accent: 0xaaccdd,
         speed: 0.6,
         intensity: 0.5,
-        scale: 1.0
+        scale: 1.0,
+        sunX: 0.75,
+        sunY: 0.88,
+        sunSize: 0.1,
+        sunColor: 0x00d9ff,
+        sunIntensity: 0.6
       },
       terrain: {
         enabled: true,
@@ -424,7 +449,12 @@ window.TRACK_THEMES = {
         accent: 0xffcc66,
         speed: 0.7,
         intensity: 0.7,
-        scale: 1.0
+        scale: 1.0,
+        sunX: 0.5,
+        sunY: 0.82,
+        sunSize: 0.15,
+        sunColor: 0xffa500,
+        sunIntensity: 1.0
       },
       terrain: {
         enabled: true,
@@ -491,7 +521,12 @@ window.TRACK_THEMES = {
         accent: 0x00ffaa,
         speed: 0.3,
         intensity: 0.4,
-        scale: 0.8
+        scale: 0.8,
+        sunX: 0.6,
+        sunY: 0.80,
+        sunSize: 0.12,
+        sunColor: 0xffd700,
+        sunIntensity: 0.7
       },
       terrain: {
         enabled: false,  // Disabled - custom scene has its own ground/sky
@@ -548,7 +583,12 @@ window.TRACK_THEMES = {
         accent: 0xffaa44,
         speed: 1.0,
         intensity: 0.7,
-        scale: 1.0
+        scale: 1.0,
+        sunX: 0.2,
+        sunY: 0.88,
+        sunSize: 0.16,
+        sunColor: 0xff4500,
+        sunIntensity: 1.1
       },
       terrain: {
         enabled: true,
@@ -616,7 +656,12 @@ window.TRACK_THEMES = {
         accent: 0x88eeff,
         speed: 0.6,
         intensity: 0.7,
-        scale: 1.0
+        scale: 1.0,
+        sunX: 0.5,
+        sunY: 0.85,
+        sunSize: 0.18,
+        sunColor: 0xff6347,
+        sunIntensity: 1.0
       },
       terrain: {
         enabled: true,
@@ -684,7 +729,12 @@ window.TRACK_THEMES = {
         accent: 0x00ff00,
         speed: 1.0,
         intensity: 0.8,
-        scale: 1.2
+        scale: 1.2,
+        sunX: 0.7,
+        sunY: 0.82,
+        sunSize: 0.12,
+        sunColor: 0xffd700,
+        sunIntensity: 0.7
       },
       terrain: {
         enabled: true,
@@ -752,7 +802,12 @@ window.TRACK_THEMES = {
         accent: 0x00ddff,
         speed: 0.7,
         intensity: 0.6,
-        scale: 1.0
+        scale: 1.0,
+        sunX: 0.5,
+        sunY: 0.85,
+        sunSize: 0.1,
+        sunColor: 0xffb700,
+        sunIntensity: 0.6
       },
       terrain: {
         enabled: true,
@@ -864,7 +919,12 @@ window.DEFAULT_THEME = {
       accent: 0xff00ff,
       speed: 0.8,
       intensity: 0.5,
-      scale: 1.0
+      scale: 1.0,
+      sunX: 0.5,
+      sunY: 0.82,
+      sunSize: 0.12,
+      sunColor: 0xffdd44,
+      sunIntensity: 0.8
     },
     terrain: {
       enabled: true,
