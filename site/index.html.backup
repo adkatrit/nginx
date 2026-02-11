@@ -90,7 +90,7 @@
     <link rel="manifest" href="./site.webmanifest" />
     <!-- Preload critical assets -->
     <link rel="preload" href="./styles.css?v=24" as="style" />
-    <link rel="preload" href="./app.js?v=33" as="script" />
+    <link rel="preload" href="./app.js?v=28" as="script" />
     <link rel="preload" href="./track-scenes.js?v=36" as="script" />
     <link rel="preload" href="./environments.js?v=12" as="script" />
 
@@ -436,7 +436,6 @@
           <div class="control-bar__waveform">
             <span class="control-bar__time" id="currentTime">0:00</span>
             <div class="waveform-container" id="waveformContainer">
-              <canvas id="sunBackgroundCanvas" class="sun-background-canvas"></canvas>
               <canvas id="waveformCanvas" class="waveform-canvas"></canvas>
               <input id="seek" type="range" min="0" max="1000" value="0" step="1" class="waveform-input" aria-label="Seek position" />
               <div class="waveform-playhead" id="waveformPlayhead"></div>
@@ -489,16 +488,16 @@
 
     <script src="./tracks.js?v=13"></script>
     <script src="./models.js?v=9"></script>
-    <script src="./themes.js?v=15"></script>
-    <script src="./backgrounds.js?v=12"></script>
+    <script src="./themes.js?v=13"></script>
+    <script src="./backgrounds.js?v=10"></script>
     <script src="./track-scenes.js?v=36"></script>
     <script src="./effects-manager.js?v=10"></script>
     <script src="./noise.js?v=9"></script>
     <script src="./terrain.js?v=9"></script>
-    <script src="./environments.js?v=13"></script>
+    <script src="./environments.js?v=12"></script>
     <script src="./stem-player.js?v=13"></script>
     <script src="./ios-viz.js?v=9"></script>
     <script src="./scene-tuner.js?v=4"></script>
-    <script src="./app.js?v=33"></script>
+    <script src="./app.js?v=28"></script>
   </body>
 </html>

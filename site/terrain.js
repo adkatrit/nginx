@@ -132,109 +132,89 @@ window.TerrainSystem = (function() {
       }
 
       if (config.colorByHeight) {
-        // Shader material with height-based gradient and audio reactivity (color-based, not vertex)
-        return new THREE.ShaderMaterial({
-          uniforms: {
-            lowColor: { value: new THREE.Color(config.lowColor || 0x2d5016) },
-            midColor: { value: new THREE.Color(config.midColor || 0x4a7023) },
-            highColor: { value: new THREE.Color(config.highColor || 0x8b9a6b) },
-            peakColor: { value: new THREE.Color(config.peakColor || 0xffffff) },
-            baseHeight: { value: config.baseHeight || -2 },
-            amplitude: { value: config.amplitude || 8 },
-            fogColor: { value: new THREE.Color(config.fogColor || 0x000810) },
-            fogNear: { value: config.fogNear || 50 },
-            fogFar: { value: config.fogFar || 300 },
-            // Audio-reactive uniforms (color-based effects)
-            uTime: { value: 0.0 },
-            uBassDeform: { value: 0.0 },
-            uDrumImpact: { value: 0.0 },
-            uPlayerZ: { value: 0.0 }
-          },
-          vertexShader: `
-            uniform float uTime;
-            uniform float uBassDeform;
-            uniform float uDrumImpact;
-            uniform float uPlayerZ;
+        const TSL = window._TSL;
+        if (!TSL) {
+          console.warn("Terrain: window._TSL not available, falling back to standard material");
+          return new THREE.MeshStandardMaterial({
+            color: config.color || 0x4a7023, roughness: 0.9, metalness: 0.1, flatShading: true
+          });
+        }
+        const {
+          Fn, float, vec2, vec3, vec4, uniform,
+          positionLocal, positionWorld, normalWorld,
+          mix: tslMix, smoothstep: tslSmoothstep, clamp: tslClamp,
+          sin: tslSin, cos: tslCos, abs: tslAbs, exp: tslExp,
+          max: tslMax, dot: tslDot, normalize: tslNormalize, length: tslLength,
+          select, cameraPosition: tslCameraPosition,
+        } = TSL;
 
-            varying float vHeight;
-            varying vec3 vNormal;
-            varying float vFogDepth;
-            varying float vBassWave;
-            varying float vDrumPulse;
-            varying vec3 vWorldPos;
+        // TSL uniforms — shared across all chunks via the same material
+        const uLowColor = uniform(new THREE.Color(config.lowColor || 0x2d5016));
+        const uMidColor = uniform(new THREE.Color(config.midColor || 0x4a7023));
+        const uHighColor = uniform(new THREE.Color(config.highColor || 0x8b9a6b));
+        const uPeakColor = uniform(new THREE.Color(config.peakColor || 0xffffff));
+        const uBaseHeight = uniform(config.baseHeight || -2);
+        const uAmplitude = uniform(config.amplitude || 8);
+        const uFogColor = uniform(new THREE.Color(config.fogColor || 0x000810));
+        const uFogNear = uniform(config.fogNear || 50);
+        const uFogFar = uniform(config.fogFar || 300);
+        const uTime = uniform(0);
+        const uBassDeform = uniform(0);
+        const uDrumImpact = uniform(0);
+        const uPlayerZ = uniform(0);
 
-            void main() {
-              vec3 pos = position;
-              vWorldPos = (modelMatrix * vec4(pos, 1.0)).xyz;
+        const colorNode = Fn(() => {
+          const worldPos = positionWorld;
+          const localPos = positionLocal;
+          const norm = normalWorld;
 
-              // Calculate audio effects for fragment shader (color-based, no vertex displacement)
-              vBassWave = sin(vWorldPos.x * 0.08 + uTime * 1.5) * cos(vWorldPos.z * 0.06 + uTime) * uBassDeform;
+          // Height-based gradient (0-1 range)
+          const h = tslClamp(localPos.y.sub(uBaseHeight).div(uAmplitude), 0, 1);
 
-              float distFromPlayer = length(vec2(vWorldPos.x, vWorldPos.z - uPlayerZ));
-              vDrumPulse = exp(-distFromPlayer * 0.015) * uDrumImpact;
+          // Four-way gradient using select (TSL conditional)
+          const lowMid = tslMix(uLowColor, uMidColor, h.mul(3));
+          const midHigh = tslMix(uMidColor, uHighColor, h.sub(0.33).mul(3));
+          const highPeak = tslMix(uHighColor, uPeakColor, h.sub(0.66).mul(3));
+          const gradientColor = select(h.lessThan(0.33), lowMid,
+            select(h.lessThan(0.66), midHigh, highPeak));
 
-              vHeight = pos.y;
-              vNormal = normalize(normalMatrix * normal);
-              vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
-              vFogDepth = -mvPosition.z;
-              gl_Position = projectionMatrix * mvPosition;
-            }
-          `,
-          fragmentShader: `
-            uniform vec3 lowColor;
-            uniform vec3 midColor;
-            uniform vec3 highColor;
-            uniform vec3 peakColor;
-            uniform float baseHeight;
-            uniform float amplitude;
-            uniform vec3 fogColor;
-            uniform float fogNear;
-            uniform float fogFar;
+          // Simple directional lighting
+          const lightDir = tslNormalize(vec3(0.5, 1.0, 0.3));
+          const diff = tslMax(tslDot(norm, lightDir), float(0));
+          const litColor = gradientColor.mul(float(0.4).add(diff.mul(0.6)));
 
-            varying float vHeight;
-            varying vec3 vNormal;
-            varying float vFogDepth;
-            varying float vBassWave;
-            varying float vDrumPulse;
-            varying vec3 vWorldPos;
+          // Audio-reactive color effects computed per-pixel from world position
+          const bassWave = tslSin(worldPos.x.mul(0.08).add(uTime.mul(1.5)))
+            .mul(tslCos(worldPos.z.mul(0.06).add(uTime)))
+            .mul(uBassDeform);
 
-            void main() {
-              // Normalize height to 0-1 range
-              float h = clamp((vHeight - baseHeight) / amplitude, 0.0, 1.0);
+          const distFromPlayer = tslLength(vec2(worldPos.x, worldPos.z.sub(uPlayerZ)));
+          const drumPulse = tslExp(distFromPlayer.negate().mul(0.015)).mul(uDrumImpact);
 
-              // Four-way gradient
-              vec3 color;
-              if (h < 0.33) {
-                color = mix(lowColor, midColor, h * 3.0);
-              } else if (h < 0.66) {
-                color = mix(midColor, highColor, (h - 0.33) * 3.0);
-              } else {
-                color = mix(highColor, peakColor, (h - 0.66) * 3.0);
-              }
+          const bassGlow = bassWave.mul(0.5);
+          const drumFlash = drumPulse;
 
-              // Simple directional lighting
-              vec3 lightDir = normalize(vec3(0.5, 1.0, 0.3));
-              float diff = max(dot(vNormal, lightDir), 0.0);
-              color = color * (0.4 + 0.6 * diff);
+          const bassColor = vec3(0.2, 0.4, 1.0).mul(tslAbs(bassGlow));
+          const drumColor = vec3(1.0, 0.6, 0.2).mul(drumFlash);
+          const c = litColor.mul(float(1).add(drumFlash.mul(0.5)))
+            .add(bassColor.mul(0.3)).add(drumColor.mul(0.4)).toVar();
 
-              // Audio-reactive color effects (bass = wave glow, drums = bright pulse)
-              float bassGlow = vBassWave * 0.5;
-              float drumFlash = vDrumPulse * 1.0;
+          // Fog based on distance from camera
+          const viewDist = tslLength(worldPos.sub(tslCameraPosition));
+          const fogFactor = tslSmoothstep(uFogNear, uFogFar, viewDist);
+          c.assign(tslMix(c, uFogColor, fogFactor));
 
-              // Add visible color tint: bass adds blue, drums add warm flash
-              vec3 bassColor = vec3(0.2, 0.4, 1.0) * abs(bassGlow);
-              vec3 drumColor = vec3(1.0, 0.6, 0.2) * drumFlash;
-              color = color * (1.0 + drumFlash * 0.5) + bassColor * 0.3 + drumColor * 0.4;
+          return vec4(c, float(1));
+        })();
 
-              // Apply fog
-              float fogFactor = smoothstep(fogNear, fogFar, vFogDepth);
-              color = mix(color, fogColor, fogFactor);
-
-              gl_FragColor = vec4(color, 1.0);
-            }
-          `,
-          side: THREE.FrontSide
+        const mat = new TSL.MeshStandardNodeMaterial({
+          side: THREE.FrontSide,
+          colorNode: colorNode,
         });
+
+        // Store uniform refs on the material for updates
+        mat._tslUniforms = { uTime, uBassDeform, uDrumImpact, uPlayerZ };
+        return mat;
       }
 
       // Default material
@@ -360,7 +340,7 @@ window.TerrainSystem = (function() {
       this.clearAllChunks();
     }
 
-    updateChunks(playerX, playerZ, chunksAhead = 4, chunksBehind = 2) {
+    updateChunks(playerX, playerZ, chunksAhead = 4, chunksBehind = 2, symmetricRange = 0) {
       if (!this.enabled) return;
 
       // Calculate which chunks should exist
@@ -369,17 +349,30 @@ window.TerrainSystem = (function() {
 
       const neededChunks = new Set();
 
-      // Generate chunks in a grid around player
-      for (let dx = -2; dx <= 2; dx++) {
-        for (let dz = -chunksBehind; dz <= chunksAhead; dz++) {
-          const chunkX = playerChunkX + dx * CHUNK_SIZE;
-          const chunkZ = playerChunkZ + dz * CHUNK_SIZE;
-          const key = `${chunkX},${chunkZ}`;
-          neededChunks.add(key);
-
-          // Create chunk if it doesn't exist
-          if (!this.chunks.has(key)) {
-            this.createChunk(chunkX, chunkZ, key);
+      if (symmetricRange > 0) {
+        // Symmetric grid: ±range in both X and Z (for omnidirectional flight)
+        for (let dx = -symmetricRange; dx <= symmetricRange; dx++) {
+          for (let dz = -symmetricRange; dz <= symmetricRange; dz++) {
+            const chunkX = playerChunkX + dx * CHUNK_SIZE;
+            const chunkZ = playerChunkZ + dz * CHUNK_SIZE;
+            const key = `${chunkX},${chunkZ}`;
+            neededChunks.add(key);
+            if (!this.chunks.has(key)) {
+              this.createChunk(chunkX, chunkZ, key);
+            }
+          }
+        }
+      } else {
+        // Original asymmetric grid (forward-facing flight)
+        for (let dx = -2; dx <= 2; dx++) {
+          for (let dz = -chunksBehind; dz <= chunksAhead; dz++) {
+            const chunkX = playerChunkX + dx * CHUNK_SIZE;
+            const chunkZ = playerChunkZ + dz * CHUNK_SIZE;
+            const key = `${chunkX},${chunkZ}`;
+            neededChunks.add(key);
+            if (!this.chunks.has(key)) {
+              this.createChunk(chunkX, chunkZ, key);
+            }
           }
         }
       }
@@ -478,20 +471,18 @@ window.TerrainSystem = (function() {
       }
 
       let uniformsUpdated = 0;
-      // Update uniforms in all chunk materials
+      // Update TSL uniforms in all chunk materials
       for (const chunk of this.chunks.values()) {
         if (chunk.mesh) {
-          // Handle both single mesh and group structures
           const meshes = chunk.mesh.isGroup ? chunk.mesh.children : [chunk.mesh];
           for (const mesh of meshes) {
-            if (mesh.material && mesh.material.uniforms) {
-              if (mesh.material.uniforms.uTime) {
-                mesh.material.uniforms.uTime.value = time;
-                mesh.material.uniforms.uBassDeform.value = bassDeform;
-                mesh.material.uniforms.uDrumImpact.value = drumImpact;
-                mesh.material.uniforms.uPlayerZ.value = playerZ;
-                uniformsUpdated++;
-              }
+            if (mesh.material?._tslUniforms) {
+              const u = mesh.material._tslUniforms;
+              u.uTime.value = time;
+              u.uBassDeform.value = bassDeform;
+              u.uDrumImpact.value = drumImpact;
+              u.uPlayerZ.value = playerZ;
+              uniformsUpdated++;
             }
           }
         }

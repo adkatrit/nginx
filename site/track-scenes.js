@@ -1685,147 +1685,131 @@ window.TrackScenes = (function() {
     // Very light fog - ground visible
     scene.fog = new THREE.FogExp2(0x030101, 0.003);
 
-    // === MYCELIUM NETWORK GROUND ===
-    const terrainVertexShader = `
-      varying vec2 vUv;
-      varying vec3 vWorldPos;
-      varying float vHeight;
+    // === MYCELIUM NETWORK GROUND (TSL) ===
+    const TSL = window._TSL;
+    const {
+      Fn, float, vec2, vec3, vec4, uniform, uv: tslUV,
+      positionWorld,
+      mix: tslMix, sin: tslSin, cos: tslCos, abs: tslAbs, pow: tslPow,
+      step: tslStep, smoothstep: tslSmoothstep, clamp: tslClamp,
+      fract: tslFract, floor: tslFloor, dot: tslDot,
+      length: tslLength, sqrt: tslSqrt, min: tslMin, max: tslMax,
+      normalize: tslNormalize, atan2: tslAtan2, exp: tslExp, select,
+      mx_noise_float,
+    } = TSL;
 
-      void main() {
-        vUv = uv;
-        vec4 worldPos = modelMatrix * vec4(position, 1.0);
-        vWorldPos = worldPos.xyz;
-        vHeight = 0.0;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }
-    `;
-
-    const terrainFragmentShader = `
-      uniform float time;
-      uniform float bassEnergy;
-      uniform float drumEnergy;
-      uniform float patternScale;
-      uniform float veinThickness;
-      uniform float glowIntensity;
-      uniform float dataFlowSpeed;
-      uniform float nodeSize;
-      uniform vec3 baseColor;
-      uniform vec3 glowColor;
-      varying vec2 vUv;
-      varying vec3 vWorldPos;
-      varying float vHeight;
-
-      float hash(vec2 p) {
-        return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-      }
-
-      float noise(vec2 p) {
-        vec2 i = floor(p);
-        vec2 f = fract(p);
-        f = f * f * (3.0 - 2.0 * f);
-        float a = hash(i);
-        float b = hash(i + vec2(1.0, 0.0));
-        float c = hash(i + vec2(0.0, 1.0));
-        float d = hash(i + vec2(1.0, 1.0));
-        return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
-      }
-
-      // Voronoi for mycelium network
-      vec2 voronoi(vec2 p) {
-        vec2 n = floor(p);
-        vec2 f = fract(p);
-        float minDist = 8.0;
-        float secondDist = 8.0;
-
-        for(int j = -1; j <= 1; j++) {
-          for(int i = -1; i <= 1; i++) {
-            vec2 g = vec2(float(i), float(j));
-            vec2 o = vec2(hash(n + g), hash(n + g + 100.0));
-            vec2 diff = g + o - f;
-            float d = dot(diff, diff);
-            if(d < minDist) {
-              secondDist = minDist;
-              minDist = d;
-            } else if(d < secondDist) {
-              secondDist = d;
-            }
-          }
-        }
-        return vec2(sqrt(minDist), sqrt(secondDist));
-      }
-
-      void main() {
-        // Use WORLD POSITION so pattern is fixed in space (you fly over it)
-        vec2 uv = vWorldPos.xz * patternScale * 0.02;  // Scale world coords
-
-        // Distance from center for edge fade (based on geometry UV)
-        float dist = length(vUv - 0.5) * 2.0;
-        float fade = smoothstep(0.7, 1.0, dist);
-
-        // === MYCELIUM NETWORK ===
-        vec2 vor = voronoi(uv);
-        float edge = vor.y - vor.x;
-        float veins = smoothstep(0.0, veinThickness, edge) * (1.0 - smoothstep(veinThickness, veinThickness * 2.5, edge));
-
-        // Secondary finer network
-        vec2 vor2 = voronoi(uv * 2.0);
-        float edge2 = vor2.y - vor2.x;
-        float fineVeins = smoothstep(0.0, veinThickness * 0.67, edge2) * (1.0 - smoothstep(veinThickness * 0.67, veinThickness * 1.67, edge2));
-
-        // === DATA STREAMS ===
-        float flow = fract(vor.x * 4.0 - time * dataFlowSpeed);
-        float dataStream = veins * smoothstep(0.0, 0.15, flow) * smoothstep(0.5, 0.25, flow);
-
-        // === COLORS ===
-        vec3 darkSoil = baseColor;
-        vec3 myceliumGlow = glowColor;
-        vec3 dataColor = vec3(0.2, 1.0, 0.9);        // Bright cyan
-        vec3 nodeColor = vec3(0.9, 0.3, 1.0);        // Magenta
-
-        // Base ground
-        vec3 groundColorOut = darkSoil * (0.8 + noise(uv * 3.0) * 0.4);
-
-        // === GLOWING MYCELIUM ===
-        float bassGlow = glowIntensity + bassEnergy * 1.2;
-        groundColorOut += myceliumGlow * veins * bassGlow;
-        groundColorOut += myceliumGlow * fineVeins * bassGlow * 0.4;
-
-        // === FLOWING DATA ===
-        groundColorOut += dataColor * dataStream * (0.6 + bassEnergy);
-
-        // === NODES ===
-        float nodes = smoothstep(nodeSize, 0.0, vor.x);
-        groundColorOut += nodeColor * nodes * (0.4 + drumEnergy * 1.2);
-
-        // === SPOTS ===
-        float spots = smoothstep(0.72, 0.78, noise(uv * 0.5 + time * 0.1));
-        groundColorOut += vec3(0.1, 0.6, 0.4) * spots * (0.3 + bassEnergy * 0.5);
-
-        // Edge fade to dark
-        groundColorOut = mix(groundColorOut, vec3(0.01, 0.005, 0.005), fade);
-
-        gl_FragColor = vec4(groundColorOut, 1.0);
-      }
-    `;
-
-    const groundUniforms = {
-      time: { value: 0 },
-      bassEnergy: { value: 0 },
-      drumEnergy: { value: 0 },
-      patternScale: { value: 25 },
-      veinThickness: { value: 0.09 },
-      glowIntensity: { value: 0 },
-      dataFlowSpeed: { value: 6 },
-      nodeSize: { value: 0.21 },
-      baseColor: { value: new THREE.Vector3(0.105, 0.13, 0.12) },
-      glowColor: { value: new THREE.Vector3(0.3, 0.65, 0.75) }
+    // TSL hash
+    const hash = (p) => tslFract(tslSin(tslDot(p, vec2(127.1, 311.7))).mul(43758.5453));
+    // TSL noise (value noise via hash)
+    const noise2d = (p) => {
+      const i = vec2(tslFloor(p.x), tslFloor(p.y));
+      const f = vec2(tslFract(p.x), tslFract(p.y));
+      const fx = f.x.mul(f.x).mul(float(3).sub(f.x.mul(2)));
+      const fy = f.y.mul(f.y).mul(float(3).sub(f.y.mul(2)));
+      const a = hash(i);
+      const b = hash(i.add(vec2(1, 0)));
+      const c = hash(i.add(vec2(0, 1)));
+      const d = hash(i.add(vec2(1, 1)));
+      return tslMix(tslMix(a, b, fx), tslMix(c, d, fx), fy);
     };
 
-    const groundMat = new THREE.ShaderMaterial({
-      vertexShader: terrainVertexShader,
-      fragmentShader: terrainFragmentShader,
-      uniforms: groundUniforms,
-      side: THREE.DoubleSide
+    // Voronoi (unrolled 3x3 = 9 iterations)
+    const voronoi = (p) => {
+      const n = vec2(tslFloor(p.x), tslFloor(p.y));
+      const f = vec2(tslFract(p.x), tslFract(p.y));
+      let minDist = float(8).toVar();
+      let secondDist = float(8).toVar();
+      for (let j = -1; j <= 1; j++) {
+        for (let i = -1; i <= 1; i++) {
+          const g = vec2(i, j);
+          const ng = n.add(g);
+          const ox = hash(ng);
+          const oy = hash(ng.add(100));
+          const diffX = float(i).add(ox).sub(f.x);
+          const diffY = float(j).add(oy).sub(f.y);
+          const dd = diffX.mul(diffX).add(diffY.mul(diffY));
+          // Two-pass min tracking using select
+          const newSecond = select(dd.lessThan(minDist), minDist, select(dd.lessThan(secondDist), dd, secondDist));
+          const newMin = select(dd.lessThan(minDist), dd, minDist);
+          minDist.assign(newMin);
+          secondDist.assign(newSecond);
+        }
+      }
+      return vec2(tslSqrt(minDist), tslSqrt(secondDist));
+    };
+
+    const groundUniforms = {
+      time: uniform(0),
+      bassEnergy: uniform(0),
+      drumEnergy: uniform(0),
+      patternScale: uniform(25),
+      veinThickness: uniform(0.09),
+      glowIntensity: uniform(0),
+      dataFlowSpeed: uniform(6),
+      nodeSize: uniform(0.21),
+      baseColor: uniform(new THREE.Vector3(0.105, 0.13, 0.12)),
+      glowColor: uniform(new THREE.Vector3(0.3, 0.65, 0.75)),
+    };
+
+    const groundColorNode = Fn(() => {
+      const worldPos = positionWorld;
+      const geomUV = tslUV();
+      const uvCoord = worldPos.xz.mul(groundUniforms.patternScale).mul(0.02);
+
+      // Edge fade
+      const dist = tslLength(geomUV.sub(0.5)).mul(2);
+      const fade = tslSmoothstep(float(0.7), float(1), dist);
+
+      // Mycelium network
+      const vor = voronoi(uvCoord);
+      const edge = vor.y.sub(vor.x);
+      const vt = groundUniforms.veinThickness;
+      const veins = tslSmoothstep(float(0), vt, edge).mul(float(1).sub(tslSmoothstep(vt, vt.mul(2.5), edge)));
+
+      // Fine network
+      const vor2 = voronoi(uvCoord.mul(2));
+      const edge2 = vor2.y.sub(vor2.x);
+      const fineVeins = tslSmoothstep(float(0), vt.mul(0.67), edge2)
+        .mul(float(1).sub(tslSmoothstep(vt.mul(0.67), vt.mul(1.67), edge2)));
+
+      // Data streams
+      const flow = tslFract(vor.x.mul(4).sub(groundUniforms.time.mul(groundUniforms.dataFlowSpeed)));
+      const dataStream = veins.mul(tslSmoothstep(float(0), float(0.15), flow)).mul(tslSmoothstep(float(0.5), float(0.25), flow));
+
+      // Colors
+      const darkSoil = groundUniforms.baseColor;
+      const myceliumGlow = groundUniforms.glowColor;
+      const dataColor = vec3(0.2, 1.0, 0.9);
+      const nodeColor = vec3(0.9, 0.3, 1.0);
+
+      // Base ground with noise variation
+      const c = vec3(darkSoil).mul(float(0.8).add(noise2d(uvCoord.mul(3)).mul(0.4))).toVar();
+
+      // Glowing mycelium
+      const bassGlow = groundUniforms.glowIntensity.add(groundUniforms.bassEnergy.mul(1.2));
+      c.addAssign(vec3(myceliumGlow).mul(veins).mul(bassGlow));
+      c.addAssign(vec3(myceliumGlow).mul(fineVeins).mul(bassGlow).mul(0.4));
+
+      // Flowing data
+      c.addAssign(dataColor.mul(dataStream).mul(float(0.6).add(groundUniforms.bassEnergy)));
+
+      // Nodes
+      const nodes = tslSmoothstep(groundUniforms.nodeSize, float(0), vor.x);
+      c.addAssign(nodeColor.mul(nodes).mul(float(0.4).add(groundUniforms.drumEnergy.mul(1.2))));
+
+      // Spots
+      const spots = tslSmoothstep(float(0.72), float(0.78), noise2d(uvCoord.mul(0.5).add(groundUniforms.time.mul(0.1))));
+      c.addAssign(vec3(0.1, 0.6, 0.4).mul(spots).mul(float(0.3).add(groundUniforms.bassEnergy.mul(0.5))));
+
+      // Edge fade
+      c.assign(tslMix(c, vec3(0.01, 0.005, 0.005), fade));
+
+      return vec4(c, 1);
+    })();
+
+    const groundMat = new TSL.MeshBasicNodeMaterial({
+      side: THREE.DoubleSide,
+      colorNode: groundColorNode,
     });
 
     // EXPOSE GLOBALLY for scene tuner access
@@ -1845,134 +1829,96 @@ window.TrackScenes = (function() {
     groundPlane.renderOrder = 1;  // Render after other ground elements
     scene.add(groundPlane);
 
-    // === SUNRISE SKY SHADER - Fully Vocal Reactive ===
-    const sunriseVertexShader = `
-      varying vec3 vWorldPosition;
-      varying vec2 vUv;
-      void main() {
-        vUv = uv;
-        vec4 worldPos = modelMatrix * vec4(position, 1.0);
-        vWorldPosition = worldPos.xyz;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }
-    `;
-
-    const sunriseFragmentShader = `
-      uniform float time;
-      uniform float vocalEnergy;
-      uniform float bassEnergy;
-      uniform float drumEnergy;
-      uniform float luminosityMin;
-      uniform float luminosityRange;
-      uniform float sunGlowIntensity;
-      uniform float horizonIntensity;
-      varying vec3 vWorldPosition;
-      varying vec2 vUv;
-
-      void main() {
-        vec3 dir = normalize(vWorldPosition);
-        float y = dir.y;
-        float x = atan(dir.x, dir.z) / 3.14159;
-
-        float v = vocalEnergy;
-        float b = bassEnergy;
-        float d = drumEnergy;
-
-        // === GROUND COLOR - Matches organic jungle floor ===
-        vec3 groundColor = vec3(0.015, 0.01, 0.008);  // Dark jungle floor
-
-        // Below horizon = solid ground (no sky visible through terrain gaps)
-        if (y < -0.05) {
-          // Solid ground with subtle distance fade
-          float fade = smoothstep(-0.5, -0.05, y);
-          gl_FragColor = vec4(groundColor * (0.3 + fade * 0.7), 1.0);
-          return;
-        }
-
-        // === RICH SATURATED PALETTE - Fixed colors ===
-        vec3 twilight = vec3(0.12, 0.04, 0.16);       // Purple-magenta
-        vec3 rose = vec3(0.3, 0.07, 0.12);            // Deep rose
-        vec3 coral = vec3(0.55, 0.15, 0.06);          // Rich coral
-        vec3 orange = vec3(0.8, 0.3, 0.04);           // Warm orange
-        vec3 gold = vec3(0.9, 0.5, 0.06);             // Saturated gold
-
-        // === BUILD BASE GRADIENT - Only sky portion ===
-        vec3 baseColor;
-
-        if (y < 0.05) {
-          // Near horizon - blend from ground to twilight
-          float t = (y + 0.05) / 0.1;
-          baseColor = mix(groundColor * 2.0, twilight, t);
-        } else if (y < 0.12) {
-          float t = (y - 0.05) / 0.07;
-          baseColor = mix(twilight, rose, t);
-        } else if (y < 0.2) {
-          float t = (y - 0.12) / 0.08;
-          baseColor = mix(rose, coral, t);
-        } else if (y < 0.3) {
-          float t = (y - 0.2) / 0.1;
-          baseColor = mix(coral, orange, t);
-        } else if (y < 0.42) {
-          float t = (y - 0.3) / 0.12;
-          baseColor = mix(orange, gold, t);
-        } else {
-          float t = (y - 0.42) / 0.58;
-          baseColor = mix(gold, twilight, t);
-        }
-
-        // === LUMINOSITY CONTROL ===
-        // Vocals control brightness, not color
-        // Quiet = dim, Singing = bright (tunable range)
-        float luminosity = luminosityMin + v * luminosityRange;
-        vec3 color = baseColor * luminosity;
-
-        // === SUN GLOW - Brighter with vocals, same color ===
-        float sunDist = length(vec2(x, y - 0.08));
-        float sunGlow = smoothstep(0.35, 0.05, sunDist);
-        // Sun just gets brighter, keeps gold color
-        color += gold * sunGlow * (sunGlowIntensity + v * 0.6) * luminosity;
-
-        // === HORIZON LINE - Brighter with vocals ===
-        float horizonLine = exp(-abs(y - 0.03) * 25.0);
-        color += orange * horizonLine * (horizonIntensity + v * 0.4) * luminosity;
-
-        // === LIGHT RAYS - Visible when singing loud ===
-        if (v > 0.25) {
-          float rayAngle = x * 8.0;
-          float rays = pow(abs(sin(rayAngle)), 10.0);
-          float rayMask = smoothstep(0.06, 0.3, y) * smoothstep(0.55, 0.2, y);
-          float rayIntensity = rays * rayMask * (v - 0.25) * 1.2;
-          color += coral * rayIntensity * 0.3;
-        }
-
-        // === DRUM FLASH - Multiplicative brightness ===
-        color *= 1.0 + d * 0.4 * smoothstep(0.2, -0.2, y);
-
-        // === BASS - Adds purple depth near horizon ===
-        vec3 bassColor = vec3(0.1, 0.03, 0.15);  // Deep purple
-        color += bassColor * b * smoothstep(0.1, -0.1, y) * 0.5;
-
-        gl_FragColor = vec4(color, 1.0);
-      }
-    `;
-
+    // === SUNRISE SKY SHADER - TSL Vocal Reactive ===
     const skyUniforms = {
-      time: { value: 0 },
-      vocalEnergy: { value: 0 },
-      bassEnergy: { value: 0 },
-      drumEnergy: { value: 0 },
-      luminosityMin: { value: 0.35 },
-      luminosityRange: { value: 1.15 },
-      sunGlowIntensity: { value: 0.15 },
-      horizonIntensity: { value: 0.1 }
+      time: uniform(0),
+      vocalEnergy: uniform(0),
+      bassEnergy: uniform(0),
+      drumEnergy: uniform(0),
+      luminosityMin: uniform(0.35),
+      luminosityRange: uniform(1.15),
+      sunGlowIntensity: uniform(0.15),
+      horizonIntensity: uniform(0.1),
     };
 
-    const skyMat = new THREE.ShaderMaterial({
-      vertexShader: sunriseVertexShader,
-      fragmentShader: sunriseFragmentShader,
-      uniforms: skyUniforms,
+    const sunriseColorNode = Fn(() => {
+      const worldPos = positionWorld;
+      const dir = tslNormalize(worldPos);
+      const y = dir.y;
+      const x = tslAtan2(dir.x, dir.z).div(3.14159);
+      const v = skyUniforms.vocalEnergy;
+      const b = skyUniforms.bassEnergy;
+      const d = skyUniforms.drumEnergy;
+
+      // Colors
+      const groundColor = vec3(0.015, 0.01, 0.008);
+      const twilight = vec3(0.12, 0.04, 0.16);
+      const rose = vec3(0.3, 0.07, 0.12);
+      const coral = vec3(0.55, 0.15, 0.06);
+      const orange = vec3(0.8, 0.3, 0.04);
+      const gold = vec3(0.9, 0.5, 0.06);
+
+      // Ground below horizon
+      const groundFade = tslSmoothstep(float(-0.5), float(-0.05), y);
+      const groundOut = vec3(groundColor).mul(float(0.3).add(groundFade.mul(0.7)));
+
+      // Build sky gradient using select chains (replaces if/else)
+      const t1 = y.add(0.05).div(0.1);
+      const t2 = y.sub(0.05).div(0.07);
+      const t3 = y.sub(0.12).div(0.08);
+      const t4 = y.sub(0.2).div(0.1);
+      const t5 = y.sub(0.3).div(0.12);
+      const t6 = y.sub(0.42).div(0.58);
+      const baseColor = select(y.lessThan(0.05),
+        tslMix(groundColor.mul(2), twilight, tslClamp(t1, 0, 1)),
+        select(y.lessThan(0.12),
+          tslMix(twilight, rose, tslClamp(t2, 0, 1)),
+          select(y.lessThan(0.2),
+            tslMix(rose, coral, tslClamp(t3, 0, 1)),
+            select(y.lessThan(0.3),
+              tslMix(coral, orange, tslClamp(t4, 0, 1)),
+              select(y.lessThan(0.42),
+                tslMix(orange, gold, tslClamp(t5, 0, 1)),
+                tslMix(gold, twilight, tslClamp(t6, 0, 1))
+              )))));
+
+      // Luminosity
+      const luminosity = skyUniforms.luminosityMin.add(v.mul(skyUniforms.luminosityRange));
+      const c = baseColor.mul(luminosity).toVar();
+
+      // Sun glow
+      const sunDist = tslLength(vec2(x, y.sub(0.08)));
+      const sunGlow = tslSmoothstep(float(0.35), float(0.05), sunDist);
+      c.addAssign(gold.mul(sunGlow).mul(skyUniforms.sunGlowIntensity.add(v.mul(0.6))).mul(luminosity));
+
+      // Horizon line
+      const horizonLine = tslExp(tslAbs(y.sub(0.03)).negate().mul(25));
+      c.addAssign(orange.mul(horizonLine).mul(skyUniforms.horizonIntensity.add(v.mul(0.4))).mul(luminosity));
+
+      // Light rays (always compute, multiply by threshold mask so rays vanish when v <= 0.25)
+      const rayAngle = x.mul(8);
+      const rays = tslPow(tslAbs(tslSin(rayAngle)), float(10));
+      const rayMask = tslSmoothstep(float(0.06), float(0.3), y).mul(tslSmoothstep(float(0.55), float(0.2), y));
+      const rayThreshold = tslMax(float(0), v.sub(0.25));
+      const rayIntensity = rays.mul(rayMask).mul(rayThreshold).mul(1.2);
+      c.addAssign(coral.mul(rayIntensity).mul(0.3));
+
+      // Drum flash
+      c.mulAssign(float(1).add(d.mul(0.4).mul(tslSmoothstep(float(0.2), float(-0.2), y))));
+
+      // Bass purple depth
+      const bassColor = vec3(0.1, 0.03, 0.15);
+      c.addAssign(bassColor.mul(b).mul(tslSmoothstep(float(0.1), float(-0.1), y)).mul(0.5));
+
+      // Select ground vs sky based on y position
+      const result = select(y.lessThan(-0.05), groundOut, c);
+      return vec4(result, 1);
+    })();
+
+    const skyMat = new TSL.MeshBasicNodeMaterial({
       side: THREE.BackSide,
-      depthWrite: false
+      depthWrite: false,
+      colorNode: sunriseColorNode,
     });
 
     const skyGeom = new THREE.SphereGeometry(200, 32, 32);
@@ -2490,7 +2436,7 @@ window.TrackScenes = (function() {
           if (param === 'luminosityRange') skyUniforms.luminosityRange.value = value;
           if (param === 'sunGlowIntensity') skyUniforms.sunGlowIntensity.value = value;
           if (param === 'horizonIntensity') skyUniforms.horizonIntensity.value = value;
-          skyMat.needsUpdate = true;
+          // TSL uniforms update automatically, no needsUpdate required
         }
         // Trees
         if (section === 'trees') {
@@ -3763,155 +3709,127 @@ window.TrackScenes = (function() {
     // ═══════════════════════════════════════════════════════════════════════
     // SKY — Physically-based atmospheric scattering (Preetham model)
     // ═══════════════════════════════════════════════════════════════════════
-    const skyVertexShader = `
-      uniform vec3 sunPosition;
-      uniform float rayleigh;
-      uniform float turbidity;
-      uniform float mieCoefficient;
-      uniform vec3 up;
-
-      varying vec3 vWorldPosition;
-      varying vec3 vSunDirection;
-      varying float vSunfade;
-      varying vec3 vBetaR;
-      varying vec3 vBetaM;
-      varying float vSunE;
-
-      const float e = 2.71828182845904523536028747135266249775724709369995957;
-      const float pi = 3.141592653589793238462643383279502884197169;
-
-      const vec3 lambda = vec3( 680E-9, 550E-9, 450E-9 );
-      const vec3 totalRayleigh = vec3( 5.804542996261093E-6, 1.3562911419845635E-5, 3.0265902468824876E-5 );
-
-      const float v = 4.0;
-      const vec3 K = vec3( 0.686, 0.678, 0.666 );
-      const vec3 MieConst = vec3( 1.8399918514433978E14, 2.7798023919660528E14, 4.0790479543861094E14 );
-
-      const float cutoffAngle = 1.6110731556870734;
-      const float steepness = 1.5;
-      const float EE = 1000.0;
-
-      float sunIntensity( float zenithAngleCos ) {
-        zenithAngleCos = clamp( zenithAngleCos, -1.0, 1.0 );
-        return EE * max( 0.0, 1.0 - pow( e, -( ( cutoffAngle - acos( zenithAngleCos ) ) / steepness ) ) );
-      }
-
-      vec3 totalMie( float T ) {
-        float c = ( 0.2 * T ) * 10E-18;
-        return 0.434 * c * MieConst;
-      }
-
-      void main() {
-        vec4 worldPosition = modelMatrix * vec4( position, 1.0 );
-        vWorldPosition = worldPosition.xyz;
-
-        gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
-        gl_Position.z = gl_Position.w; // render at far plane
-
-        vSunDirection = normalize( sunPosition );
-        vSunE = sunIntensity( dot( vSunDirection, up ) );
-        vSunfade = 1.0 - clamp( 1.0 - exp( ( sunPosition.y / 450000.0 ) ), 0.0, 1.0 );
-
-        float rayleighCoefficient = rayleigh - ( 1.0 * ( 1.0 - vSunfade ) );
-        vBetaR = totalRayleigh * rayleighCoefficient;
-        vBetaM = totalMie( turbidity ) * mieCoefficient;
-      }
-    `;
-
-    const skyFragmentShader = `
-      varying vec3 vWorldPosition;
-      varying vec3 vSunDirection;
-      varying float vSunfade;
-      varying vec3 vBetaR;
-      varying vec3 vBetaM;
-      varying float vSunE;
-
-      uniform float mieDirectionalG;
-      uniform vec3 up;
-      uniform float exposure;
-
-      const float pi = 3.141592653589793238462643383279502884197169;
-      const float n = 1.0003;
-      const float N = 2.545E25;
-      const float rayleighZenithLength = 8.4E3;
-      const float mieZenithLength = 1.25E3;
-      const float sunAngularDiameterCos = 0.999956676946448443553574619906976478926848692873900859324;
-
-      const float THREE_OVER_SIXTEENPI = 0.05968310365946075;
-      const float ONE_OVER_FOURPI = 0.07957747154594767;
-
-      float rayleighPhase( float cosTheta ) {
-        return THREE_OVER_SIXTEENPI * ( 1.0 + pow( cosTheta, 2.0 ) );
-      }
-
-      float hgPhase( float cosTheta, float g ) {
-        float g2 = pow( g, 2.0 );
-        float inverse = 1.0 / pow( 1.0 - 2.0 * g * cosTheta + g2, 1.5 );
-        return ONE_OVER_FOURPI * ( ( 1.0 - g2 ) * inverse );
-      }
-
-      // ACES filmic tone mapping
-      vec3 acesFilmic( vec3 x ) {
-        float a = 2.51;
-        float b = 0.03;
-        float c = 2.43;
-        float d = 0.59;
-        float ee = 0.14;
-        return clamp( ( x * ( a * x + b ) ) / ( x * ( c * x + d ) + ee ), 0.0, 1.0 );
-      }
-
-      void main() {
-        vec3 direction = normalize( vWorldPosition - cameraPosition );
-
-        float zenithAngle = acos( max( 0.0, dot( up, direction ) ) );
-        float inverse = 1.0 / ( cos( zenithAngle ) + 0.15 * pow( 93.885 - ( ( zenithAngle * 180.0 ) / pi ), -1.253 ) );
-        float sR = rayleighZenithLength * inverse;
-        float sM = mieZenithLength * inverse;
-
-        vec3 Fex = exp( -( vBetaR * sR + vBetaM * sM ) );
-
-        float cosTheta = dot( direction, vSunDirection );
-        float rPhase = rayleighPhase( cosTheta * 0.5 + 0.5 );
-        vec3 betaRTheta = vBetaR * rPhase;
-        float mPhase = hgPhase( cosTheta, mieDirectionalG );
-        vec3 betaMTheta = vBetaM * mPhase;
-
-        vec3 Lin = pow( vSunE * ( ( betaRTheta + betaMTheta ) / ( vBetaR + vBetaM ) ) * ( 1.0 - Fex ), vec3( 1.5 ) );
-        Lin *= mix( vec3( 1.0 ), pow( vSunE * ( ( betaRTheta + betaMTheta ) / ( vBetaR + vBetaM ) ) * Fex, vec3( 1.0 / 2.0 ) ), clamp( pow( 1.0 - dot( up, vSunDirection ), 5.0 ), 0.0, 1.0 ) );
-
-        vec3 L0 = vec3( 0.1 ) * Fex;
-
-        // Solar disc
-        float sundisk = smoothstep( sunAngularDiameterCos, sunAngularDiameterCos + 0.00002, cosTheta );
-        L0 += ( vSunE * 19000.0 * Fex ) * sundisk;
-
-        vec3 texColor = ( Lin + L0 ) * 0.04 + vec3( 0.0, 0.0003, 0.00075 );
-        vec3 retColor = pow( texColor, vec3( 1.0 / ( 1.2 + ( 1.2 * vSunfade ) ) ) );
-
-        // Tone mapping and sRGB conversion
-        retColor = acesFilmic( retColor * exposure );
-        retColor = pow( retColor, vec3( 1.0 / 2.2 ) );
-
-        gl_FragColor = vec4( retColor, 1.0 );
-      }
-    `;
+    // Preetham atmospheric sky — TSL NodeMaterial
+    // Scattering coefficients computed per-pixel (moved from vertex shader)
+    const TSL2 = window._TSL;
+    const {
+      Fn: Fn2, float: float2, vec2: vec22, vec3: vec32, vec4: vec42, uniform: uniform2,
+      positionWorld: positionWorld2, cameraPosition: tslCameraPosition2,
+      mix: mix2, smoothstep: smoothstep2, clamp: clamp2,
+      sin: sin2, cos: cos2, abs: abs2, pow: pow2, exp: exp2,
+      max: max2, dot: dot2, normalize: normalize2, length: length2,
+      sqrt: sqrt2,
+    } = TSL2;
 
     const skyUniforms = {
-      turbidity: { value: 10 },
-      rayleigh: { value: 3 },
-      mieCoefficient: { value: 0.005 },
-      mieDirectionalG: { value: 0.7 },
-      sunPosition: { value: new THREE.Vector3() },
-      up: { value: new THREE.Vector3(0, 1, 0) },
-      exposure: { value: 0.45 }
+      turbidity: uniform2(10),
+      rayleigh: uniform2(3),
+      mieCoefficient: uniform2(0.005),
+      mieDirectionalG: uniform2(0.7),
+      sunPosition: uniform2(new THREE.Vector3()),
+      up: uniform2(new THREE.Vector3(0, 1, 0)),
+      exposure: uniform2(0.45),
     };
 
-    const skyMat = new THREE.ShaderMaterial({
-      uniforms: skyUniforms,
-      vertexShader: skyVertexShader,
-      fragmentShader: skyFragmentShader,
+    const preethamColorNode = Fn2(() => {
+      const worldPos = positionWorld2;
+      const direction = normalize2(worldPos.sub(tslCameraPosition2));
+
+      const upDir = skyUniforms.up;
+      const sunPos2 = skyUniforms.sunPosition;
+      const sunDirection = normalize2(sunPos2);
+
+      // Precompute scattering (was in vertex shader)
+      const totalRayleigh = vec32(5.804542996261093e-6, 1.3562911419845635e-5, 3.0265902468824876e-5);
+      const MieConst = vec32(1.8399918514433978e14, 2.7798023919660528e14, 4.0790479543861094e14);
+      const cutoffAngle = float2(1.6110731556870734);
+      const steepness = float2(1.5);
+      const EE = float2(1000);
+      const e = float2(2.71828182845904523536);
+
+      // Sun intensity
+      const zenithAngleCos = clamp2(dot2(sunDirection, upDir), -1, 1);
+      // acos not directly available in TSL — use identity: acos(x) = pi/2 - asin(x), or approximate
+      // Actually we can use the ternary approach: compute via the exponential
+      // sunIntensity = EE * max(0, 1 - e^(-(cutoffAngle - acos(zenithAngleCos)) / steepness))
+      // For TSL we use .acos() chain method if available, or compute manually
+      const zenithAngle = zenithAngleCos.acos();
+      const sunE = EE.mul(max2(float2(0), float2(1).sub(pow2(e, cutoffAngle.sub(zenithAngle).div(steepness).negate()))));
+
+      // Sunfade
+      const sunfade = float2(1).sub(clamp2(float2(1).sub(exp2(sunPos2.y.div(450000))), 0, 1));
+
+      // Coefficients
+      const rayleighCoefficient = skyUniforms.rayleigh.sub(float2(1).sub(sunfade));
+      const betaR = totalRayleigh.mul(rayleighCoefficient);
+      const mieC = skyUniforms.turbidity.mul(0.2).mul(10e-18);
+      const betaM = MieConst.mul(0.434).mul(mieC).mul(skyUniforms.mieCoefficient);
+
+      // Fragment computations
+      const pi = float2(3.141592653589793);
+      const rayleighZenithLength = float2(8400);
+      const mieZenithLength = float2(1250);
+      const sunAngularDiameterCos = float2(0.999956676946448);
+
+      const dirZenith = max2(float2(0), dot2(upDir, direction)).acos();
+      const invFactor = cos2(dirZenith).add(pow2(float2(93.885).sub(dirZenith.mul(180).div(pi)), float2(-1.253)).mul(0.15)).reciprocal();
+      const sR = rayleighZenithLength.mul(invFactor);
+      const sM = mieZenithLength.mul(invFactor);
+
+      const Fex = exp2(betaR.mul(sR).add(betaM.mul(sM)).negate());
+
+      const cosTheta = dot2(direction, sunDirection);
+
+      // Rayleigh phase
+      const THREE_OVER_SIXTEENPI = float2(0.05968310365946075);
+      const rPhase = THREE_OVER_SIXTEENPI.mul(float2(1).add(pow2(cosTheta.mul(0.5).add(0.5), float2(2))));
+      const betaRTheta = betaR.mul(rPhase);
+
+      // Mie phase (Henyey-Greenstein)
+      const ONE_OVER_FOURPI = float2(0.07957747154594767);
+      const g = skyUniforms.mieDirectionalG;
+      const g2 = pow2(g, float2(2));
+      const hgInverse = pow2(float2(1).sub(g.mul(2).mul(cosTheta)).add(g2), float2(1.5)).reciprocal();
+      const mPhase = ONE_OVER_FOURPI.mul(float2(1).sub(g2)).mul(hgInverse);
+      const betaMTheta = betaM.mul(mPhase);
+
+      // In-scattering
+      const betaSum = betaR.add(betaM);
+      const scatterRatio = betaRTheta.add(betaMTheta).div(betaSum);
+      const Lin = pow2(scatterRatio.mul(sunE).mul(vec32(1, 1, 1).sub(Fex)), vec32(1.5, 1.5, 1.5)).toVar();
+
+      // Multiple scattering correction
+      const sunDotUp = float2(1).sub(dot2(upDir, sunDirection));
+      const msCorrection = clamp2(pow2(sunDotUp, float2(5)), 0, 1);
+      Lin.mulAssign(mix2(vec32(1, 1, 1), pow2(scatterRatio.mul(sunE).mul(Fex), vec32(0.5, 0.5, 0.5)), msCorrection));
+
+      // L0 + solar disc
+      const L0 = vec32(0.1, 0.1, 0.1).mul(Fex).toVar();
+      const sundisk = smoothstep2(sunAngularDiameterCos, sunAngularDiameterCos.add(0.00002), cosTheta);
+      L0.addAssign(Fex.mul(sunE).mul(19000).mul(sundisk));
+
+      const texColor = Lin.add(L0).mul(0.04).add(vec32(0, 0.0003, 0.00075));
+      const gammaExp = float2(1).div(float2(1.2).add(sunfade.mul(1.2)));
+      const retColor = pow2(texColor, vec32(gammaExp, gammaExp, gammaExp)).toVar();
+
+      // ACES filmic tone mapping
+      const mapped = retColor.mul(skyUniforms.exposure);
+      const a = float2(2.51); const b = float2(0.03);
+      const c2 = float2(2.43); const d = float2(0.59); const ee = float2(0.14);
+      retColor.assign(clamp2(
+        mapped.mul(mapped.mul(a).add(b)).div(mapped.mul(mapped.mul(c2).add(d)).add(ee)),
+        0, 1));
+
+      // sRGB gamma
+      retColor.assign(pow2(retColor, vec32(1.0 / 2.2)));
+
+      return vec42(retColor, 1);
+    })();
+
+    const skyMat = new TSL2.MeshBasicNodeMaterial({
       side: THREE.BackSide,
-      depthWrite: false
+      depthWrite: false,
+      colorNode: preethamColorNode,
     });
 
     const sky = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), skyMat);
@@ -4008,6 +3926,987 @@ window.TrackScenes = (function() {
 
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // TEST - Simple Preetham sky + flying bird
+  // ═══════════════════════════════════════════════════════════════════════════
+  function buildTest(THREE, scene, audioData) {
+    console.log('[Test] buildTest called');
+    const group = new THREE.Group();
+
+    // Hide environment visuals — sky sphere, ground plane, scenery (rocks/cacti), effects
+    const hiddenEffects = [];
+    scene.traverse(child => {
+      if (child.name === 'grid-effects' || child.name === 'lightning-effects' ||
+          child.name === 'aurora-effects' || child.name === 'lights-effects' ||
+          child.name === 'ride-path' || child.name === 'parallax-backdrop') {
+        child.visible = false;
+        hiddenEffects.push(child);
+      }
+      // Hide environment sky sphere (large BackSide sphere)
+      if (child.isMesh && child.geometry?.parameters?.radius > 700 &&
+          child.material?.side === THREE.BackSide) {
+        child.visible = false;
+        hiddenEffects.push(child);
+      }
+      // Hide environment ground plane (large flat plane)
+      if (child.isMesh && child.geometry?.parameters?.width > 1000 &&
+          child.rotation?.x === -Math.PI / 2) {
+        child.visible = false;
+        hiddenEffects.push(child);
+      }
+      // Hide environment instanced scenery (rocks, cacti, etc.)
+      if (child.isInstancedMesh) {
+        child.visible = false;
+        hiddenEffects.push(child);
+      }
+    });
+
+    // Kill environment fog — we want a clear day
+    scene.fog = null;
+    // Also disable fog on the EnvironmentMode instance so it doesn't re-apply it each frame
+    if (window.EnvironmentMode?.instance) {
+      window.EnvironmentMode.instance.theme.fogNear = 99999;
+      window.EnvironmentMode.instance.theme.fogFar = 100000;
+      console.log('[Test] Disabled environment fog');
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // PREETHAM SKY
+    // ═══════════════════════════════════════════════════════════════════════
+    const TSL = window._TSL;
+    if (!TSL) {
+      console.error('[Test] window._TSL not available! Preetham sky cannot be created.');
+      return { group, update() {}, dispose() { scene.remove(group); } };
+    }
+    console.log('[Test] TSL available, building Preetham sky');
+    const {
+      Fn, float, vec2, vec3, vec4, uniform,
+      positionWorld, cameraPosition: tslCameraPosition,
+      mix, smoothstep, clamp: tslClamp,
+      sin: tslSin, cos: tslCos, abs: tslAbs, pow: tslPow, exp: tslExp,
+      max: tslMax, dot: tslDot, normalize: tslNormalize, length: tslLength,
+      sqrt: tslSqrt,
+    } = TSL;
+
+    const skyUniforms = {
+      turbidity: uniform(4),
+      rayleigh: uniform(2),
+      mieCoefficient: uniform(0.005),
+      mieDirectionalG: uniform(0.8),
+      sunPosition: uniform(new THREE.Vector3()),
+      up: uniform(new THREE.Vector3(0, 1, 0)),
+      exposure: uniform(0.5),
+    };
+
+    const preethamColorNode = Fn(() => {
+      const worldPos = positionWorld;
+      const direction = tslNormalize(worldPos.sub(tslCameraPosition));
+
+      const upDir = skyUniforms.up;
+      const sunDirection = tslNormalize(skyUniforms.sunPosition);
+
+      const totalRayleigh = vec3(5.804542996261093e-6, 1.3562911419845635e-5, 3.0265902468824876e-5);
+      const MieConst = vec3(1.8399918514433978e14, 2.7798023919660528e14, 4.0790479543861094e14);
+      const cutoffAngle = float(1.6110731556870734);
+      const steepness = float(1.5);
+      const EE = float(1000);
+      const e = float(2.71828182845904523536);
+
+      const zenithAngleCos = tslClamp(tslDot(sunDirection, upDir), -1, 1);
+      const zenithAngle = zenithAngleCos.acos();
+      const sunE = EE.mul(tslMax(float(0), float(1).sub(tslPow(e, cutoffAngle.sub(zenithAngle).div(steepness).negate()))));
+
+      const sunfade = float(1).sub(tslClamp(float(1).sub(tslExp(skyUniforms.sunPosition.y.div(450000))), 0, 1));
+      const rayleighCoefficient = skyUniforms.rayleigh.sub(float(1).sub(sunfade));
+      const betaR = totalRayleigh.mul(rayleighCoefficient);
+      const mieC = skyUniforms.turbidity.mul(0.2).mul(10e-18);
+      const betaM = MieConst.mul(0.434).mul(mieC).mul(skyUniforms.mieCoefficient);
+
+      const pi = float(3.141592653589793);
+      const rayleighZenithLength = float(8400);
+      const mieZenithLength = float(1250);
+      const sunAngularDiameterCos = float(0.999956676946448);
+
+      const dirZenith = tslMax(float(0), tslDot(upDir, direction)).acos();
+      const invFactor = tslCos(dirZenith).add(tslPow(float(93.885).sub(dirZenith.mul(180).div(pi)), float(-1.253)).mul(0.15)).reciprocal();
+      const sR = rayleighZenithLength.mul(invFactor);
+      const sM = mieZenithLength.mul(invFactor);
+
+      const Fex = tslExp(betaR.mul(sR).add(betaM.mul(sM)).negate());
+      const cosTheta = tslDot(direction, sunDirection);
+
+      const THREE_OVER_SIXTEENPI = float(0.05968310365946075);
+      const rPhase = THREE_OVER_SIXTEENPI.mul(float(1).add(tslPow(cosTheta.mul(0.5).add(0.5), float(2))));
+      const betaRTheta = betaR.mul(rPhase);
+
+      const ONE_OVER_FOURPI = float(0.07957747154594767);
+      const g = skyUniforms.mieDirectionalG;
+      const g2 = tslPow(g, float(2));
+      const hgInverse = tslPow(float(1).sub(g.mul(2).mul(cosTheta)).add(g2), float(1.5)).reciprocal();
+      const mPhase = ONE_OVER_FOURPI.mul(float(1).sub(g2)).mul(hgInverse);
+      const betaMTheta = betaM.mul(mPhase);
+
+      const betaSum = betaR.add(betaM);
+      const scatterRatio = betaRTheta.add(betaMTheta).div(betaSum);
+      const Lin = tslPow(scatterRatio.mul(sunE).mul(vec3(1, 1, 1).sub(Fex)), vec3(1.5, 1.5, 1.5)).toVar();
+
+      const sunDotUp = float(1).sub(tslDot(upDir, sunDirection));
+      const msCorrection = tslClamp(tslPow(sunDotUp, float(5)), 0, 1);
+      Lin.mulAssign(mix(vec3(1, 1, 1), tslPow(scatterRatio.mul(sunE).mul(Fex), vec3(0.5, 0.5, 0.5)), msCorrection));
+
+      const L0 = vec3(0.1, 0.1, 0.1).mul(Fex).toVar();
+      const sundisk = smoothstep(sunAngularDiameterCos, sunAngularDiameterCos.add(0.00002), cosTheta);
+      L0.addAssign(Fex.mul(sunE).mul(19000).mul(sundisk));
+
+      const texColor = Lin.add(L0).mul(0.04).add(vec3(0, 0.0003, 0.00075));
+      const gammaExp = float(1).div(float(1.2).add(sunfade.mul(1.2)));
+      const retColor = tslPow(texColor, vec3(gammaExp, gammaExp, gammaExp)).toVar();
+
+      // ACES tone mapping
+      const mapped = retColor.mul(skyUniforms.exposure);
+      const a = float(2.51); const b = float(0.03);
+      const c = float(2.43); const d = float(0.59); const ee = float(0.14);
+      retColor.assign(tslClamp(
+        mapped.mul(mapped.mul(a).add(b)).div(mapped.mul(mapped.mul(c).add(d)).add(ee)),
+        0, 1));
+
+      retColor.assign(tslPow(retColor, vec3(1.0 / 2.2)));
+      return vec4(retColor, 1);
+    })();
+
+    const skyMat = new TSL.MeshBasicNodeMaterial({
+      side: THREE.BackSide,
+      depthWrite: false,
+      colorNode: preethamColorNode,
+    });
+
+    const skyGeom = new THREE.SphereGeometry(500, 32, 32);
+    const sky = new THREE.Mesh(skyGeom, skyMat);
+    group.add(sky);  // child of group so it auto-follows shipZ
+    console.log('[Test] Sky sphere added to group, radius=500, material side=BackSide');
+
+    // Sun position (base values - tuner can override)
+    let baseSunElevation = -5;
+    let sunAzimuth = 0;
+    let baseTurbidity = 4;
+    let baseRayleigh = 3.5;
+    let baseMieCoefficient = 0.005;
+    let baseMieDirectionalG = 0.8;
+    let baseExposure = 0.05;
+
+    const sunPos = new THREE.Vector3();
+    const phi = (90 - baseSunElevation) * Math.PI / 180;
+    sunPos.setFromSphericalCoords(1, phi, sunAzimuth * Math.PI / 180);
+    skyUniforms.sunPosition.value.copy(sunPos);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LIGHTING - match Preetham sun
+    // ═══════════════════════════════════════════════════════════════════════
+    const sunLight = new THREE.DirectionalLight(0xff8844, 0.1);  // Starts dim (sun below horizon)
+    sunLight.position.copy(sunPos).multiplyScalar(100);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.width = 2048;
+    sunLight.shadow.mapSize.height = 2048;
+    sunLight.shadow.camera.near = 1;
+    sunLight.shadow.camera.far = 300;
+    sunLight.shadow.camera.left = -100;
+    sunLight.shadow.camera.right = 100;
+    sunLight.shadow.camera.top = 100;
+    sunLight.shadow.camera.bottom = -100;
+    scene.add(sunLight);
+    const hemiLight = new THREE.HemisphereLight(0xffccaa, 0x553311, 0.04);  // Starts dim
+    scene.add(hemiLight);
+
+    // Fog starts thin, dissipates as sun rises
+    scene.fog = new THREE.FogExp2(0x0a0a14, 0.0018);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // NOISE — hash-based 2D value noise + fBm
+    // ═══════════════════════════════════════════════════════════════════════
+    function _hash(ix, iy) {
+      let h = ix * 374761393 + iy * 668265263;
+      h = ((h ^ (h >>> 13)) * 1274126177) | 0;
+      return ((h ^ (h >>> 16)) & 0x7fffffff) / 0x7fffffff;
+    }
+    function noise2D(x, y) {
+      const ix = Math.floor(x), iy = Math.floor(y);
+      const fx = x - ix, fy = y - iy;
+      const sx = fx * fx * (3 - 2 * fx);
+      const sy = fy * fy * (3 - 2 * fy);
+      const n00 = _hash(ix, iy), n10 = _hash(ix + 1, iy);
+      const n01 = _hash(ix, iy + 1), n11 = _hash(ix + 1, iy + 1);
+      return (n00 + (n10 - n00) * sx) + ((n01 + (n11 - n01) * sx) - (n00 + (n10 - n00) * sx)) * sy;
+    }
+    function fbm(x, y, octaves) {
+      let val = 0, amp = 1, freq = 1, maxAmp = 0;
+      for (let i = 0; i < octaves; i++) {
+        val += noise2D(x * freq, y * freq) * amp;
+        maxAmp += amp;
+        amp *= 0.5;
+        freq *= 2;
+      }
+      return val / maxAmp; // 0–1
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // TERRAIN — noise-based mountains, valleys & water
+    // ═══════════════════════════════════════════════════════════════════════
+    const CHUNK_W = 400, CHUNK_D = 80, SEG_X = 80, SEG_Z = 20;
+    const TERRAIN_AHEAD = 7, TERRAIN_BEHIND = 2;
+    const WATER_Y = -6;
+    const terrainChunks = [];
+    const waterChunks = [];
+    let nextTerrainZ = -TERRAIN_BEHIND * CHUNK_D;
+
+    function terrainHeight(x, z) {
+      // Rolling hills everywhere — multiple octaves
+      const base = (fbm(x * 0.005, z * 0.005, 6) - 0.5) * 2;       // broad landscape
+      const mid = (fbm(x * 0.015 + 37, z * 0.012 + 19, 4) - 0.5) * 2;  // medium hills
+      const fine = (fbm(x * 0.04 + 100, z * 0.04 + 80, 3) - 0.5) * 2;  // bumps & texture
+      const micro = (fbm(x * 0.12 + 200, z * 0.12 + 150, 2) - 0.5) * 2; // fine roughness
+
+      // Ridge features — abs of noise gives sharp creases
+      const ridge = 1 - Math.abs(fbm(x * 0.008 + 100, z * 0.006 + 50, 4) - 0.5) * 2;
+
+      // Mountains scale up away from center (keep sunset horizon clear)
+      const absX = Math.abs(x);
+      const mountainScale = Math.min(1, Math.max(0, (absX - 40) / 50)); // 0 near center, 1 beyond x=90
+
+      // Center gets rolling hills, not flat — just capped lower
+      const centerScale = 1 - mountainScale; // inverse: 1 at center, 0 at edges
+
+      let h = base * 10                               // broad rolling everywhere
+            + mid * 6 * (0.4 + centerScale * 0.6)     // medium hills (stronger in center)
+            + fine * 2.5                               // bumps everywhere
+            + micro * 0.8                              // fine roughness everywhere
+            + ridge * mountainScale * 50               // tall ridges on sides only
+            + mountainScale * base * 25;               // mountain mass
+
+      // Occasional deeper valleys that can hold water
+      const valleyNoise = fbm(x * 0.007 + 300, z * 0.007 + 250, 3);
+      if (valleyNoise < 0.35) {
+        const depth = (0.35 - valleyNoise) / 0.35; // 0 at edge, 1 at deepest
+        h -= depth * depth * 12;
+      }
+
+      return h;
+    }
+
+    const terrainMat = new THREE.MeshStandardMaterial({
+      vertexColors: true, flatShading: true, roughness: 0.85, metalness: 0.05,
+      emissiveIntensity: 0.12, emissive: new THREE.Color(0xffffff),  // slight self-illumination so colors read in dusk light
+    });
+
+    const waterMat = new THREE.MeshStandardMaterial({
+      color: 0x1a5c6e, transparent: true, opacity: 0.6,
+      roughness: 0.05, metalness: 0.4, side: THREE.DoubleSide,
+    });
+
+    function spawnTerrainChunk(zCenter) {
+      const geom = new THREE.PlaneGeometry(CHUNK_W, CHUNK_D, SEG_X, SEG_Z);
+      geom.rotateX(-Math.PI / 2);
+      const pos = geom.attributes.position;
+      const colors = new Float32Array(pos.count * 3);
+
+      for (let i = 0; i < pos.count; i++) {
+        const lx = pos.getX(i), lz = pos.getZ(i);
+        const wx = lx, wz = lz + zCenter;
+        let h = terrainHeight(wx, wz);
+        pos.setY(i, h);
+
+        // Approximate slope from neighbours
+        const hx = terrainHeight(wx + 1, wz);
+        const hz = terrainHeight(wx, wz + 1);
+        const slope = Math.sqrt((hx - h) * (hx - h) + (hz - h) * (hz - h));
+
+        // Two noise frequencies — coarse patches + fine grain
+        const n1 = fbm(wx * 0.02 + 200, wz * 0.02 + 200, 2);  // large patches
+        const n2 = fbm(wx * 0.1 + 500, wz * 0.1 + 500, 2);    // fine grain
+        const nPatch = (n1 - 0.5) * 2;  // -1 to 1
+        const nGrain = (n2 - 0.5) * 2;
+
+        let r, g, b;
+        if (h < WATER_Y - 2) {
+          // Deep underwater — dark silt / clay
+          r = 0.18 + nGrain * 0.06;
+          g = 0.14 + nGrain * 0.05;
+          b = 0.10 + nPatch * 0.04;
+        } else if (h < WATER_Y + 1) {
+          // Shoreline — wet sand/mud, patchy
+          r = 0.42 + nPatch * 0.12 + nGrain * 0.06;
+          g = 0.32 + nPatch * 0.08 + nGrain * 0.04;
+          b = 0.18 + nPatch * 0.05;
+        } else if (h < 3) {
+          // Low grass — lush, patchy greens
+          const t = (h - WATER_Y) / (3 - WATER_Y);
+          r = 0.12 + nPatch * 0.08 + t * 0.06;
+          g = 0.42 + nPatch * 0.15 + nGrain * 0.08 + t * 0.08;
+          b = 0.08 + nPatch * 0.04;
+          // Random dirt patches
+          if (nPatch > 0.4) {
+            r += 0.18; g -= 0.12; b += 0.03;
+          }
+        } else if (h < 15) {
+          // Mid grass → dry scrub, more varied
+          const t = (h - 3) / 12;
+          r = 0.22 + t * 0.30 + nPatch * 0.12 + nGrain * 0.06;
+          g = 0.50 - t * 0.22 + nPatch * 0.10 + nGrain * 0.05;
+          b = 0.10 + t * 0.06 + nGrain * 0.03;
+          // Patchy dry yellow areas
+          if (nPatch > 0.3) {
+            r += 0.12 * t; g += 0.05 * t; b -= 0.02;
+          }
+        } else if (h < 35) {
+          // Rock — grey/brown with lichen patches
+          const t = Math.min(1, (h - 15) / 20 + slope * 0.12);
+          r = 0.45 + t * 0.10 + nPatch * 0.10 + nGrain * 0.06;
+          g = 0.40 + t * 0.08 + nPatch * 0.08 + nGrain * 0.05;
+          b = 0.32 + t * 0.12 + nPatch * 0.06 + nGrain * 0.04;
+          // Greenish lichen patches on rock
+          if (nPatch < -0.3) {
+            g += 0.10; r -= 0.05;
+          }
+        } else {
+          // Snow / ice caps — not pure white, has blue/grey variation
+          const t = Math.min(1, (h - 35) / 15);
+          r = 0.75 + t * 0.15 + nGrain * 0.05;
+          g = 0.78 + t * 0.12 + nGrain * 0.04;
+          b = 0.82 + t * 0.10 + nPatch * 0.06;
+        }
+
+        // Steep slopes → exposed rock regardless of height
+        if (slope > 1.5 && h > WATER_Y + 1) {
+          const rockBlend = Math.min(1, (slope - 1.5) / 3);
+          const rr = 0.48 + nPatch * 0.08 + nGrain * 0.05;
+          const rg = 0.42 + nPatch * 0.06 + nGrain * 0.04;
+          const rb = 0.36 + nPatch * 0.05 + nGrain * 0.03;
+          r = r * (1 - rockBlend) + rr * rockBlend;
+          g = g * (1 - rockBlend) + rg * rockBlend;
+          b = b * (1 - rockBlend) + rb * rockBlend;
+        }
+
+        // Clamp
+        r = Math.max(0, Math.min(1, r));
+        g = Math.max(0, Math.min(1, g));
+        b = Math.max(0, Math.min(1, b));
+
+        colors[i * 3] = r; colors[i * 3 + 1] = g; colors[i * 3 + 2] = b;
+      }
+
+      geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      geom.computeVertexNormals();
+      const mesh = new THREE.Mesh(geom, terrainMat);
+      mesh.position.z = zCenter;
+      mesh.receiveShadow = true;
+      mesh.castShadow = true;
+      scene.add(mesh);
+      terrainChunks.push({ mesh, zCenter });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // WATER — flat plane at WATER_Y, fills valleys naturally
+    // ═══════════════════════════════════════════════════════════════════════
+    function spawnWaterChunk(zCenter) {
+      const geom = new THREE.PlaneGeometry(CHUNK_W, CHUNK_D, 1, 1);
+      geom.rotateX(-Math.PI / 2);
+      const mesh = new THREE.Mesh(geom, waterMat);
+      mesh.position.set(0, WATER_Y, zCenter);
+      mesh.receiveShadow = true;
+      scene.add(mesh);
+      waterChunks.push({ mesh, zCenter });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // SCENERY — trees, boulders, grass clumps
+    // ═══════════════════════════════════════════════════════════════════════
+    const sceneryChunks = [];
+
+    // Shared materials
+    const treeTrunkMat = new THREE.MeshStandardMaterial({ color: 0x5c3a1e, roughness: 0.9 });
+    const treeLeafMat = new THREE.MeshStandardMaterial({ color: 0x2d6b2e, roughness: 0.8, emissive: 0x0a1a0a, emissiveIntensity: 0.15 });
+    const treeLeafDarkMat = new THREE.MeshStandardMaterial({ color: 0x1e4d20, roughness: 0.8, emissive: 0x0a150a, emissiveIntensity: 0.15 });
+    const pineLeafMat = new THREE.MeshStandardMaterial({ color: 0x1a4a2a, roughness: 0.7, emissive: 0x081408, emissiveIntensity: 0.15 });
+    const boulderMat = new THREE.MeshStandardMaterial({ color: 0x6b6b6b, roughness: 0.95, emissive: 0x111111, emissiveIntensity: 0.08 });
+    const bushMat = new THREE.MeshStandardMaterial({ color: 0x3a7a3a, roughness: 0.85, emissive: 0x0a1a0a, emissiveIntensity: 0.15 });
+    const sceneryMats = [treeTrunkMat, treeLeafMat, treeLeafDarkMat, pineLeafMat, boulderMat, bushMat];
+
+    // Shared geometries
+    const trunkGeom = new THREE.CylinderGeometry(0.15, 0.25, 1, 6);
+    const canopyGeom = new THREE.SphereGeometry(1, 6, 5);
+    const coneGeom = new THREE.ConeGeometry(1, 1, 6);
+    const boulderGeom = new THREE.DodecahedronGeometry(1, 1);
+    const bushGeom = new THREE.SphereGeometry(1, 5, 4);
+    const sceneryGeoms = [trunkGeom, canopyGeom, coneGeom, boulderGeom, bushGeom];
+
+    function makeTree(x, z, h, rng) {
+      const treeGroup = new THREE.Group();
+      const trunkH = 2 + rng * 2;
+      const trunk = new THREE.Mesh(trunkGeom, treeTrunkMat);
+      trunk.scale.set(1, trunkH, 1);
+      trunk.position.set(0, trunkH / 2, 0);
+      trunk.castShadow = true;
+      treeGroup.add(trunk);
+
+      const canopySize = 1.5 + rng * 1.5;
+      const leafMat = rng > 0.5 ? treeLeafMat : treeLeafDarkMat;
+      const canopy = new THREE.Mesh(canopyGeom, leafMat);
+      canopy.scale.setScalar(canopySize);
+      canopy.position.set((rng - 0.5) * 0.5, trunkH + canopySize * 0.6, 0);
+      canopy.castShadow = true;
+      treeGroup.add(canopy);
+
+      treeGroup.position.set(x, h, z);
+      treeGroup.rotation.y = rng * Math.PI * 2;
+      return treeGroup;
+    }
+
+    function makePine(x, z, h, rng) {
+      const pineGroup = new THREE.Group();
+      const trunkH = 3 + rng * 3;
+      const trunk = new THREE.Mesh(trunkGeom, treeTrunkMat);
+      trunk.scale.set(0.8, trunkH, 0.8);
+      trunk.position.set(0, trunkH / 2, 0);
+      trunk.castShadow = true;
+      pineGroup.add(trunk);
+
+      // Stack of cones
+      const layers = 2 + Math.floor(rng * 2);
+      for (let l = 0; l < layers; l++) {
+        const layerSize = (1.8 - l * 0.3) * (0.8 + rng * 0.4);
+        const layerH = 2 * layerSize;
+        const cone = new THREE.Mesh(coneGeom, pineLeafMat);
+        cone.scale.set(layerSize, layerH, layerSize);
+        cone.position.set(0, trunkH * 0.5 + l * layerH * 0.5 + layerH / 2, 0);
+        cone.castShadow = true;
+        pineGroup.add(cone);
+      }
+
+      pineGroup.position.set(x, h, z);
+      pineGroup.rotation.y = rng * Math.PI * 2;
+      return pineGroup;
+    }
+
+    function makeBoulder(x, z, h, rng) {
+      const size = 0.5 + rng * 2;
+      const boulder = new THREE.Mesh(boulderGeom, boulderMat);
+      boulder.scale.set(size * (0.8 + rng * 0.4), size * (0.6 + rng * 0.4), size * (0.8 + rng * 0.4));
+      boulder.position.set(x, h + size * 0.2, z);
+      boulder.rotation.set(rng * 0.5, rng * Math.PI, rng * 0.3);
+      boulder.castShadow = true;
+      boulder.receiveShadow = true;
+      return boulder;
+    }
+
+    function makeBush(x, z, h, rng) {
+      const size = 0.4 + rng * 0.8;
+      const bush = new THREE.Mesh(bushGeom, bushMat);
+      bush.scale.set(size * (0.8 + rng * 0.5), size * (0.6 + rng * 0.3), size * (0.8 + rng * 0.5));
+      bush.position.set(x, h + size * 0.15, z);
+      bush.castShadow = true;
+      return bush;
+    }
+
+    function spawnSceneryChunk(zCenter) {
+      const objects = [];
+      // Deterministic pseudo-random per chunk based on position
+      const seed = Math.abs(Math.floor(zCenter * 7.13)) % 10000;
+
+      for (let i = 0; i < 30; i++) {
+        // Deterministic random from seed + index
+        const s = _hash(seed + i * 3, seed + i * 7 + 1000);
+        const s2 = _hash(seed + i * 5 + 500, seed + i * 11 + 2000);
+        const s3 = _hash(seed + i * 13 + 800, seed + i * 17 + 3000);
+
+        const x = (s - 0.5) * CHUNK_W * 0.9;
+        const z = (s2 - 0.5) * CHUNK_D + zCenter;
+        const h = terrainHeight(x, z);
+
+        // Skip if underwater
+        if (h < WATER_Y + 0.5) continue;
+
+        let obj;
+        if (h > 20) {
+          // High altitude: boulders and occasional pine
+          if (s3 < 0.6) obj = makeBoulder(x, z, h, s3);
+          else obj = makePine(x, z, h, s3);
+        } else if (h > 5) {
+          // Mid altitude: pines and boulders
+          if (s3 < 0.35) obj = makePine(x, z, h, s3);
+          else if (s3 < 0.55) obj = makeBoulder(x, z, h, s3);
+          else obj = makeBush(x, z, h, s3);
+        } else {
+          // Low: deciduous trees, bushes
+          if (s3 < 0.3) obj = makeTree(x, z, h, s3);
+          else if (s3 < 0.55) obj = makeBush(x, z, h, s3);
+          else if (s3 < 0.7) obj = makePine(x, z, h, s3);
+          else obj = makeBoulder(x, z, h, s3);
+        }
+
+        scene.add(obj);
+        objects.push(obj);
+      }
+
+      sceneryChunks.push({ objects, zCenter });
+    }
+
+    // Pre-fill visible area
+    while (nextTerrainZ < TERRAIN_AHEAD * CHUNK_D) {
+      spawnTerrainChunk(nextTerrainZ);
+      spawnWaterChunk(nextTerrainZ);
+      spawnSceneryChunk(nextTerrainZ);
+      nextTerrainZ += CHUNK_D;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // BIRD - fly-by style rotation-based flight
+    // ═══════════════════════════════════════════════════════════════════════
+    let bird = null;
+    let birdMixer = null;
+    let birdAction = null;
+    let wasFlapping = false;
+    let charNeck = null;
+    let charBody = null;
+
+    import('three/addons/loaders/GLTFLoader.js').then(({ GLTFLoader }) => {
+      const loader = new GLTFLoader();
+      loader.load('./models/fly-by-bird/scene.gltf', (gltf) => {
+        bird = gltf.scene;
+        bird.scale.setScalar(0.9);
+        bird.position.set(0, 25, 0);
+        bird.traverse(child => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
+        charNeck = bird.getObjectByName('Neck_Armature') || null;
+        charBody = bird.getObjectByName('Armature_rootJoint') || null;
+        scene.add(bird);
+
+        if (gltf.animations && gltf.animations.length > 0) {
+          birdMixer = new THREE.AnimationMixer(bird);
+          birdAction = birdMixer.clipAction(gltf.animations[0]);
+          birdAction.play();
+          birdAction.fadeOut(0.01);
+        }
+        console.log('[Test] Bird loaded (fly-by rotation mode)');
+      });
+    }).catch(err => console.warn('[Test] Could not load bird:', err));
+
+    scene.add(group);
+
+
+    console.log('[Test] Sun position:', sunPos.x.toFixed(3), sunPos.y.toFixed(3), sunPos.z.toFixed(3));
+    console.log('[Test] Sky sphere radius: 500, camera far should be >= 500');
+    console.log('[Test] Scene children:', scene.children.length);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // STATE
+    // ═══════════════════════════════════════════════════════════════════════
+    let smoothVocal = 0;
+    let smoothDrum = 0;
+
+    // Fly-by rotation state (matches github.com/jessehhydee/fly-by)
+    let charRotateYIncrement = 0;
+    let charPosYIncrement = 0;
+    const FLY = {
+      forwardSpeed: 0.25,
+      doubleSpeed: 0.6,
+      rotateYMax: 0.0015,
+      rotateYAccel: 0.000075,
+      posYAccel: 0.0025,
+      posYMax: 0.045,
+      minY: 2,
+      maxY: 90,
+      neckYStep: 0.018, neckYMax: 0.7,
+      bodyYStep: 0.01,  bodyYMax: 0.4,
+      neckXStep: 0.008, neckXMax: 0.6,
+      bodyXStep: 0.005, bodyXMax: 0.4,
+      flapLift: 0.025,
+      camLerp: 0.07,
+      camY: 7,
+      camZ: -10,
+      lookAtZ: 15,
+    };
+    let isDoubleSpeed = false;
+    let lookAtPosZ = FLY.lookAtZ;
+    // Smooth camera state (we own these — env camera must not interfere)
+    let camSmooth = null;
+    let camSmoothTarget = null;
+
+    // Keyboard controls
+    const birdKeys = {};
+    const onBirdKeyDown = (e) => {
+      birdKeys[e.code] = true;
+      if (e.code === 'Space') { e.preventDefault(); isDoubleSpeed = !isDoubleSpeed; }
+    };
+    const onBirdKeyUp = (e) => { birdKeys[e.code] = false; };
+    document.addEventListener('keydown', onBirdKeyDown);
+    document.addEventListener('keyup', onBirdKeyUp);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // SCENE TUNER WIRING
+    // ═══════════════════════════════════════════════════════════════════════
+    const tunerCallback = (section, param, value) => {
+      if (section === 'sun') {
+        if (param === 'elevation') baseSunElevation = value;
+        else if (param === 'azimuth') sunAzimuth = value;
+      } else if (section === 'atmosphere') {
+        if (param === 'turbidity') baseTurbidity = value;
+        else if (param === 'rayleigh') baseRayleigh = value;
+        else if (param === 'mieCoefficient') baseMieCoefficient = value;
+        else if (param === 'mieDirectionalG') baseMieDirectionalG = value;
+        else if (param === 'exposure') baseExposure = value;
+      } else if (section === 'lighting') {
+        if (param === 'sunIntensity') sunLight.intensity = value;
+        else if (param === 'ambientIntensity') hemiLight.intensity = value;
+      } else if (section === 'fog') {
+        if (param === 'near' && scene.fog) scene.fog.near = value;
+        else if (param === 'far' && scene.fog) scene.fog.far = value;
+      }
+    };
+    if (window.SceneTuner) window.SceneTuner.onUpdate(tunerCallback);
+
+    return {
+      group,
+      stemEffects: {
+        drums: { target: 'sky', effect: 'flash', color: '#ffaa44' },
+        bass: { target: 'sky', effect: 'turbidity', color: '#ff8844' },
+        vocals: { target: 'sky + sun', effect: 'elevation', color: '#ffddcc' },
+        synth: { target: 'bird speed', effect: 'orbit', color: '#aaddff' },
+      },
+
+      update(time, freq, amplitude, shipPos, shipSpeed, stemData) {
+        const shipX = shipPos ? shipPos.x : 0;
+        const shipZ = shipPos ? shipPos.z : 0;
+
+        // Stem energies
+        const drumEnergy = getEffectiveStemEnergy('drums', stemData?.drums?.energy || 0);
+        const bassEnergy = getEffectiveStemEnergy('bass', stemData?.bass?.energy || 0);
+        const vocalEnergy = getEffectiveStemEnergy('vocals', stemData?.vocals?.energy || 0);
+        const synthEnergy = getEffectiveStemEnergy('synth', stemData?.synth?.energy || 0);
+
+        smoothVocal = smoothVocal * 0.9 + vocalEnergy * 0.1;
+        smoothDrum = smoothDrum * 0.85 + drumEnergy * 0.15;
+
+        // Keep effects hidden
+        for (const fx of hiddenEffects) fx.visible = false;
+
+        // Sun rises with song progress: -5° at start → +5° at end
+        const SUN_START = -5, SUN_END = 5;
+        let songProgress = 0;
+        const sp = window.currentStemPlayer;
+        if (sp && sp.getDuration && sp.getDuration() > 0) {
+          songProgress = Math.min(1, Math.max(0, (sp.getCurrentTime() || 0) / sp.getDuration()));
+        } else {
+          // Fallback: DOM audio element
+          const aud = document.getElementById('playerAudio');
+          if (aud && aud.duration > 0) songProgress = aud.currentTime / aud.duration;
+        }
+        const dynElevation = SUN_START + songProgress * (SUN_END - SUN_START);
+        const dynPhi = (90 - dynElevation) * Math.PI / 180;
+        const dynTheta = sunAzimuth * Math.PI / 180;
+        sunPos.setFromSphericalCoords(1, dynPhi, dynTheta);
+        skyUniforms.sunPosition.value.copy(sunPos);
+
+        // Natural sun-linked lighting: derive everything from sun elevation
+        // smoothstep maps elevation smoothly: 0 at -5° (below horizon) → 1 at +5° (above)
+        const sunT = Math.max(0, Math.min(1, (dynElevation - SUN_START) / (SUN_END - SUN_START)));
+        const sunFactor = sunT * sunT * (3 - 2 * sunT);  // smoothstep curve
+
+        // Atmosphere: golden-hour haze near horizon, cleaner sky when sun is up
+        const horizonProximity = 1 - Math.abs(dynElevation) / Math.max(Math.abs(SUN_START), Math.abs(SUN_END));
+        skyUniforms.turbidity.value = baseTurbidity + (1 - sunFactor) * 3 + horizonProximity * 2 + bassEnergy * 2;
+        skyUniforms.rayleigh.value = baseRayleigh + sunFactor * 1.5;
+        skyUniforms.mieCoefficient.value = baseMieCoefficient + horizonProximity * 0.02 + smoothVocal * 0.003;
+        skyUniforms.mieDirectionalG.value = baseMieDirectionalG + horizonProximity * 0.12;
+        skyUniforms.exposure.value = baseExposure + sunFactor * 0.5 + smoothDrum * 0.05;
+
+        // Light intensities driven by sun elevation
+        sunLight.intensity = 0.1 + sunFactor * 2.8;     // 0.1 (below horizon) → 2.9 (above)
+        hemiLight.intensity = 0.04 + sunFactor * 0.65;   // 0.04 (dark) → 0.69 (bright)
+
+        // Sun color shifts: warm orange near horizon → whiter when higher
+        const warmth = 1 - sunFactor * 0.4;  // 1.0 (warm) → 0.6 (less warm)
+        sunLight.color.setRGB(1, 0.53 + sunFactor * 0.3, 0.27 + sunFactor * 0.45);
+        hemiLight.color.setRGB(1 * warmth, 0.8 * warmth, 0.67 * warmth);
+
+        // Renderer tone mapping exposure — darkens/brightens the ENTIRE scene (terrain, water, bird, everything)
+        const envRenderer = window.EnvironmentMode?.instance?.renderer;
+        if (envRenderer) {
+          if (envRenderer.toneMapping === THREE.NoToneMapping) {
+            envRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+          }
+          envRenderer.toneMappingExposure = 0.15 + sunFactor * 1.35;  // 0.15 (dark) → 1.5 (bright)
+        }
+
+        // Fog dissipates as sun rises — thick at dawn, nearly gone in daylight
+        if (scene.fog) {
+          scene.fog.density = 0.0018 * (1 - sunFactor * 0.85);  // 0.0018 (subtle) → ~0.0003 (nearly clear)
+          // Fog color warms with sunrise: dark blue-grey → warm haze
+          const fogR = 0.04 + sunFactor * 0.55;
+          const fogG = 0.04 + sunFactor * 0.45;
+          const fogB = 0.08 + sunFactor * 0.35;
+          scene.fog.color.setRGB(fogR, fogG, fogB);
+        }
+
+        // Use bird's actual position for terrain/sun (bird uses translateZ, so position tracks real flight path)
+        const posX = bird ? bird.position.x : shipX;
+        const posZ = bird ? bird.position.z : shipZ;
+
+        // Update sun light to match sky, centered on bird for shadows
+        sunLight.position.copy(sunPos).multiplyScalar(100);
+        sunLight.position.x += posX;
+        sunLight.position.z += posZ;
+        sunLight.target.position.set(posX, 0, posZ);
+        sunLight.target.updateMatrixWorld();
+
+        // Spawn terrain + water + scenery ahead, cleanup behind
+        while (nextTerrainZ < posZ + TERRAIN_AHEAD * CHUNK_D) {
+          spawnTerrainChunk(nextTerrainZ);
+          spawnWaterChunk(nextTerrainZ);
+          spawnSceneryChunk(nextTerrainZ);
+          nextTerrainZ += CHUNK_D;
+        }
+        while (terrainChunks.length && terrainChunks[0].zCenter < posZ - TERRAIN_BEHIND * CHUNK_D) {
+          const old = terrainChunks.shift();
+          old.mesh.geometry.dispose();
+          scene.remove(old.mesh);
+        }
+        while (waterChunks.length && waterChunks[0].zCenter < posZ - TERRAIN_BEHIND * CHUNK_D) {
+          const old = waterChunks.shift();
+          old.mesh.geometry.dispose();
+          scene.remove(old.mesh);
+        }
+        while (sceneryChunks.length && sceneryChunks[0].zCenter < posZ - TERRAIN_BEHIND * CHUNK_D) {
+          const old = sceneryChunks.shift();
+          for (const obj of old.objects) {
+            // Don't dispose geometries here — they're shared across all scenery chunks
+            scene.remove(obj);
+          }
+        }
+
+        // ── Fly-by bird flight (rotation-based, matches jessehhydee/fly-by) ──
+        if (bird) {
+          const leftDown  = birdKeys['ArrowLeft']  || birdKeys['KeyA'];
+          const rightDown = birdKeys['ArrowRight'] || birdKeys['KeyD'];
+          const upDown    = birdKeys['ArrowUp']    || birdKeys['KeyW'];
+          const downDown  = birdKeys['ArrowDown']  || birdKeys['KeyS'];
+          const flapping  = birdKeys['ShiftLeft']  || birdKeys['ShiftRight'];
+
+          // Always move forward in facing direction
+          bird.translateZ(isDoubleSpeed ? FLY.doubleSpeed : FLY.forwardSpeed);
+
+          // ── Flapping: gentle lift ──
+          if (flapping && bird.position.y < FLY.maxY) {
+            bird.position.y += FLY.flapLift;
+          }
+
+          // ── Up: ascend (slower — climbing is harder) ──
+          if (upDown) {
+            if (bird.position.y < FLY.maxY) {
+              bird.position.y += charPosYIncrement * 0.5;
+              if (charPosYIncrement < FLY.posYMax) charPosYIncrement += FLY.posYAccel * 0.5;
+              if (charNeck && charNeck.rotation.x > -FLY.neckXMax) charNeck.rotation.x -= FLY.neckXStep * 0.5;
+              if (charBody && charBody.rotation.x > -FLY.bodyXMax) charBody.rotation.x -= FLY.bodyXStep * 0.5;
+            } else {
+              if ((charNeck && charNeck.rotation.x < 0) || (charBody && charBody.rotation.x < 0)) {
+                bird.position.y += charPosYIncrement * 0.5;
+                if (charNeck) charNeck.rotation.x += FLY.neckXStep * 0.5;
+                if (charBody) charBody.rotation.x += FLY.bodyXStep * 0.5;
+              }
+            }
+          }
+          // ── Down: descend ──
+          if (downDown) {
+            if (bird.position.y > FLY.minY) {
+              bird.position.y -= charPosYIncrement;
+              if (charPosYIncrement < FLY.posYMax) charPosYIncrement += FLY.posYAccel;
+              if (charNeck && charNeck.rotation.x < FLY.neckXMax) charNeck.rotation.x += FLY.neckXStep;
+              if (charBody && charBody.rotation.x < FLY.bodyXMax) charBody.rotation.x += FLY.bodyXStep;
+            } else {
+              if ((charNeck && charNeck.rotation.x > 0) || (charBody && charBody.rotation.x > 0)) {
+                bird.position.y -= charPosYIncrement;
+                if (charNeck) charNeck.rotation.x -= FLY.neckXStep;
+                if (charBody) charBody.rotation.x -= FLY.bodyXStep;
+              }
+            }
+          }
+
+          // ── Left: yaw left ──
+          if (leftDown) {
+            bird.rotateY(charRotateYIncrement);
+            const yMax = isDoubleSpeed ? FLY.rotateYMax * 2 : FLY.rotateYMax;
+            if (charRotateYIncrement < yMax) charRotateYIncrement += FLY.rotateYAccel;
+            if (charNeck && charNeck.rotation.y > -FLY.neckYMax) charNeck.rotation.y -= FLY.neckYStep;
+            if (charBody && charBody.rotation.y < FLY.bodyYMax) charBody.rotation.y += FLY.bodyYStep;
+          }
+          // ── Right: yaw right ──
+          if (rightDown) {
+            bird.rotateY(-charRotateYIncrement);
+            const yMax = isDoubleSpeed ? FLY.rotateYMax * 2 : FLY.rotateYMax;
+            if (charRotateYIncrement < yMax) charRotateYIncrement += FLY.rotateYAccel;
+            if (charNeck && charNeck.rotation.y < FLY.neckYMax) charNeck.rotation.y += FLY.neckYStep;
+            if (charBody && charBody.rotation.y > -FLY.bodyYMax) charBody.rotation.y -= FLY.bodyYStep;
+          }
+
+          // ── Revert altitude (no up/down) ──
+          if ((!upDown && !downDown) || (upDown && downDown)) {
+            if (charPosYIncrement > 0) charPosYIncrement -= FLY.posYAccel;
+            if ((charNeck && charNeck.rotation.x < 0) || (charBody && charBody.rotation.x < 0)) {
+              bird.position.y += charPosYIncrement;
+              if (charNeck) charNeck.rotation.x += FLY.neckXStep;
+              if (charBody) charBody.rotation.x += FLY.bodyXStep;
+            }
+            if ((charNeck && charNeck.rotation.x > 0) || (charBody && charBody.rotation.x > 0)) {
+              bird.position.y -= charPosYIncrement;
+              if (charNeck) charNeck.rotation.x -= FLY.neckXStep;
+              if (charBody) charBody.rotation.x -= FLY.bodyXStep;
+            }
+          }
+
+          // ── Revert yaw (no left/right) ──
+          if ((!leftDown && !rightDown) || (leftDown && rightDown)) {
+            if (charRotateYIncrement > 0) charRotateYIncrement -= FLY.rotateYAccel;
+            if ((charNeck && charNeck.rotation.y < 0) || (charBody && charBody.rotation.y > 0)) {
+              bird.rotateY(charRotateYIncrement);
+              if (charNeck) charNeck.rotation.y += FLY.neckYStep;
+              if (charBody) charBody.rotation.y -= FLY.bodyYStep;
+            }
+            if ((charNeck && charNeck.rotation.y > 0) || (charBody && charBody.rotation.y < 0)) {
+              bird.rotateY(-charRotateYIncrement);
+              if (charNeck) charNeck.rotation.y -= FLY.neckYStep;
+              if (charBody) charBody.rotation.y += FLY.bodyYStep;
+            }
+          }
+
+          // ── Wing animation on flap ──
+          if (birdMixer) {
+            if (flapping && !wasFlapping && birdAction) {
+              birdAction.reset().setEffectiveTimeScale(0.6).setEffectiveWeight(1).fadeIn(0.8).play();
+            } else if (!flapping && wasFlapping && birdAction) {
+              birdAction.fadeOut(1.2);
+            }
+            wasFlapping = flapping;
+            birdMixer.update(0.016);
+          }
+
+          // ── Hide env player, use this bird instead ──
+          const env = window.EnvironmentMode?.instance;
+          if (env?.player) env.player.visible = false;
+
+          // ── Camera: quaternion-based trailing follow (fly-by style) ──
+          const cam = env?.camera;
+          if (cam) {
+            const idealPos = new THREE.Vector3(0, FLY.camY, FLY.camZ)
+              .applyQuaternion(bird.quaternion)
+              .add(bird.position);
+
+            // Dynamic look-ahead (pulls in at high altitude)
+            if (!leftDown && !rightDown && !upDown && !downDown) {
+              if (bird.position.y > 60 && lookAtPosZ > 5) lookAtPosZ -= 0.2;
+              if (bird.position.y <= 60 && lookAtPosZ < FLY.lookAtZ) lookAtPosZ += 0.2;
+            }
+
+            const idealTarget = new THREE.Vector3(0, -1.2, lookAtPosZ)
+              .applyQuaternion(bird.quaternion)
+              .add(bird.position);
+
+            if (!camSmooth) {
+              camSmooth = idealPos.clone();
+              camSmoothTarget = idealTarget.clone();
+            } else {
+              camSmooth.lerp(idealPos, FLY.camLerp);
+              camSmoothTarget.lerp(idealTarget, FLY.camLerp);
+            }
+            cam.position.copy(camSmooth);
+            cam.lookAt(camSmoothTarget);
+          }
+        }
+
+        // Track bird position for terrain/sky (use bird if loaded, else env shipPos)
+        const birdX = bird ? bird.position.x : shipX;
+        const birdZ = bird ? bird.position.z : shipZ;
+        group.position.set(birdX, 0, birdZ);
+      },
+
+      dispose() {
+        // Remove bird keyboard listeners
+        document.removeEventListener('keydown', onBirdKeyDown);
+        document.removeEventListener('keyup', onBirdKeyUp);
+
+        // Restore renderer tone mapping
+        const envRenderer = window.EnvironmentMode?.instance?.renderer;
+        if (envRenderer) {
+          envRenderer.toneMapping = THREE.NoToneMapping;
+          envRenderer.toneMappingExposure = 1;
+        }
+
+        // Clear fog
+        scene.fog = null;
+
+        // Restore player visibility
+        const env = window.EnvironmentMode?.instance;
+        if (env?.player) env.player.visible = true;
+
+        // Restore hidden effects
+        for (const fx of hiddenEffects) fx.visible = true;
+
+        // Bird
+        if (bird) {
+          scene.remove(bird);
+          bird.traverse(c => {
+            if (c.geometry) c.geometry.dispose();
+            if (c.material) {
+              if (Array.isArray(c.material)) c.material.forEach(m => m.dispose());
+              else c.material.dispose();
+            }
+          });
+        }
+
+        // Terrain
+        for (const ch of terrainChunks) {
+          ch.mesh.geometry.dispose();
+          scene.remove(ch.mesh);
+        }
+        terrainMat.dispose();
+
+        // Water
+        for (const ch of waterChunks) {
+          ch.mesh.geometry.dispose();
+          scene.remove(ch.mesh);
+        }
+        waterMat.dispose();
+
+        // Scenery
+        for (const ch of sceneryChunks) {
+          for (const obj of ch.objects) {
+            obj.traverse(c => { if (c.geometry) c.geometry.dispose(); });
+            scene.remove(obj);
+          }
+        }
+        for (const m of sceneryMats) m.dispose();
+        for (const g of sceneryGeoms) g.dispose();
+
+        // Tuner
+        if (window.SceneTuner) window.SceneTuner.offUpdate(tunerCallback);
+
+        // Lights & fog
+        scene.remove(sunLight);
+        scene.remove(hemiLight);
+        scene.fog = null;
+
+        // Group (sky)
+        group.traverse(c => {
+          if (c.geometry) c.geometry.dispose();
+          if (c.material) c.material.dispose();
+        });
+        scene.remove(group);
+      }
+    };
+  }
+
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // PUBLIC API - Scene builder registry
   // ═══════════════════════════════════════════════════════════════════════════
   return {
@@ -4023,7 +4922,8 @@ window.TrackScenes = (function() {
       "The Last Dragon": buildLastDragon,
       "Who's Learning Who": buildWhosLearning,
       "Terms & Conditions": buildTermsConditions,
-      "Turn Your Phone Face Down": buildPhoneFaceDown
+      "Turn Your Phone Face Down": buildPhoneFaceDown,
+      "Test": buildTest
     },
 
     build(trackTitle, THREE, scene, audioData) {

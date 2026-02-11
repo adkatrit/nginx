@@ -177,7 +177,7 @@ class _FileSlice(io.RawIOBase):
 
 def main() -> int:
     here = Path(__file__).resolve().parent
-    default_dir = here / "nginx" / "site"
+    default_dir = here / "site"
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="127.0.0.1")
