@@ -4150,12 +4150,11 @@ window.TrackScenes = (function() {
     // ═══════════════════════════════════════════════════════════════════════
     // TERRAIN — noise-based mountains, valleys & water
     // ═══════════════════════════════════════════════════════════════════════
-    const CHUNK_W = 400, CHUNK_D = 80, SEG_X = 80, SEG_Z = 20;
-    const TERRAIN_AHEAD = 7, TERRAIN_BEHIND = 2;
+    const CHUNK_SIZE = 80, CHUNK_SEGS = 20, CHUNK_RANGE = 5;
     const WATER_Y = -6;
-    const terrainChunks = [];
-    const waterChunks = [];
-    let nextTerrainZ = -TERRAIN_BEHIND * CHUNK_D;
+    const terrainChunks = new Map();  // "cx,cz" → { mesh }
+    const waterChunks = new Map();
+    const sceneryChunks = new Map();
 
     function terrainHeight(x, z) {
       // Rolling hills everywhere — multiple octaves
@@ -4167,18 +4166,16 @@ window.TrackScenes = (function() {
       // Ridge features — abs of noise gives sharp creases
       const ridge = 1 - Math.abs(fbm(x * 0.008 + 100, z * 0.006 + 50, 4) - 0.5) * 2;
 
-      // Mountains scale up away from center (keep sunset horizon clear)
-      const absX = Math.abs(x);
-      const mountainScale = Math.min(1, Math.max(0, (absX - 40) / 50)); // 0 near center, 1 beyond x=90
-
-      // Center gets rolling hills, not flat — just capped lower
-      const centerScale = 1 - mountainScale; // inverse: 1 at center, 0 at edges
+      // Noise-driven mountain field — mountains appear naturally in all directions
+      const mountainNoise = fbm(x * 0.003 + 500, z * 0.003 + 500, 3);
+      const mountainScale = clamp((mountainNoise - 0.4) / 0.3, 0, 1);
+      const valleyScale = 1 - mountainScale;
 
       let h = base * 10                               // broad rolling everywhere
-            + mid * 6 * (0.4 + centerScale * 0.6)     // medium hills (stronger in center)
+            + mid * 6 * (0.4 + valleyScale * 0.6)     // medium hills (stronger in valleys)
             + fine * 2.5                               // bumps everywhere
             + micro * 0.8                              // fine roughness everywhere
-            + ridge * mountainScale * 50               // tall ridges on sides only
+            + ridge * mountainScale * 50               // tall ridges in mountain regions
             + mountainScale * base * 25;               // mountain mass
 
       // Occasional deeper valleys that can hold water
@@ -4201,15 +4198,15 @@ window.TrackScenes = (function() {
       roughness: 0.05, metalness: 0.4, side: THREE.DoubleSide,
     });
 
-    function spawnTerrainChunk(zCenter) {
-      const geom = new THREE.PlaneGeometry(CHUNK_W, CHUNK_D, SEG_X, SEG_Z);
+    function spawnTerrainChunk(cx, cz) {
+      const geom = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, CHUNK_SEGS, CHUNK_SEGS);
       geom.rotateX(-Math.PI / 2);
       const pos = geom.attributes.position;
       const colors = new Float32Array(pos.count * 3);
 
       for (let i = 0; i < pos.count; i++) {
         const lx = pos.getX(i), lz = pos.getZ(i);
-        const wx = lx, wz = lz + zCenter;
+        const wx = lx + cx * CHUNK_SIZE, wz = lz + cz * CHUNK_SIZE;
         let h = terrainHeight(wx, wz);
         pos.setY(i, h);
 
@@ -4295,31 +4292,29 @@ window.TrackScenes = (function() {
       geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
       geom.computeVertexNormals();
       const mesh = new THREE.Mesh(geom, terrainMat);
-      mesh.position.z = zCenter;
+      mesh.position.set(cx * CHUNK_SIZE, 0, cz * CHUNK_SIZE);
       mesh.receiveShadow = true;
       mesh.castShadow = true;
       scene.add(mesh);
-      terrainChunks.push({ mesh, zCenter });
+      terrainChunks.set(`${cx},${cz}`, { mesh });
     }
 
     // ═══════════════════════════════════════════════════════════════════════
     // WATER — flat plane at WATER_Y, fills valleys naturally
     // ═══════════════════════════════════════════════════════════════════════
-    function spawnWaterChunk(zCenter) {
-      const geom = new THREE.PlaneGeometry(CHUNK_W, CHUNK_D, 1, 1);
+    function spawnWaterChunk(cx, cz) {
+      const geom = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, 1, 1);
       geom.rotateX(-Math.PI / 2);
       const mesh = new THREE.Mesh(geom, waterMat);
-      mesh.position.set(0, WATER_Y, zCenter);
+      mesh.position.set(cx * CHUNK_SIZE, WATER_Y, cz * CHUNK_SIZE);
       mesh.receiveShadow = true;
       scene.add(mesh);
-      waterChunks.push({ mesh, zCenter });
+      waterChunks.set(`${cx},${cz}`, { mesh });
     }
 
     // ═══════════════════════════════════════════════════════════════════════
     // SCENERY — trees, boulders, grass clumps
     // ═══════════════════════════════════════════════════════════════════════
-    const sceneryChunks = [];
-
     // Shared materials
     const treeTrunkMat = new THREE.MeshStandardMaterial({ color: 0x5c3a1e, roughness: 0.9 });
     const treeLeafMat = new THREE.MeshStandardMaterial({ color: 0x2d6b2e, roughness: 0.8, emissive: 0x0a1a0a, emissiveIntensity: 0.15 });
@@ -4405,19 +4400,19 @@ window.TrackScenes = (function() {
       return bush;
     }
 
-    function spawnSceneryChunk(zCenter) {
+    function spawnSceneryChunk(cx, cz) {
       const objects = [];
       // Deterministic pseudo-random per chunk based on position
-      const seed = Math.abs(Math.floor(zCenter * 7.13)) % 10000;
+      const seed = Math.abs(cx * 374761 + cz * 668265) % 100000;
 
-      for (let i = 0; i < 30; i++) {
+      for (let i = 0; i < 8; i++) {
         // Deterministic random from seed + index
         const s = _hash(seed + i * 3, seed + i * 7 + 1000);
         const s2 = _hash(seed + i * 5 + 500, seed + i * 11 + 2000);
         const s3 = _hash(seed + i * 13 + 800, seed + i * 17 + 3000);
 
-        const x = (s - 0.5) * CHUNK_W * 0.9;
-        const z = (s2 - 0.5) * CHUNK_D + zCenter;
+        const x = (s - 0.5) * CHUNK_SIZE * 0.9 + cx * CHUNK_SIZE;
+        const z = (s2 - 0.5) * CHUNK_SIZE * 0.9 + cz * CHUNK_SIZE;
         const h = terrainHeight(x, z);
 
         // Skip if underwater
@@ -4445,16 +4440,43 @@ window.TrackScenes = (function() {
         objects.push(obj);
       }
 
-      sceneryChunks.push({ objects, zCenter });
+      sceneryChunks.set(`${cx},${cz}`, { objects });
+    }
+
+    function updateChunks2D(posX, posZ) {
+      const pcx = Math.round(posX / CHUNK_SIZE);
+      const pcz = Math.round(posZ / CHUNK_SIZE);
+      const needed = new Set();
+      const r2 = (CHUNK_RANGE + 0.5) * (CHUNK_RANGE + 0.5);
+
+      for (let dx = -CHUNK_RANGE; dx <= CHUNK_RANGE; dx++) {
+        for (let dz = -CHUNK_RANGE; dz <= CHUNK_RANGE; dz++) {
+          if (dx * dx + dz * dz > r2) continue; // circular culling
+          const cx = pcx + dx, cz = pcz + dz;
+          const key = `${cx},${cz}`;
+          needed.add(key);
+          if (!terrainChunks.has(key)) {
+            spawnTerrainChunk(cx, cz);
+            spawnWaterChunk(cx, cz);
+            spawnSceneryChunk(cx, cz);
+          }
+        }
+      }
+
+      // Remove chunks outside range
+      for (const [key, ch] of terrainChunks) {
+        if (!needed.has(key)) { ch.mesh.geometry.dispose(); scene.remove(ch.mesh); terrainChunks.delete(key); }
+      }
+      for (const [key, ch] of waterChunks) {
+        if (!needed.has(key)) { ch.mesh.geometry.dispose(); scene.remove(ch.mesh); waterChunks.delete(key); }
+      }
+      for (const [key, ch] of sceneryChunks) {
+        if (!needed.has(key)) { for (const obj of ch.objects) scene.remove(obj); sceneryChunks.delete(key); }
+      }
     }
 
     // Pre-fill visible area
-    while (nextTerrainZ < TERRAIN_AHEAD * CHUNK_D) {
-      spawnTerrainChunk(nextTerrainZ);
-      spawnWaterChunk(nextTerrainZ);
-      spawnSceneryChunk(nextTerrainZ);
-      nextTerrainZ += CHUNK_D;
-    }
+    updateChunks2D(0, 0);
 
     // ═══════════════════════════════════════════════════════════════════════
     // BIRD - fly-by style rotation-based flight
@@ -4660,30 +4682,8 @@ window.TrackScenes = (function() {
         sunLight.target.position.set(posX, 0, posZ);
         sunLight.target.updateMatrixWorld();
 
-        // Spawn terrain + water + scenery ahead, cleanup behind
-        while (nextTerrainZ < posZ + TERRAIN_AHEAD * CHUNK_D) {
-          spawnTerrainChunk(nextTerrainZ);
-          spawnWaterChunk(nextTerrainZ);
-          spawnSceneryChunk(nextTerrainZ);
-          nextTerrainZ += CHUNK_D;
-        }
-        while (terrainChunks.length && terrainChunks[0].zCenter < posZ - TERRAIN_BEHIND * CHUNK_D) {
-          const old = terrainChunks.shift();
-          old.mesh.geometry.dispose();
-          scene.remove(old.mesh);
-        }
-        while (waterChunks.length && waterChunks[0].zCenter < posZ - TERRAIN_BEHIND * CHUNK_D) {
-          const old = waterChunks.shift();
-          old.mesh.geometry.dispose();
-          scene.remove(old.mesh);
-        }
-        while (sceneryChunks.length && sceneryChunks[0].zCenter < posZ - TERRAIN_BEHIND * CHUNK_D) {
-          const old = sceneryChunks.shift();
-          for (const obj of old.objects) {
-            // Don't dispose geometries here — they're shared across all scenery chunks
-            scene.remove(obj);
-          }
-        }
+        // Spawn/cleanup terrain + water + scenery in 2D grid around bird
+        updateChunks2D(posX, posZ);
 
         // ── Fly-by bird flight (rotation-based, matches jessehhydee/fly-by) ──
         if (bird) {
@@ -4864,26 +4864,29 @@ window.TrackScenes = (function() {
         }
 
         // Terrain
-        for (const ch of terrainChunks) {
+        for (const [, ch] of terrainChunks) {
           ch.mesh.geometry.dispose();
           scene.remove(ch.mesh);
         }
+        terrainChunks.clear();
         terrainMat.dispose();
 
         // Water
-        for (const ch of waterChunks) {
+        for (const [, ch] of waterChunks) {
           ch.mesh.geometry.dispose();
           scene.remove(ch.mesh);
         }
+        waterChunks.clear();
         waterMat.dispose();
 
         // Scenery
-        for (const ch of sceneryChunks) {
+        for (const [, ch] of sceneryChunks) {
           for (const obj of ch.objects) {
             obj.traverse(c => { if (c.geometry) c.geometry.dispose(); });
             scene.remove(obj);
           }
         }
+        sceneryChunks.clear();
         for (const m of sceneryMats) m.dispose();
         for (const g of sceneryGeoms) g.dispose();
 
