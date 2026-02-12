@@ -127,6 +127,10 @@ class StemPlayer {
     this.fftSize = 256;
     this.smoothingTimeConstant = 0.8;
 
+    // Precompute A-weighting curve for perceptual loudness (Fletcher-Munson)
+    // Maps FFT bins to perceptual weights so bass isn't over-represented
+    this.aWeights = null; // initialized on first analysis when sample rate is known
+
     // Event listeners
     this.listeners = {
       'stemAnalysis': [],
@@ -321,7 +325,8 @@ class StemPlayer {
         bass: 0,
         mid: 0,
         treble: 0,
-        peak: 0
+        peak: 0,
+        centroid: 0
       }
     });
   }
@@ -714,13 +719,42 @@ class StemPlayer {
   }
 
   /**
-   * Analyze all stems and emit data
-   * Call this in your animation loop
+   * Initialize A-weighting curve for perceptual loudness.
+   * Called once when sample rate is known.
+   * Based on IEC 61672:2003 A-weighting formula.
    */
+  _initAWeights(binCount, sampleRate) {
+    this.aWeights = new Float32Array(binCount);
+    const nyquist = sampleRate / 2;
+    for (let i = 0; i < binCount; i++) {
+      const f = (i / binCount) * nyquist;
+      if (f < 10) { this.aWeights[i] = 0; continue; }
+      // A-weighting transfer function (simplified)
+      const f2 = f * f;
+      const num = 12194 * 12194 * f2 * f2;
+      const den = (f2 + 20.6 * 20.6) * Math.sqrt((f2 + 107.7 * 107.7) * (f2 + 737.9 * 737.9)) * (f2 + 12194 * 12194);
+      const ra = num / den;
+      // Convert to linear gain (normalize so 1kHz ≈ 1.0)
+      const dB = 20 * Math.log10(ra) + 2.0; // +2dB offset so 1kHz = ~0dB
+      this.aWeights[i] = Math.pow(10, dB / 20);
+    }
+    // Normalize peak to 1.0
+    let maxW = 0;
+    for (let i = 0; i < binCount; i++) if (this.aWeights[i] > maxW) maxW = this.aWeights[i];
+    if (maxW > 0) for (let i = 0; i < binCount; i++) this.aWeights[i] /= maxW;
+  }
+
   analyze() {
     if (!this.isLoaded && !this.isPartiallyLoaded) return null;
 
+    // Lazy-init A-weighting curve on first analysis
+    if (!this.aWeights) {
+      const sampleRate = this.audioContext.sampleRate || 44100;
+      this._initAWeights(this.fftSize / 2, sampleRate);
+    }
+
     const analysisResults = {};
+    const weights = this.aWeights;
 
     for (const [stemId, stem] of this.stems) {
       // Skip stems that haven't loaded yet
@@ -737,7 +771,7 @@ class StemPlayer {
       const data = stem.frequencyData;
       const binCount = data.length;
 
-      // Calculate frequency band energies
+      // Calculate frequency band energies with A-weighting
       // Bass: 20-250Hz (roughly first 10% of bins)
       // Mid: 250-2000Hz (roughly 10-40% of bins)
       // Treble: 2000-20000Hz (roughly 40-100% of bins)
@@ -746,30 +780,46 @@ class StemPlayer {
       const midEnd = Math.floor(binCount * 0.4);
 
       let bassSum = 0, midSum = 0, trebleSum = 0, totalSum = 0;
+      let bassWeightSum = 0, midWeightSum = 0, trebleWeightSum = 0, totalWeightSum = 0;
       let peak = 0;
+      let centroidNum = 0, centroidDen = 0;
 
       for (let i = 0; i < binCount; i++) {
-        const value = data[i] / 255;
-        totalSum += value;
+        const raw = data[i] / 255;
+        const w = weights[i] || 0;
+        const value = raw * w; // A-weighted value
 
-        if (value > peak) peak = value;
+        totalSum += value;
+        totalWeightSum += w;
+
+        if (raw > peak) peak = raw;
+
+        // Spectral centroid: weighted average of bin index by magnitude
+        centroidNum += i * raw;
+        centroidDen += raw;
 
         if (i < bassEnd) {
           bassSum += value;
+          bassWeightSum += w;
         } else if (i < midEnd) {
           midSum += value;
+          midWeightSum += w;
         } else {
           trebleSum += value;
+          trebleWeightSum += w;
         }
       }
 
-      // Normalize
-      const bass = bassEnd > 0 ? bassSum / bassEnd : 0;
-      const mid = (midEnd - bassEnd) > 0 ? midSum / (midEnd - bassEnd) : 0;
-      const treble = (binCount - midEnd) > 0 ? trebleSum / (binCount - midEnd) : 0;
-      const energy = binCount > 0 ? totalSum / binCount : 0;
+      // Normalize by sum of weights in each band (not just count)
+      const bass = bassWeightSum > 0 ? bassSum / bassWeightSum : 0;
+      const mid = midWeightSum > 0 ? midSum / midWeightSum : 0;
+      const treble = trebleWeightSum > 0 ? trebleSum / trebleWeightSum : 0;
+      const energy = totalWeightSum > 0 ? totalSum / totalWeightSum : 0;
 
-      stem.analysis = { energy, bass, mid, treble, peak };
+      // Spectral centroid: 0 = all energy in low bins, 1 = all in high bins
+      const centroid = centroidDen > 0 ? centroidNum / centroidDen / binCount : 0;
+
+      stem.analysis = { energy, bass, mid, treble, peak, centroid };
       analysisResults[stemId] = stem.analysis;
     }
 

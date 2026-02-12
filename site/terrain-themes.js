@@ -24,17 +24,27 @@ window.TERRAIN_THEMES = (function() {
     chunkRange: 5,
 
     terrainHeight(x, z, noise2D, fbm, time) {
-      // Rolling hills everywhere — multiple octaves
-      const base = (fbm(x * 0.005, z * 0.005, 6) - 0.5) * 2;
-      const mid  = (fbm(x * 0.015 + 37, z * 0.012 + 19, 4) - 0.5) * 2;
-      const fine = (fbm(x * 0.04 + 100, z * 0.04 + 80, 3) - 0.5) * 2;
-      const micro = (fbm(x * 0.12 + 200, z * 0.12 + 150, 2) - 0.5) * 2;
+      // Domain warping (Quilez 2002): warp input coordinates through a secondary
+      // noise field before sampling terrain. Creates organic flowing shapes —
+      // river-like channels, swirling ridges — that plain fBm can't produce.
+      const warpScale = 0.003;
+      const warpStrength = 45;
+      const wx = (fbm(x * warpScale, z * warpScale, 3) - 0.5) * warpStrength;
+      const wz = (fbm(x * warpScale + 5.2, z * warpScale + 1.3, 3) - 0.5) * warpStrength;
+      const xw = x + wx;
+      const zw = z + wz;
+
+      // Rolling hills everywhere — multiple octaves (now using warped coords)
+      const base = (fbm(xw * 0.005, zw * 0.005, 6) - 0.5) * 2;
+      const mid  = (fbm(xw * 0.015 + 37, zw * 0.012 + 19, 4) - 0.5) * 2;
+      const fine = (fbm(xw * 0.04 + 100, zw * 0.04 + 80, 3) - 0.5) * 2;
+      const micro = (fbm(x * 0.12 + 200, z * 0.12 + 150, 2) - 0.5) * 2; // micro uses unwrapped for detail
 
       // Ridge features — abs of noise gives sharp creases
-      const ridge = 1 - Math.abs(fbm(x * 0.008 + 100, z * 0.006 + 50, 4) - 0.5) * 2;
+      const ridge = 1 - Math.abs(fbm(xw * 0.008 + 100, zw * 0.006 + 50, 4) - 0.5) * 2;
 
       // Noise-driven mountain field
-      const mountainNoise = fbm(x * 0.003 + 500, z * 0.003 + 500, 3);
+      const mountainNoise = fbm(xw * 0.003 + 500, zw * 0.003 + 500, 3);
       const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
       const mountainScale = clamp((mountainNoise - 0.4) / 0.3, 0, 1);
       const valleyScale = 1 - mountainScale;
@@ -47,7 +57,7 @@ window.TERRAIN_THEMES = (function() {
             + mountainScale * base * 25;
 
       // Occasional deeper valleys that can hold water
-      const valleyNoise = fbm(x * 0.007 + 300, z * 0.007 + 250, 3);
+      const valleyNoise = fbm(xw * 0.007 + 300, zw * 0.007 + 250, 3);
       if (valleyNoise < 0.35) {
         const depth = (0.35 - valleyNoise) / 0.35;
         h -= depth * depth * 12;
@@ -165,16 +175,22 @@ window.TERRAIN_THEMES = (function() {
     },
 
     fogColor: 0x0a0a14,
-    fogDensity: 0.0089,
-    fogDissipation: 0.989,
+    fogColorLight: 0x8c7a5e,
+    fogDensity: 0.0036,
+    fogDensityDay: 0,
 
     baseSunElevation: -5,
+    sunElevationRange: 10,
     sunAzimuth: 0,
     baseTurbidity: 4,
     baseRayleigh: 3.5,
     baseMieCoefficient: 0.005,
     baseMieDirectionalG: 0.8,
     baseExposure: 0.05,
+    baseSunIntensity: 0.1,
+    sunIntensityRange: 1.6,
+    baseHemiIntensity: 0.04,
+    hemiIntensityRange: 0.46,
 
     animated: false,
     animateChunks: null,
@@ -251,8 +267,8 @@ window.TERRAIN_THEMES = (function() {
     sceneryDensity: 0,
 
     fogColor: 0x0d1520,
-    fogDensity: 0.0089,
-    fogDissipation: 0.989,
+    fogDensity: 0.006,
+    fogDensityDay: 0.0002,
 
     baseSunElevation: -5,
     sunAzimuth: 0,
@@ -263,136 +279,16 @@ window.TERRAIN_THEMES = (function() {
     baseExposure: 0.15,
 
     animated: false,
-    gpuAnimated: true,
 
-    // Returns a MeshStandardMaterial with TSL vertex shader that animates
-    // wave height on GPU, plus a colorNode for Fresnel, sun specular,
-    // subsurface scattering, and scrolling noise micro-detail.
-    createTerrainMaterial(THREE, timeUniform) {
-      const TSL = window._TSL;
-      if (!TSL) return null;
-
-      const {
-        Fn, float, vec2, vec3, vec4, uniform,
-        positionLocal, positionWorld, normalLocal, normalWorld, modelWorldMatrix,
-        cameraPosition: tslCameraPosition,
-        sin: tslSin, cos: tslCos, pow: tslPow,
-        normalize: tslNormalize, mix, smoothstep, clamp: tslClamp,
-        dot: tslDot, max: tslMax, negate,
-        mx_noise_float,
-      } = TSL;
-
-      // Sun direction uniform — updated per-frame from track-scenes.js
-      const sunDirUniform = uniform(new THREE.Vector3(0, 0.3, 1).normalize());
-
-      // Tunable water shader uniforms (scene tuner can update these at runtime)
-      const uFresnelStrength = uniform(0.7);
-      const uSpecIntensity   = uniform(1.5);
-      const uSpecPower       = uniform(256);
-      const uSssStrength     = uniform(0.3);
-
-      // GPU wave height — matches CPU terrainHeight for ocean areas
-      // (omits noise chop — sin/cos only, trivial on GPU)
-      const waveHeight = Fn(([wx, wz]) => {
-        const t = timeUniform.mul(0.4);
-        const swell = tslSin(wx.mul(0.015).add(t.mul(0.7)))
-          .mul(tslCos(wz.mul(0.012).sub(t.mul(0.5))))
-          .mul(3.0);
-        const cross1 = tslSin(wx.add(wz).mul(0.025).add(t.mul(1.1))).mul(1.2);
-        const cross2 = tslSin(wx.sub(wz.mul(0.7)).mul(0.03).sub(t.mul(0.8))).mul(0.8);
-        const broad = tslSin(wx.mul(0.004).add(t.mul(0.15)))
-          .mul(tslSin(wz.mul(0.005).sub(t.mul(0.1))))
-          .mul(2.0);
-        return swell.add(cross1).add(cross2).add(broad).sub(2.0);
-      });
-
-      const mat = new THREE.MeshStandardMaterial({
-        vertexColors: false,
-        flatShading: false,
-        roughness: 0.08,
-        metalness: 0.7,
-        emissiveIntensity: 0.03,
-        emissive: new THREE.Color(0xffffff),
-      });
-
-      // Position node: wave Y for ocean, original Y for islands
-      // Ocean waves can crest to ~+6, islands start at ~1 but peaks go to 35+
-      // Use smoothstep(7, 12) so all ocean is animated, island edges blend, peaks are frozen
-      mat.positionNode = Fn(() => {
-        const pos = positionLocal.toVar();
-        const origY = positionLocal.y;
-        const wPos = modelWorldMatrix.mul(vec4(positionLocal, float(1.0)));
-        const waveY = waveHeight(wPos.x, wPos.z);
-        const islandFactor = smoothstep(float(7.0), float(12.0), origY);
-        pos.y.assign(mix(waveY, origY, islandFactor));
-        return pos;
-      })();
-
-      // Normal node: analytical wave normals for ocean, geometry normals for islands
-      mat.normalNode = Fn(() => {
-        const origY = positionLocal.y;
-        const wPos = modelWorldMatrix.mul(vec4(positionLocal, float(1.0)));
-        const eps = float(1.0);
-        const h0 = waveHeight(wPos.x, wPos.z);
-        const hx = waveHeight(wPos.x.add(eps), wPos.z);
-        const hz = waveHeight(wPos.x, wPos.z.add(eps));
-        const waveNrm = tslNormalize(vec3(hx.sub(h0).negate(), float(1.0), hz.sub(h0).negate()));
-        const islandFactor = smoothstep(float(7.0), float(12.0), origY);
-        return tslNormalize(mix(waveNrm, normalLocal, islandFactor));
-      })();
-
-      // Color node: procedural ocean color + Fresnel + specular + SSS + noise
-      mat.colorNode = Fn(() => {
-        // Procedural ocean color (matches colorVertex depth-based blue-green)
-        const wH = positionWorld.y;
-        const depth = tslClamp(float(1.5).sub(wH).div(6.0), 0, 1);
-        const cr = float(0.04).add(float(1).sub(depth).mul(0.08));
-        const cg = float(0.18).add(float(1).sub(depth).mul(0.22)).sub(depth.mul(0.06));
-        const cb = float(0.35).add(float(1).sub(depth).mul(0.15)).add(depth.mul(0.10));
-        const baseColor = vec3(cr, cg, cb);
-
-        // 1. Fresnel — transparent looking down, reflective at glancing angles
-        const viewDir = tslNormalize(tslCameraPosition.sub(positionWorld));
-        const NdotV = tslMax(float(0), tslDot(normalWorld, viewDir));
-        const fresnel = tslPow(float(1).sub(NdotV), float(5));
-        const skyColor = vec3(0.4, 0.55, 0.7);
-        const fresnelColor = mix(baseColor, skyColor, fresnel.mul(uFresnelStrength));
-
-        // Sun visibility factor — fades specular/SSS to zero when sun is below horizon
-        const sunVis = smoothstep(float(-0.02), float(0.15), sunDirUniform.y);
-
-        // 2. Sun specular (Blinn-Phong) — bright sun path across the water
-        const halfVec = tslNormalize(viewDir.add(sunDirUniform));
-        const spec = tslPow(tslMax(float(0), tslDot(normalWorld, halfVec)), uSpecPower).mul(sunVis);
-
-        // 3. Subsurface scattering — wave crests glow when backlit by sun
-        const sss = tslPow(tslMax(float(0), tslDot(viewDir, negate(sunDirUniform))), float(4)).mul(sunVis);
-        const sssColor = vec3(0.1, 0.4, 0.35);
-
-        // 4. Scrolling noise micro-detail — animated surface texture variation
-        const noiseInput = vec2(
-          positionWorld.x.mul(0.5).add(timeUniform.mul(0.1)),
-          positionWorld.z.mul(0.5).add(timeUniform.mul(0.07))
-        );
-        const noise = mx_noise_float(noiseInput);
-
-        // Combine all effects
-        return fresnelColor
-          .add(vec3(spec, spec, spec).mul(uSpecIntensity))
-          .add(sssColor.mul(sss).mul(uSssStrength))
-          .add(vec3(noise, noise, noise).mul(0.03));
-      })();
-
-      // Expose uniforms for per-frame / tuner updates from track-scenes.js
-      mat._sunDirUniform = sunDirUniform;
-      mat._waterUniforms = {
-        fresnelStrength: uFresnelStrength,
-        specIntensity:   uSpecIntensity,
-        specPower:       uSpecPower,
-        sssStrength:     uSssStrength,
-      };
-
-      return mat;
+    // Use Three.js WaterMesh (TSL/WebGPU reflective ocean) instead of chunked terrain
+    useWaterMesh: true,
+    waterMeshConfig: {
+      size: 10000,           // single large plane
+      textureSize: 1.0,      // normal map scale
+      waterColor: 0x001e0f,
+      sunColor: 0xffffff,
+      distortionScale: 3.7,
+      alpha: 0.98,
     },
 
   };

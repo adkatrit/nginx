@@ -230,7 +230,7 @@
     return;
   }
 
-  /** @typedef {{ title?: string; artist?: string; url?: string; coverUrl?: string; stemsManifest?: string; _objectUrl?: string; }} Track */
+  /** @typedef {{ title?: string; artist?: string; url?: string; coverUrl?: string; stemsManifest?: string; hidden?: boolean; _objectUrl?: string; }} Track */
 
   /** @type {Track[]} */
   const hostedTracks = (Array.isArray(window.TRACKS) ? window.TRACKS : [])
@@ -244,6 +244,7 @@
       url: typeof t.url === "string" ? t.url : undefined,
       coverUrl: typeof t.coverUrl === "string" ? t.coverUrl : undefined,
       stemsManifest: typeof t.stemsManifest === "string" ? t.stemsManifest : undefined,
+      hidden: !!t.hidden,
     }));
 
   /** @type {Track[]} */
@@ -545,6 +546,12 @@
   let spectralFlux = 0;
   let globalBeatPulse = 0;
   let lastBassForSpeed = 0;
+
+  // Adaptive onset detection (Bello 2005) — rolling history for median-based threshold
+  const ONSET_HISTORY_SIZE = 43; // ~0.7 sec at 60fps — captures ~2 beats at 170 BPM
+  const onsetHistory = new Float32Array(ONSET_HISTORY_SIZE);
+  let onsetHistoryIdx = 0;
+  let onsetCooldown = 0; // frames to wait after a detected onset
 
   const VIZ_PARAMS_STORAGE_KEY = "mysongs-viz-params";
 
@@ -1838,6 +1845,7 @@
 
     for (let i = 0; i < tracks.length; i += 1) {
       const t = tracks[i];
+      if (t.hidden) continue; // hidden tracks only accessible via URL hash
       const title = (t.title || deriveTitleFromUrl(t.url)).toLowerCase();
       const artist = (t.artist || "").toLowerCase();
       const combined = `${artist} ${title}`.trim();
@@ -3117,10 +3125,24 @@
       spectralFlux = spectralFlux * 0.88 + Math.abs(energyDelta) * 0.12;
       lastEnergyForSpeed = energy;
 
-      // Beat detection - detect bass hits for speed bursts
-      bassHit = bass > 0.5 && bass > lastBassForSpeed + 0.1;
+      // Adaptive onset detection (Bello 2005):
+      // Detect bass hits using spectral flux peaks above a running median threshold.
+      // Adapts to both quiet and loud tracks — no hardcoded absolute threshold.
+      const bassFlux = Math.max(0, bass - lastBassForSpeed); // positive-only (onset = increase)
+      onsetHistory[onsetHistoryIdx] = bassFlux;
+      onsetHistoryIdx = (onsetHistoryIdx + 1) % ONSET_HISTORY_SIZE;
+
+      // Compute median of recent flux values as adaptive threshold
+      // Using a sorted copy of the circular buffer
+      const sorted = Array.from(onsetHistory).sort((a, b) => a - b);
+      const medianFlux = sorted[Math.floor(ONSET_HISTORY_SIZE / 2)];
+      const onsetThreshold = medianFlux * 3.0 + 0.02; // sensitivity: 3x median + small floor
+
+      if (onsetCooldown > 0) onsetCooldown--;
+      bassHit = bassFlux > onsetThreshold && onsetCooldown === 0 && bass > 0.08;
       if (bassHit) {
         globalBeatPulse = Math.min(globalBeatPulse + 0.35, 1.0);
+        onsetCooldown = 5; // ~83ms debounce at 60fps — prevents double-triggers
       }
       globalBeatPulse *= 0.93; // Smooth decay
       lastBassForSpeed = bass;
@@ -4378,18 +4400,27 @@
     if (!tracks.length) return -1;
 
     if (shuffle) {
-      if (tracks.length === 1) return currentIndex;
+      // Build list of non-hidden indices for shuffle pool
+      const pool = [];
+      for (let i = 0; i < tracks.length; i++) if (!tracks[i].hidden) pool.push(i);
+      if (pool.length <= 1) return pool[0] ?? currentIndex;
       let n = currentIndex;
       for (let tries = 0; tries < 6 && n === currentIndex; tries += 1) {
-        n = Math.floor(Math.random() * tracks.length);
+        n = pool[Math.floor(Math.random() * pool.length)];
       }
       return n;
     }
 
-    const next = currentIndex + direction;
-    if (next < 0) return repeatMode === "all" ? tracks.length - 1 : 0;
-    if (next >= tracks.length) return repeatMode === "all" ? 0 : tracks.length - 1;
-    return next;
+    // Step in direction, skipping hidden tracks
+    const len = tracks.length;
+    let next = currentIndex;
+    for (let tries = 0; tries < len; tries++) {
+      next += direction;
+      if (next >= len) next = repeatMode === "all" ? 0 : len - 1;
+      if (next < 0) next = repeatMode === "all" ? len - 1 : 0;
+      if (!tracks[next].hidden) return next;
+    }
+    return currentIndex; // fallback if all non-current tracks are hidden
   }
 
   function next({ autoplay = true } = {}) {

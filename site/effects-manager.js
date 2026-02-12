@@ -25,6 +25,14 @@ const EffectsManager = (function() {
   let audioData = { bass: 0, mid: 0, treble: 0, energy: 0 };
   let shipPosition = { x: 0, y: 0, z: 0 };
 
+  // Perceptual scaling (Stevens' power law):
+  // Human perception of intensity is nonlinear — this maps linear audio values
+  // through a power curve so quiet sections are more visible and loud sections
+  // don't saturate. exp=0.5 matches brightness perception, 0.6 for general use.
+  function perceptual(v, exp = 0.6) {
+    return v > 0 ? Math.pow(v, exp) : 0;
+  }
+
   // Per-stem visualization data from manifest
   // Format: { stemId: { analysis: {energy, bass, mid, treble}, viz: {target, effect, color} } }
   let stemVizData = null;
@@ -678,18 +686,19 @@ const EffectsManager = (function() {
       const { analysis, viz } = data;
       if (!analysis || !viz) continue;
 
-      const energy = analysis.energy || 0;
-      const bass = analysis.bass || 0;
+      const energy = perceptual(analysis.energy || 0);
+      const bass = perceptual(analysis.bass || 0);
       const color = viz.color || '#ffffff';
 
       // Route to appropriate effect based on target and effect type
-      // LOWER THRESHOLDS + HIGHER MULTIPLIERS for dramatic visibility
+      // Perceptual scaling (Stevens' power law) applied above so quiet
+      // sections are more visible and loud sections don't saturate.
       switch (viz.target) {
         case 'terrain':
           if (viz.effect === 'impact') {
-            // Impact: drum/percussion hits - LOW threshold for responsiveness
+            // Impact: drum/percussion hits
             if (energy > 0.2) {
-              totalTerrainImpact += energy * 1.5; // Boosted multiplier
+              totalTerrainImpact += energy * 1.5;
               // Trigger visual ripple on moderate hits
               if (energy > 0.4 && stemEffects.terrainImpacts.length < 8) {
                 stemEffects.terrainImpacts.push({
@@ -703,14 +712,14 @@ const EffectsManager = (function() {
             }
           } else if (viz.effect === 'deformation') {
             // Deformation: continuous bass warping - always active
-            totalTerrainDeformation += bass * 1.2; // Boosted
+            totalTerrainDeformation += bass * 1.2;
           }
           break;
 
         case 'atmosphere':
           if (viz.effect === 'fog') {
-            // Fog: vocals - direct mapping, no threshold
-            totalAtmosphereFog += energy * 1.0; // Full strength
+            // Fog: vocals - perceptual scaling keeps soft vocals visible
+            totalAtmosphereFog += energy * 1.0;
           } else if (viz.effect === 'glow') {
             // Glow: backing vocals
             totalAtmosphereGlow += energy * 0.8;
@@ -720,16 +729,16 @@ const EffectsManager = (function() {
         case 'background':
           if (viz.effect === 'pulse') {
             // Pulse: synth drives everything
-            totalBackgroundPulse += energy * 1.0; // Full strength
+            totalBackgroundPulse += energy * 1.0;
           }
           break;
 
         case 'particles':
           if (viz.effect === 'trails') {
-            // Trails: guitar/keyboard - direct mapping
+            // Trails: guitar/keyboard
             totalParticleTrails += energy * 1.0;
           } else if (viz.effect === 'burst') {
-            // Burst: FX - lower threshold
+            // Burst: FX
             if (energy > 0.3) {
               shouldBurstParticles = true;
               burstColor = hexToRgb(color);

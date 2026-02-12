@@ -35,8 +35,8 @@ window.SceneTuner = (function() {
     fog: {
       fogColor:      { value: 0x0a0a14, type: 'color', label: 'Night Color' },
       fogColorLight: { value: 0x8c7a5e, type: 'color', label: 'Day Color' },
-      fogDensity:    { value: 0.0018,   min: 0.0001, max: 0.02, step: 0.0001, label: 'Density' },
-      fogDissipation:{ value: 0.85,     min: 0,      max: 1,    step: 0.05,   label: 'Dissipation' },
+      fogDensity:    { value: 0.006,    min: 0.0001, max: 0.02, step: 0.0001, label: 'Night Density' },
+      fogDensityDay: { value: 0.0002,   min: 0.0,    max: 0.01, step: 0.0001, label: 'Day Density' },
     },
     water: {
       waterY:         { value: -6,      min: -20, max: 5,   step: 0.5,  label: 'Water Y' },
@@ -422,7 +422,7 @@ window.SceneTuner = (function() {
     lines.push(`  fogColor: 0x${(c.fog.fogColor & 0xffffff).toString(16).padStart(6, '0')},`);
     lines.push(`  fogColorLight: 0x${(c.fog.fogColorLight & 0xffffff).toString(16).padStart(6, '0')},`);
     lines.push(`  fogDensity: ${c.fog.fogDensity},`);
-    lines.push(`  fogDissipation: ${c.fog.fogDissipation},`);
+    lines.push(`  fogDensityDay: ${c.fog.fogDensityDay},`);
 
     // Water
     lines.push(`  waterY: ${c.water.waterY},`);
@@ -556,7 +556,7 @@ window.SceneTuner = (function() {
     if (theme.fogColor != null)      setParam('fog', 'fogColor', theme.fogColor);
     if (theme.fogColorLight != null) setParam('fog', 'fogColorLight', theme.fogColorLight);
     if (theme.fogDensity != null)    setParam('fog', 'fogDensity', theme.fogDensity);
-    if (theme.fogDissipation != null) setParam('fog', 'fogDissipation', theme.fogDissipation);
+    if (theme.fogDensityDay != null) setParam('fog', 'fogDensityDay', theme.fogDensityDay);
 
     // Water — hide section if theme has no water planes (waterY <= -100)
     const hasWaterPlanes = theme.waterY == null || theme.waterY > -100;

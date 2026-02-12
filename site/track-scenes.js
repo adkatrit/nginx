@@ -4448,7 +4448,7 @@ window.TrackScenes = (function() {
     let sunIntensityRange = activeTheme.sunIntensityRange || 1.6;
     let baseHemiIntensity = activeTheme.baseHemiIntensity || 0.04;
     let hemiIntensityRange = activeTheme.hemiIntensityRange || 0.46;
-    let fogDissipation = activeTheme.fogDissipation || 0.85;
+    let fogDensityDay = activeTheme.fogDensityDay ?? 0.0002;
     let fogColorLight = activeTheme.fogColorLight || 0x8c7a5e;
 
     const sunPos = new THREE.Vector3();
@@ -4529,10 +4529,7 @@ window.TrackScenes = (function() {
     }
 
     let terrainMat = null;
-    if (activeTheme.gpuAnimated && activeTheme.createTerrainMaterial) {
-      terrainMat = activeTheme.createTerrainMaterial(THREE, oceanTimeUniform);
-    }
-    if (!terrainMat) {
+    if (!activeTheme.useWaterMesh) {
       terrainMat = new THREE.MeshStandardMaterial({
         vertexColors: true,
         flatShading: activeTheme.terrainMatProps.flatShading,
@@ -4551,6 +4548,61 @@ window.TrackScenes = (function() {
       metalness: activeTheme.waterMetalness,
       side: THREE.DoubleSide,
     });
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // WaterMesh — Three.js TSL/WebGPU reflective ocean (used by Data Tide)
+    // Lazy-loaded: only imported when a useWaterMesh theme is active
+    // ═══════════════════════════════════════════════════════════════════════
+    let waterMeshObj = null;      // WaterMesh instance (or null if not active)
+    let waterMeshReady = false;   // true once async import + creation completes
+
+    async function createWaterMeshForTheme(theme) {
+      if (!theme.useWaterMesh) return;
+      try {
+        const { WaterMesh } = await import('three/addons/objects/WaterMesh.js');
+        const cfg = theme.waterMeshConfig || {};
+        const loader = new THREE.TextureLoader();
+        const waterNormals = await loader.loadAsync('textures/waternormals.jpg');
+        waterNormals.wrapS = waterNormals.wrapT = THREE.RepeatWrapping;
+
+        const planeSize = cfg.size || 10000;
+        const geom = new THREE.PlaneGeometry(planeSize, planeSize);
+        geom.rotateX(-Math.PI / 2);
+
+        waterMeshObj = new WaterMesh(geom, {
+          waterNormals,
+          sunDirection: new THREE.Vector3(sunPos.x, sunPos.y, sunPos.z),
+          sunColor: cfg.sunColor ?? 0xffffff,
+          waterColor: cfg.waterColor ?? 0x001e0f,
+          distortionScale: cfg.distortionScale ?? 3.7,
+          size: cfg.textureSize ?? 1.0,
+          alpha: cfg.alpha ?? 0.98,
+        });
+        waterMeshObj.position.y = -2;  // match terrainHeight base level
+        scene.add(waterMeshObj);
+        waterMeshReady = true;
+        console.log('[Flight] WaterMesh created for', theme.name);
+      } catch (err) {
+        console.error('[Flight] Failed to create WaterMesh:', err);
+        waterMeshObj = null;
+        waterMeshReady = false;
+      }
+    }
+
+    function disposeWaterMesh() {
+      if (waterMeshObj) {
+        scene.remove(waterMeshObj);
+        waterMeshObj.geometry.dispose();
+        waterMeshObj.material.dispose();
+        waterMeshObj = null;
+        waterMeshReady = false;
+      }
+    }
+
+    // Kick off WaterMesh creation if initial theme uses it
+    if (activeTheme.useWaterMesh) {
+      createWaterMeshForTheme(activeTheme);
+    }
 
     const FAR_SEGS = 6;  // reduced segments for distant LOD chunks
 
@@ -4701,8 +4753,10 @@ window.TrackScenes = (function() {
       }
     }
 
-    // Pre-fill visible area
-    updateChunks2D(0, 0);
+    // Pre-fill visible area (skip for WaterMesh themes — they use a single plane)
+    if (!activeTheme.useWaterMesh) {
+      updateChunks2D(0, 0);
+    }
 
     // ═══════════════════════════════════════════════════════════════════════
     // BIRD - fly-by style rotation-based flight
@@ -4851,10 +4905,18 @@ window.TrackScenes = (function() {
         else if (param === 'baseHemiIntensity') baseHemiIntensity = value;
         else if (param === 'hemiIntensityRange') hemiIntensityRange = value;
       } else if (section === 'fog') {
-        if (param === 'fogDensity') activeTheme.fogDensity = value;
-        else if (param === 'fogColor') activeTheme.fogColor = value;
+        if (param === 'fogDensity') {
+          activeTheme.fogDensity = value;
+          if (scene.fog) scene.fog.density = value; // immediate feedback
+        }
+        else if (param === 'fogDensityDay') {
+          fogDensityDay = value;
+        }
+        else if (param === 'fogColor') {
+          activeTheme.fogColor = value;
+          if (scene.fog) scene.fog.color.setHex(value);
+        }
         else if (param === 'fogColorLight') fogColorLight = value;
-        else if (param === 'fogDissipation') fogDissipation = value;
       } else if (section === 'water') {
         if (param === 'waterY') {
           for (const [, ch] of waterChunks) ch.mesh.position.y = value;
@@ -4916,8 +4978,9 @@ window.TrackScenes = (function() {
         if (newTheme === activeTheme) return;
         console.log('[Flight] Hot-swapping theme to:', newThemeName);
 
-        // 1. Dispose current theme materials & geometries
-        terrainMat.dispose();
+        // 1. Dispose current WaterMesh or terrain materials
+        disposeWaterMesh();
+        if (terrainMat) terrainMat.dispose();
         waterMat.dispose();
         for (const m of Object.values(sceneryMats)) m.dispose();
         for (const g of Object.values(sceneryGeoms)) g.dispose();
@@ -4946,12 +5009,11 @@ window.TrackScenes = (function() {
         // 3. Swap theme reference
         activeTheme = newTheme;
 
-        // 4. Recreate materials from new theme
+        // 4. Recreate materials from new theme (or WaterMesh)
         terrainMat = null;
-        if (activeTheme.gpuAnimated && activeTheme.createTerrainMaterial) {
-          terrainMat = activeTheme.createTerrainMaterial(THREE, oceanTimeUniform);
-        }
-        if (!terrainMat) {
+        if (activeTheme.useWaterMesh) {
+          createWaterMeshForTheme(activeTheme);
+        } else {
           terrainMat = new THREE.MeshStandardMaterial({
             vertexColors: true,
             flatShading: activeTheme.terrainMatProps.flatShading,
@@ -5018,10 +5080,12 @@ window.TrackScenes = (function() {
           }
         });
 
-        // 9. Regenerate chunks around bird
-        const posX = bird ? bird.position.x : 0;
-        const posZ = bird ? bird.position.z : 0;
-        updateChunks2D(posX, posZ);
+        // 9. Regenerate chunks around bird (skip for WaterMesh themes)
+        if (!activeTheme.useWaterMesh) {
+          const posX = bird ? bird.position.x : 0;
+          const posZ = bird ? bird.position.z : 0;
+          updateChunks2D(posX, posZ);
+        }
 
         // Update new lighting/fog range variables from theme (with fallbacks)
         sunElevationRange = activeTheme.sunElevationRange || 10;
@@ -5029,7 +5093,7 @@ window.TrackScenes = (function() {
         sunIntensityRange = activeTheme.sunIntensityRange || 1.6;
         baseHemiIntensity = activeTheme.baseHemiIntensity || 0.04;
         hemiIntensityRange = activeTheme.hemiIntensityRange || 0.46;
-        fogDissipation = activeTheme.fogDissipation || 0.85;
+        fogDensityDay = activeTheme.fogDensityDay ?? 0.0002;
         fogColorLight = activeTheme.fogColorLight || 0x8c7a5e;
 
         if (window.SceneTuner) window.SceneTuner.syncFromTheme(activeTheme, FLY, starCfg);
@@ -5064,6 +5128,7 @@ window.TrackScenes = (function() {
         sunPos.setFromSphericalCoords(1, dynPhi, dynTheta);
         skyUniforms.sunPosition.value.copy(sunPos);
         if (terrainMat && terrainMat._sunDirUniform) terrainMat._sunDirUniform.value.copy(sunPos);
+        if (waterMeshObj) waterMeshObj.sunDirection.value.copy(sunPos);
 
         // Natural sun-linked lighting: derive everything from sun elevation
         // smoothstep maps elevation smoothly: 0 at -5° (below horizon) → 1 at +5° (above)
@@ -5096,9 +5161,9 @@ window.TrackScenes = (function() {
           envRenderer.toneMappingExposure = 0.15 + sunFactor * 0.85;  // 0.15 (dark) → 1.0 (bright)
         }
 
-        // Fog dissipates as sun rises — thick at dawn, nearly gone in daylight
+        // Fog transitions with sunrise: lerp from night density → day density
         if (scene.fog) {
-          scene.fog.density = activeTheme.fogDensity * (1 - sunFactor * fogDissipation);
+          scene.fog.density = activeTheme.fogDensity + sunFactor * (fogDensityDay - activeTheme.fogDensity);
           // Fog color lerps from fogColor (night) → fogColorLight (day)
           const darkR = (activeTheme.fogColor >> 16 & 0xff) / 255;
           const darkG = (activeTheme.fogColor >> 8 & 0xff) / 255;
@@ -5194,11 +5259,19 @@ window.TrackScenes = (function() {
         }
 
         // Spawn/cleanup terrain + water + scenery in 2D grid around bird
-        updateChunks2D(posX, posZ);
+        // (skip for WaterMesh themes — they use a single repositioned plane)
+        if (activeTheme.useWaterMesh) {
+          if (waterMeshObj) {
+            waterMeshObj.position.x = posX;
+            waterMeshObj.position.z = posZ;
+          }
+        } else {
+          updateChunks2D(posX, posZ);
 
-        // Animate terrain if theme requires it (e.g. ocean waves)
-        if (activeTheme.animated && activeTheme.animateChunks) {
-          activeTheme.animateChunks(terrainChunks, time, activeTheme, noise2D, fbm, CHUNK_SIZE);
+          // Animate terrain if theme requires it (e.g. ocean waves)
+          if (activeTheme.animated && activeTheme.animateChunks) {
+            activeTheme.animateChunks(terrainChunks, time, activeTheme, noise2D, fbm, CHUNK_SIZE);
+          }
         }
 
         // ── Fly-by bird flight (rotation-based, matches jessehhydee/fly-by) ──
@@ -5395,13 +5468,16 @@ window.TrackScenes = (function() {
           });
         }
 
+        // WaterMesh
+        disposeWaterMesh();
+
         // Terrain
         for (const [, ch] of terrainChunks) {
           ch.mesh.geometry.dispose();
           scene.remove(ch.mesh);
         }
         terrainChunks.clear();
-        terrainMat.dispose();
+        if (terrainMat) terrainMat.dispose();
 
         // Water
         for (const [, ch] of waterChunks) {

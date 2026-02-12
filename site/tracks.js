@@ -40,7 +40,8 @@ window.TRACKS = [
     title: "Test",
     artist: "DeytaDreams",
     url: null,
-    stemsManifest: "./tracks/test/manifest.json"
+    stemsManifest: "./tracks/test/manifest.json",
+    hidden: true
   },
   // --- Tracks without stems (mix only) - disabled for now ---
   // { title: "Soft Systems", artist: "DeytaDreams", stemsManifest: "./tracks/soft-systems/manifest.json" },
