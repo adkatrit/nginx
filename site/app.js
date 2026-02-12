@@ -1479,15 +1479,19 @@
 
     // Build custom track scene (if available and Three.js is ready)
     if (TrackScenes && threeReady && threeScene && three) {
-      // Dispose previous custom scene
-      if (currentTrackScene) {
-        currentTrackScene.dispose();
-        currentTrackScene = null;
+      if (currentTrackScene && currentTrackScene.setTheme) {
+        // Hot-swap terrain theme (no full rebuild — bird position carries over)
+        currentTrackScene.setTheme(track.title);
+        console.log("Hot-swapped terrain theme:", track.title);
+      } else {
+        // Cold start — dispose previous and build new
+        if (currentTrackScene) {
+          currentTrackScene.dispose();
+          currentTrackScene = null;
+        }
+        currentTrackScene = TrackScenes.build(track.title, three, threeScene, { freqData, timeData });
+        console.log("Custom track scene built:", track.title, currentTrackScene ? "success" : "not available");
       }
-
-      // Build new custom scene for this track
-      currentTrackScene = TrackScenes.build(track.title, three, threeScene, { freqData, timeData });
-      console.log("Custom track scene built:", track.title, currentTrackScene ? "success" : "not available");
     }
 
     // Change environment theme when track changes (for existing environment instance)
@@ -2889,6 +2893,17 @@
         console.log("Track scene built after Three.js ready:", currentTrackTitle, currentTrackScene ? "success" : "not available");
       }
 
+      // Apply disableEffects from the track scene (stems may have force-enabled effects before scene was built)
+      if (currentTrackScene?.disableEffects) {
+        const d = currentTrackScene.disableEffects;
+        if (d.grid) effectsConfig.grid.enabled = false;
+        if (d.aurora) effectsConfig.aurora.enabled = false;
+        if (d.lightning) effectsConfig.lightning.enabled = false;
+        if (d.lights) effectsConfig.lights.enabled = false;
+        applyEffectsToEnvironment();
+        console.log("Track scene disableEffects applied:", d);
+      }
+
       // Set up score callbacks
       EnvironmentMode.setScoreCallback((score, combo) => {
         updateScoreHUD(score, combo);
@@ -3091,7 +3106,9 @@
     }
 
     // ---- Audio-reactive speed calculation ----
-    const reactivity = vizParams.audioReactivity;
+    // Skip audio speed modulation when flight scene owns the world
+    const flightSceneActive = currentTrackScene && currentTrackScene.setTheme;
+    const reactivity = flightSceneActive ? 0 : vizParams.audioReactivity;
     let bassHit = false;
 
     if (reactivity > 0) {
@@ -3173,8 +3190,8 @@
       threeStars.rotation.x = -0.08;
     }
 
-    // Update environment mode with audio data
-    if (bgVizMode === "environment" && EnvironmentMode) {
+    // Update environment mode with audio data (skip when flight scene owns the world)
+    if (bgVizMode === "environment" && EnvironmentMode && !flightSceneActive) {
       EnvironmentMode.update(dt, {
         bass: bass,
         mid: mid,
@@ -3274,12 +3291,21 @@
       updateStemDebugMeters();
     }
 
-    // --- Audio-reactive post-processing uniforms ---
+    // --- Post-processing uniforms ---
     if (ppBloomStrength) {
-      ppBloomStrength.value = 0.5 + energy * 0.8 + globalBeatPulse * 0.5;
-      ppBloomThreshold.value = 0.7 - energy * 0.3;
-      ppVignetteIntensity.value = 0.4 + bass * 0.3;
-      ppChromaticStrength.value = 0.001 + globalBeatPulse * 0.005;
+      if (currentTrackScene && currentTrackScene.setTheme) {
+        // Flight scene: static post-processing (no audio reactivity)
+        ppBloomStrength.value = 0.6;
+        ppBloomThreshold.value = 0.65;
+        ppVignetteIntensity.value = 0.35;
+        ppChromaticStrength.value = 0.001;
+      } else {
+        // Other scenes: audio-reactive post-processing
+        ppBloomStrength.value = 0.5 + energy * 0.8 + globalBeatPulse * 0.5;
+        ppBloomThreshold.value = 0.7 - energy * 0.3;
+        ppVignetteIntensity.value = 0.4 + bass * 0.3;
+        ppChromaticStrength.value = 0.001 + globalBeatPulse * 0.005;
+      }
     }
 
     // --- Render via PostProcessing pipeline ---
@@ -3880,6 +3906,7 @@
             pass, uniform, Fn, float: tslFloat, vec2: tslVec2, vec3: tslVec3, vec4: tslVec4,
             color: tslColor, uv: tslUV, screenUV,
             positionLocal, positionWorld, normalLocal, normalWorld,
+            modelWorldMatrix,
             mix: tslMix, sin: tslSin, cos: tslCos, abs: tslAbs, pow: tslPow,
             step: tslStep, smoothstep: tslSmoothstep, clamp: tslClamp,
             fract: tslFract, floor: tslFloor, mod: tslMod,
@@ -3902,6 +3929,7 @@
             Fn, float: tslFloat, vec2: tslVec2, vec3: tslVec3, vec4: tslVec4,
             color: tslColor, uniform, uv: tslUV, screenUV,
             positionLocal, positionWorld, normalLocal, normalWorld,
+            modelWorldMatrix,
             mix: tslMix, sin: tslSin, cos: tslCos, abs: tslAbs, pow: tslPow,
             step: tslStep, smoothstep: tslSmoothstep, clamp: tslClamp,
             fract: tslFract, floor: tslFloor, mod: tslMod,
@@ -4169,7 +4197,9 @@
 
         // Enable minimal effects for stem visualization to work
         // These effects are modulated by stem analysis in EffectsManager
-        if (!effectsConfig.aurora.enabled) {
+        // Respect per-scene disableEffects flags (e.g. Test scene disables grid/aurora)
+        const sceneDisable = currentTrackScene?.disableEffects || {};
+        if (!effectsConfig.aurora.enabled && !sceneDisable.aurora) {
           effectsConfig.aurora.enabled = true;
           effectsConfig.aurora.intensity = 0.4;
           effectsConfig.aurora.ribbons = 4;
@@ -4181,11 +4211,23 @@
           effectsConfig.particles.size = 0.4;
           effectsConfig.particles.speed = 0.5;
         }
-        if (!effectsConfig.grid.enabled) {
+        if (!effectsConfig.grid.enabled && !sceneDisable.grid) {
           effectsConfig.grid.enabled = true;
           effectsConfig.grid.intensity = 0.3;
           effectsConfig.grid.floor = true;
           effectsConfig.grid.perspective = true;
+        }
+        if (sceneDisable.grid) {
+          effectsConfig.grid.enabled = false;
+        }
+        if (sceneDisable.aurora) {
+          effectsConfig.aurora.enabled = false;
+        }
+        if (sceneDisable.lightning) {
+          effectsConfig.lightning.enabled = false;
+        }
+        if (sceneDisable.lights) {
+          effectsConfig.lights.enabled = false;
         }
         // Apply updated effects config
         applyEffectsToEnvironment();

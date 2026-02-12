@@ -43,10 +43,10 @@ All frontend code lives under `nginx/site/`. There is no build step or bundler â
 
 | File | Role |
 |------|------|
-| `app.js` (~183K) | Main orchestrator. Audio playback, UI controls, Three.js render loop (`drawVizThree()`), waveform visualizer, playlist management, URL hash routing for deep links |
+| `app.js` (~215K) | Main orchestrator. Audio playback, UI controls, Three.js render loop (`drawVizThree()`), waveform visualizer, playlist management, URL hash routing for deep links. Audio-reactive speed modulation is disabled when flight scene is active |
 | `stem-player.js` | Multi-stem synchronized playback via AudioBufferSourceNode. Per-stem FFT analysis, volume/mute control, MIDI event scheduling, IndexedDB caching |
 | `environments.js` | Per-track 3D worlds. Reads themes from `themes.js`, builds terrain, fog, scenery objects. Each track maps to an environment type (ocean, volcanic, cyber, etc.) |
-| `track-scenes.js` (~173K) | Per-track bespoke Three.js scene builders (e.g., `buildDataTide()`, `buildSignalIntegrity()`). Custom meshes, particles, and animations unique to each song |
+| `track-scenes.js` (~213K) | Per-track scene builders registered on `window.TrackScenes`. All tracks use `buildFlightScene()` (legacy bespoke builders like `buildDataTide()` are dead code) |
 | `effects-manager.js` | Visual effects: lightning, aurora, god rays, particles, screen shake. Driven by audio data and per-stem visualization routing from manifest |
 | `backgrounds.js` | Shader-based animated backgrounds (topo, ocean, nebula, matrix, aurora, forge, sakura, circuit, glacier, savanna). Each track theme selects one |
 | `themes.js` | `TRACK_THEMES` config â€” per-track color palettes, 3D model, viz mode, wall/floor styles, particle types, fog, background shader selection |

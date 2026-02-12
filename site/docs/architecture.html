@@ -1,0 +1,1183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Site Architecture | Code from Dream by DeytaDreams</title>
+<meta name="description" content="Complete architecture documentation for Code from Dream — stem-reactive 3D music visualizer. Covers audio playback, flight engine, terrain generation, visual effects, shader backgrounds, and UI controls." />
+<meta name="robots" content="index, follow" />
+<link rel="canonical" href="https://jrod.dev/docs/architecture.html" />
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&family=Outfit:wght@200;300;400;500;600;700;800&display=swap');
+
+:root {
+  --bass: #ff4466;
+  --mid: #44ff88;
+  --treble: #4488ff;
+  --energy: #ffaa44;
+  --beat: #ff44ff;
+  --sky: #66bbff;
+  --terrain: #88cc44;
+  --water: #22aadd;
+  --star: #eedd88;
+  --bg: #060a14;
+  --bg2: #0a1020;
+  --card: #0d1528;
+  --border: #1a2540;
+  --text: #c8d4e8;
+  --dim: #5a6a88;
+  --node: #1a2a44;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html {
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: #1a2540 #060a14;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  overflow-x: hidden;
+  line-height: 1.6;
+}
+
+/* ─── Sticky nav ─── */
+nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  display: flex;
+  gap: 2px;
+  padding: 8px 12px;
+  background: rgba(6,10,20,0.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  overflow-x: auto;
+}
+
+nav a {
+  color: var(--dim);
+  text-decoration: none;
+  padding: 6px 14px;
+  border-radius: 4px;
+  white-space: nowrap;
+  transition: all 0.3s;
+  border: 1px solid transparent;
+}
+nav a:hover, nav a.active {
+  color: #fff;
+  background: rgba(68,136,255,0.12);
+  border-color: rgba(68,136,255,0.3);
+}
+
+/* ─── Sections ─── */
+section {
+  min-height: 100vh;
+  padding: 80px 40px 60px;
+  position: relative;
+  border-bottom: 1px solid var(--border);
+}
+
+.section-label {
+  font-family: 'Outfit', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-bottom: 8px;
+}
+
+.section-title {
+  font-family: 'Outfit', sans-serif;
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 40px;
+  background: linear-gradient(135deg, #fff 40%, var(--treble));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.section-intro {
+  max-width: 800px;
+  margin-bottom: 40px;
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--text);
+}
+
+/* ─── Cards ─── */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  max-width: 1200px;
+  margin: 24px auto;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s;
+}
+
+.card:hover {
+  border-color: var(--treble);
+  box-shadow: 0 0 20px rgba(68,136,255,0.1);
+  transform: translateY(-2px);
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+}
+
+.card h3 {
+  font-family: 'Outfit', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #fff;
+}
+
+.card p, .card li {
+  font-size: 11.5px;
+  line-height: 1.7;
+}
+
+.card ul {
+  list-style: none;
+  padding: 0;
+}
+
+.card li {
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(26,37,64,0.4);
+}
+
+.card li:last-child { border-bottom: none; }
+
+.card-tag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 3px;
+  margin-bottom: 10px;
+}
+
+/* ─── Code blocks ─── */
+.code-block {
+  background: #080e1a;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 20px;
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-x: auto;
+  max-width: 900px;
+  margin: 16px auto;
+}
+
+.code-block .kw { color: var(--treble); }
+.code-block .fn { color: var(--mid); }
+.code-block .num { color: var(--energy); }
+.code-block .cm { color: var(--dim); }
+.code-block .str { color: var(--bass); }
+.code-block .prop { color: var(--sky); }
+
+/* ─── Formula display ─── */
+.formula {
+  background: #080e1a;
+  border-left: 3px solid var(--energy);
+  padding: 10px 16px;
+  font-size: 12px;
+  margin: 8px 0;
+  border-radius: 0 6px 6px 0;
+  max-width: 900px;
+}
+
+/* ─── Flow diagram ─── */
+.flow-diagram {
+  width: 100%;
+  max-width: 1100px;
+  margin: 30px auto;
+  display: block;
+}
+
+/* ─── Node boxes ─── */
+.node-box {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 20px;
+  font-size: 12px;
+  position: relative;
+  transition: all 0.3s;
+}
+.node-box:hover {
+  border-color: var(--treble);
+  box-shadow: 0 0 20px rgba(68,136,255,0.15);
+}
+
+/* ─── Data table ─── */
+.data-table {
+  width: 100%;
+  max-width: 1100px;
+  margin: 24px auto;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.data-table th {
+  background: var(--card);
+  border: 1px solid var(--border);
+  padding: 10px 14px;
+  text-align: left;
+  font-weight: 600;
+  color: #fff;
+  font-family: 'Outfit', sans-serif;
+  font-size: 12px;
+}
+
+.data-table td {
+  border: 1px solid var(--border);
+  padding: 8px 14px;
+  vertical-align: top;
+}
+
+.data-table tr:hover td {
+  background: rgba(68,136,255,0.04);
+}
+
+/* ─── Hotkey badges ─── */
+.hotkey {
+  display: inline-block;
+  background: var(--node);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* ─── Stem color dots ─── */
+.stem-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+/* ─── Legend ─── */
+.legend {
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+  margin: 20px 0;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--dim);
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+/* ─── Background grid ─── */
+.bg-grid {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.03;
+  background-image:
+    linear-gradient(rgba(68,136,255,0.3) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(68,136,255,0.3) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 900px) {
+  .card-grid { grid-template-columns: 1fr; }
+  section { padding: 80px 20px 40px; }
+  .data-table { font-size: 11px; }
+  .data-table th, .data-table td { padding: 6px 8px; }
+}
+
+/* ─── Animations ─── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+  opacity: 0;
+  animation: fadeInUp 0.6s ease forwards;
+}
+
+/* ─── Back to app link ─── */
+.back-link {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 100;
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--dim);
+  text-decoration: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 11px;
+  transition: all 0.3s;
+}
+.back-link:hover {
+  color: #fff;
+  border-color: var(--treble);
+}
+
+/* ─── Two-column layout ─── */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  max-width: 1100px;
+  margin: 24px auto;
+}
+
+@media (max-width: 900px) {
+  .two-col { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+
+<nav>
+  <a href="#overview">Overview</a>
+  <a href="#data-flow">Data Flow</a>
+  <a href="#stem-player">Stem Player</a>
+  <a href="#flight-engine">Flight Engine</a>
+  <a href="#terrain">Terrain</a>
+  <a href="#environments">Environments</a>
+  <a href="#effects">Effects</a>
+  <a href="#backgrounds">Backgrounds</a>
+  <a href="#themes">Themes</a>
+  <a href="#ui">UI &amp; Controls</a>
+  <a href="audio-reactivity.html">Audio Reactivity</a>
+</nav>
+
+<a href="/" class="back-link">Back to App</a>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 1: OVERVIEW -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="overview">
+  <div class="section-label">Architecture</div>
+  <div class="section-title">Code from Dream</div>
+
+  <div class="section-intro">
+    A stem-reactive 3D music visualizer for DeytaDreams. Each track is split into individual stems
+    (drums, bass, vocals, synth, guitar) and each stem's real-time FFT analysis drives a unique
+    Three.js flight scene &mdash; reshaping terrain, atmosphere, lighting, and particles.
+    <br><br>
+    100% static site. No build step, no bundler, no server-side rendering.
+    Plain JS files loaded via <code>&lt;script&gt;</code> tags.
+    Three.js r182 (WebGPU + TSL) loaded from CDN.
+  </div>
+
+  <div class="card-grid">
+    <div class="card" style="border-top: 3px solid var(--bass);">
+      <div class="card-tag" style="background: rgba(255,68,102,0.15); color: var(--bass);">Audio</div>
+      <h3>stem-player.js</h3>
+      <p>Multi-stem synchronized playback via Web Audio API.
+         Per-stem FFT analysis, MIDI scheduling, IndexedDB caching.
+         Stems load progressively: drums first, then bass, vocals, synth, guitar.</p>
+    </div>
+
+    <div class="card" style="border-top: 3px solid var(--treble);">
+      <div class="card-tag" style="background: rgba(68,136,255,0.15); color: var(--treble);">Orchestrator</div>
+      <h3>app.js</h3>
+      <p>Main render loop (<code>drawVizThree()</code>). Wires audio analysis to
+         Three.js scenes. Manages playback UI, waveform visualization,
+         playlist, URL hash routing, score/combo HUD, lyrics overlay.</p>
+    </div>
+
+    <div class="card" style="border-top: 3px solid var(--mid);">
+      <div class="card-tag" style="background: rgba(68,255,136,0.15); color: var(--mid);">3D World</div>
+      <h3>track-scenes.js</h3>
+      <p>All tracks use <code>buildFlightScene()</code> &mdash; a universal flight engine
+         with Preetham sky, star dome, GPU-animated terrain, bird model,
+         and free-rotation camera. Per-track terrain themes drive the look.</p>
+    </div>
+
+    <div class="card" style="border-top: 3px solid var(--energy);">
+      <div class="card-tag" style="background: rgba(255,170,68,0.15); color: var(--energy);">Config</div>
+      <h3>themes.js + terrain-themes.js</h3>
+      <p>Per-track visual identity. <code>TRACK_THEMES</code> defines colors,
+         models, background shaders, UI theme. <code>TERRAIN_THEMES</code>
+         defines height functions, vertex coloring, scenery, atmosphere.</p>
+    </div>
+
+    <div class="card" style="border-top: 3px solid var(--beat);">
+      <div class="card-tag" style="background: rgba(255,68,255,0.15); color: var(--beat);">Effects</div>
+      <h3>effects-manager.js</h3>
+      <p>Lightning, aurora, god rays, particles, screen shake.
+         Each effect driven by per-stem audio data via manifest routing.
+         Disabled when flight scene is active.</p>
+    </div>
+
+    <div class="card" style="border-top: 3px solid var(--sky);">
+      <div class="card-tag" style="background: rgba(102,187,255,0.15); color: var(--sky);">Shaders</div>
+      <h3>backgrounds.js</h3>
+      <p>10 TSL (Three.js Shading Language) animated backgrounds:
+         topo, ocean, nebula, matrix, aurora, forge, sakura, circuit,
+         glacier, savanna. GPU-side animation, audio-responsive uniforms.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 2: DATA FLOW -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="data-flow">
+  <div class="section-label">Pipeline</div>
+  <div class="section-title">Data Flow</div>
+
+  <div class="section-intro">
+    Every frame follows a pipeline from audio decoding through FFT analysis
+    to visual rendering. The stem player produces per-stem energy bands;
+    app.js routes them to the active scene and effects.
+  </div>
+
+  <!-- ASCII flow diagram -->
+  <div class="code-block" style="max-width: 1000px; font-size: 11px; line-height: 1.5;">
+<span class="cm">  Per-Track Data</span>
+  ┌─────────────────────────────────────────────────────────┐
+  │  <span class="str">manifest.json</span>                                          │
+  │  ├── stems: { drums.mp3, bass.mp3, vocals.mp3, ... }   │
+  │  ├── midi:  { drums.mid, bass.mid, ... }                │
+  │  ├── visualization: { target, effect, color }           │
+  │  └── lyrics.json (word-level timestamps)                │
+  └───────────────────────┬─────────────────────────────────┘
+                          │
+                          ▼
+  ┌─────────────────────────────────────────────────────────┐
+  │  <span class="fn">StemPlayer</span>                                              │
+  │  AudioBufferSourceNode → AnalyserNode (per stem)        │
+  │  FFT 256 bins, smoothing 0.8                            │
+  │  ├── <span class="str">energy</span>  (all bins avg / 255)                       │
+  │  ├── <span class="str">bass</span>    (20–250 Hz, bins 0–10%)                    │
+  │  ├── <span class="str">mid</span>     (250–2 kHz, bins 10–40%)                   │
+  │  └── <span class="str">treble</span>  (2–20 kHz, bins 40–100%)                   │
+  └───────────────────────┬─────────────────────────────────┘
+                          │
+                          ▼
+  ┌─────────────────────────────────────────────────────────┐
+  │  <span class="fn">app.js</span> <span class="cm">drawVizThree()</span> — every frame                   │
+  │                                                         │
+  │  ┌─ Flight scene active? ──────────────────────────┐    │
+  │  │  YES: audio speed modulation <span class="kw">disabled</span>          │    │
+  │  │       EnvironmentMode + EffectsManager <span class="kw">skipped</span> │    │
+  │  │       stemData passed to trackScene.update()    │    │
+  │  │                                                 │    │
+  │  │  NO:  EnvironmentMode.update(bass,mid,treble)   │    │
+  │  │       EffectsManager.render(stemVizData)        │    │
+  │  └─────────────────────────────────────────────────┘    │
+  │                                                         │
+  │  Always: waveform viz, stem mixer levels, lyrics sync   │
+  └─────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+  ┌─────────────────────────────────────────────────────────┐
+  │  <span class="fn">buildFlightScene</span> <span class="cm">— the 3D world</span>                       │
+  │  ├── Preetham sky (sun rises with song progress)        │
+  │  ├── Star dome + moon + shooting stars                  │
+  │  ├── GPU-animated terrain (TSL vertex shader)           │
+  │  ├── Water chunks (if waterY &gt; -500)                    │
+  │  ├── Scenery (if sceneryDensity &gt; 0)                    │
+  │  ├── Bird model (GLTF, keyboard-controlled)             │
+  │  └── Fog (density fades as sun rises)                   │
+  └─────────────────────────────────────────────────────────┘</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 3: STEM PLAYER -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="stem-player">
+  <div class="section-label">Audio Engine</div>
+  <div class="section-title">Stem Player</div>
+
+  <div class="section-intro">
+    <code>stem-player.js</code> provides sample-accurate multi-stem playback.
+    All stems start at the exact same <code>AudioContext.currentTime</code> with
+    a 50ms scheduling offset for low-latency sync. Each stem gets its own
+    <code>AnalyserNode</code> for independent FFT analysis.
+  </div>
+
+  <div class="two-col">
+    <div class="card" style="border-top: 3px solid var(--bass);">
+      <h3>Loading Pipeline</h3>
+      <ul>
+        <li><strong>Priority order:</strong> drums, bass, vocals, synth, guitar, piano, keyboard, other, percussion, backing-vocals, fx, strings</li>
+        <li><strong>Concurrency:</strong> 3 stems loading simultaneously</li>
+        <li><strong>IndexedDB cache:</strong> DB <code>stem-player-cache</code>, store <code>audio-buffers</code>, keyed by URL</li>
+        <li><strong>Partial load event:</strong> emitted after first stem decoded</li>
+        <li><strong>Graceful degradation:</strong> works without IndexedDB</li>
+      </ul>
+    </div>
+
+    <div class="card" style="border-top: 3px solid var(--mid);">
+      <h3>FFT Analysis</h3>
+      <ul>
+        <li><strong>FFT size:</strong> 256 bins</li>
+        <li><strong>Smoothing:</strong> 0.8 (heavy)</li>
+        <li><span class="stem-dot" style="background:var(--bass)"></span><strong>Bass:</strong> 20–250 Hz &rarr; bins 0–10%</li>
+        <li><span class="stem-dot" style="background:var(--mid)"></span><strong>Mid:</strong> 250–2 kHz &rarr; bins 10–40%</li>
+        <li><span class="stem-dot" style="background:var(--treble)"></span><strong>Treble:</strong> 2–20 kHz &rarr; bins 40–100%</li>
+        <li><span class="stem-dot" style="background:var(--energy)"></span><strong>Energy:</strong> all bins averaged / 255</li>
+      </ul>
+    </div>
+
+    <div class="card" style="border-top: 3px solid var(--energy);">
+      <h3>MIDI Scheduling</h3>
+      <ul>
+        <li><strong>Format:</strong> Standard MIDI (MThd header validation)</li>
+        <li><strong>Parsing:</strong> noteOn/noteOff extraction with running status</li>
+        <li><strong>Timing:</strong> ticks &rarr; seconds via <code>60 / (bpm &times; division)</code></li>
+        <li><strong>Look-ahead:</strong> <code>getUpcomingMidiEvents(time, 4s)</code></li>
+        <li><strong>Event:</strong> <code>'midiNote'</code> &rarr; { type, time, note, velocity, channel, stemId }</li>
+      </ul>
+    </div>
+
+    <div class="card" style="border-top: 3px solid var(--beat);">
+      <h3>Events</h3>
+      <ul>
+        <li><code>'stemAnalysis'</code> &mdash; per-stem FFT data each frame</li>
+        <li><code>'midiNote'</code> &mdash; MIDI note events</li>
+        <li><code>'loaded'</code> &mdash; all stems decoded</li>
+        <li><code>'partialLoad'</code> &mdash; first stem ready</li>
+        <li><code>'progress'</code> &mdash; loading progress updates</li>
+        <li><code>'ended'</code> &mdash; all sources finished playback</li>
+        <li><code>'error'</code> &mdash; decode/fetch failures</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 4: FLIGHT ENGINE -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="flight-engine">
+  <div class="section-label">3D World</div>
+  <div class="section-title">Flight Engine</div>
+
+  <div class="section-intro">
+    <code>buildFlightScene()</code> in <code>track-scenes.js</code> is the universal scene
+    builder used by all tracks. It creates a flyable world with physically-based sky,
+    procedural terrain, and a controllable bird model. The scene is purely time-driven &mdash;
+    audio-reactive speed modulation is disabled when the flight scene is active.
+  </div>
+
+  <div class="card-grid">
+    <div class="card" style="border-top: 3px solid var(--sky);">
+      <h3>Preetham Sky</h3>
+      <p>Physically-based atmospheric scattering via TSL shader nodes. Sun position
+         is driven by song progress: elevation rises from &minus;5&deg; at track start
+         to +5&deg; at track end.</p>
+      <ul>
+        <li><strong>Uniforms:</strong> turbidity, rayleigh, mieCoefficient, mieDirectionalG, sunPosition, exposure</li>
+        <li><strong>Sun-linked lighting:</strong> sun color shifts warm orange &rarr; golden; intensity 0.1 &rarr; 1.7</li>
+        <li><strong>Tone mapping:</strong> ACESFilmic, exposure 0.15 (dark) &rarr; 1.0 (bright)</li>
+        <li><strong>Fog:</strong> density 0.0018 &rarr; ~0.0003 as sun rises; color warms with sunrise</li>
+      </ul>
+    </div>
+
+    <div class="card" style="border-top: 3px solid var(--star);">
+      <h3>Star Dome + Moon</h3>
+      <p>4600 stars painted onto a canvas texture mapped to a sphere.
+         Fades out as sun rises. Moon tracks opposite the sun (180&deg; azimuth offset).</p>
+      <ul>
+        <li><strong>Brightness:</strong> power-law distribution (most dim, few bright)</li>
+        <li><strong>Milky Way:</strong> concentrated band of faint stars</li>
+        <li><strong>Shooting stars:</strong> random chance per frame when darkness &gt; 0.3</li>
+        <li><strong>Moon:</strong> sprite with glow, opacity tracks starDarkness</li>
+        <li><strong>Tunable:</strong> 26+ parameters via scene-tuner.js (<span class="hotkey">T</span> key)</li>
+      </ul>
+    </div>
+
+    <div class="card" style="border-top: 3px solid var(--terrain);">
+      <h3>Bird Model &amp; Camera</h3>
+      <p>GLTF model loaded from <code>./models/fly-by-bird/scene.gltf</code>.
+         Rotation-based flight with bone animation for neck and body lean.</p>
+      <ul>
+        <li><strong>Forward speed:</strong> 0.25 (normal), 0.6 (double, hold <span class="hotkey">Space</span>)</li>
+        <li><strong>Yaw:</strong> <span class="hotkey">A</span>/<span class="hotkey">D</span> or <span class="hotkey">&larr;</span>/<span class="hotkey">&rarr;</span></li>
+        <li><strong>Pitch:</strong> <span class="hotkey">W</span>/<span class="hotkey">S</span> or <span class="hotkey">&uarr;</span>/<span class="hotkey">&darr;</span> (pitch-driven altitude)</li>
+        <li><strong>Flap lift:</strong> <span class="hotkey">Shift</span></li>
+        <li><strong>Altitude range:</strong> 2.0 (min) &ndash; 40.0 (max)</li>
+        <li><strong>Camera:</strong> third-person follow with look-ahead offset</li>
+      </ul>
+    </div>
+
+    <div class="card" style="border-top: 3px solid var(--water);">
+      <h3>Chunk System</h3>
+      <p>2D Map-based grid centered on the bird's position.
+         Terrain, water, and scenery chunks spawn/despawn as the bird moves.</p>
+      <ul>
+        <li><strong>Chunk size:</strong> 80 world units (configurable per theme)</li>
+        <li><strong>Chunk segments:</strong> 20&ndash;24 subdivisions</li>
+        <li><strong>Chunk range:</strong> 5 (circular culling radius)</li>
+        <li><strong>Maps:</strong> <code>terrainChunks</code>, <code>waterChunks</code>, <code>sceneryChunks</code> keyed by <code>"cx,cz"</code></li>
+        <li><strong>GPU animation:</strong> themes with <code>gpuAnimated: true</code> use TSL vertex shaders for real-time terrain deformation (e.g., ocean waves)</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="code-block" style="max-width: 900px;">
+<span class="cm">// Theme hot-swap via setTheme() — disposes old, rebuilds around bird</span>
+<span class="kw">return</span> {
+  group,
+  <span class="fn">setTheme</span>(themeName) {
+    <span class="cm">// 1. Dispose terrain/water/scenery materials + geometries</span>
+    <span class="cm">// 2. Clear all chunk Maps</span>
+    <span class="cm">// 3. Load new theme from TERRAIN_THEMES[themeName]</span>
+    <span class="cm">// 4. Recreate materials, update atmosphere/fog</span>
+    <span class="cm">// 5. Regenerate chunks around current bird position</span>
+  },
+  <span class="fn">update</span>(time, freq, amplitude, shipPos, shipSpeed, stemData) { ... },
+  <span class="fn">dispose</span>() { ... }
+};</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 5: TERRAIN THEMES -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="terrain">
+  <div class="section-label">Procedural Generation</div>
+  <div class="section-title">Terrain Themes</div>
+
+  <div class="section-intro">
+    <code>terrain-themes.js</code> defines <code>window.TERRAIN_THEMES</code> &mdash;
+    a per-track configuration that controls terrain shape, coloring, scenery,
+    atmosphere, and animation. Each theme is a plain object with functions and constants.
+  </div>
+
+  <div class="code-block" style="max-width: 1000px;">
+<span class="cm">// Terrain theme structure</span>
+{
+  <span class="prop">name</span>: <span class="str">"Track Name"</span>,
+  <span class="prop">chunkSize</span>: <span class="num">80</span>,    <span class="cm">// world units per chunk</span>
+  <span class="prop">chunkSegs</span>: <span class="num">20</span>,    <span class="cm">// mesh subdivisions per chunk</span>
+  <span class="prop">chunkRange</span>: <span class="num">5</span>,   <span class="cm">// visible radius in chunks</span>
+
+  <span class="fn">terrainHeight</span>(x, z, noise2D, fbm, time) { ... },  <span class="cm">// → height at world (x,z)</span>
+  <span class="fn">colorVertex</span>(h, slope, nPatch, nGrain, waterY) { ... },  <span class="cm">// → { r, g, b }</span>
+
+  <span class="prop">waterY</span>: <span class="num">2.5</span>,       <span class="cm">// water plane height (-999 = disabled)</span>
+  <span class="prop">waterColor</span>: <span class="num">0x1a5c6e</span>,
+  <span class="prop">waterOpacity</span>: <span class="num">0.6</span>,
+
+  <span class="prop">terrainMatProps</span>: { flatShading, roughness, metalness, emissiveIntensity },
+
+  <span class="prop">sceneryDensity</span>: <span class="num">8</span>,  <span class="cm">// objects per chunk (0 = none)</span>
+  <span class="fn">sceneryMaterials</span>(THREE) { ... },  <span class="cm">// optional</span>
+  <span class="fn">sceneryGeometries</span>(THREE) { ... }, <span class="cm">// optional</span>
+  <span class="fn">spawnSceneryObject</span>(x, z, h, waterY, rng, rng2, THREE, mats, geoms) { ... }, <span class="cm">// optional</span>
+
+  <span class="cm">// Atmosphere (Preetham sky defaults)</span>
+  <span class="prop">baseSunElevation</span>, <span class="prop">sunAzimuth</span>, <span class="prop">baseTurbidity</span>, <span class="prop">baseRayleigh</span>,
+  <span class="prop">baseMieCoefficient</span>, <span class="prop">baseMieDirectionalG</span>, <span class="prop">baseExposure</span>,
+  <span class="prop">fogColor</span>, <span class="prop">fogDensity</span>,
+
+  <span class="prop">animated</span>: <span class="kw">false</span>,     <span class="cm">// CPU vertex animation per frame</span>
+  <span class="prop">gpuAnimated</span>: <span class="kw">false</span>,  <span class="cm">// TSL vertex shader animation</span>
+  <span class="fn">createTerrainMaterial</span>(THREE, timeUniform) { ... }  <span class="cm">// returns NodeMaterial</span>
+}</div>
+
+  <table class="data-table">
+    <tr>
+      <th>Theme</th>
+      <th>Terrain</th>
+      <th>Scenery</th>
+      <th>Water</th>
+      <th>Animation</th>
+    </tr>
+    <tr>
+      <td>Terms &amp; Conditions</td>
+      <td>Multi-octave fBm mountains with ridge features and valley carving</td>
+      <td>Trees, pines, boulders, bushes (height-zoned)</td>
+      <td>Y=2.5, teal</td>
+      <td>None (static)</td>
+    </tr>
+    <tr>
+      <td>Data Tide</td>
+      <td>Pure ocean swells &mdash; sinusoidal waves + noise chop</td>
+      <td>None (water/sun/stars only)</td>
+      <td>Disabled (terrain IS the ocean)</td>
+      <td>GPU (TSL vertex shader)</td>
+    </tr>
+    <tr>
+      <td>Other tracks</td>
+      <td>Inherit from Terms &amp; Conditions (stub themes)</td>
+      <td>Same as T&amp;C</td>
+      <td>Y=2.5</td>
+      <td>None</td>
+    </tr>
+  </table>
+
+  <div style="max-width: 900px; margin: 30px auto;">
+    <h3 style="font-family: 'Outfit', sans-serif; color: #fff; margin-bottom: 16px;">Height Algorithm: Terms &amp; Conditions</h3>
+    <div class="formula">
+      h = base(<span class="num">0.5%</span> freq) &times; <span class="num">10</span>
+        + mid(<span class="num">1.5%</span>) &times; <span class="num">6</span>
+        + fine(<span class="num">4%</span>) &times; <span class="num">2.5</span>
+        + micro(<span class="num">12%</span>) &times; <span class="num">0.8</span>
+        + ridge(<span class="num">1 &minus; |fbm &minus; 0.5| &times; 2</span>)
+        &minus; valley_carving
+    </div>
+
+    <h3 style="font-family: 'Outfit', sans-serif; color: #fff; margin: 24px 0 16px;">Height Algorithm: Data Tide</h3>
+    <div class="formula">
+      h = swell(<span class="num">sin &times; cos &times; 3.0</span>)
+        + cross(<span class="num">diagonal sines &times; 2.0</span>)
+        + chop(<span class="num">noise2D &times; 1.5</span>)
+        + broad(<span class="num">slow sines &times; 2.0</span>)
+        &minus; <span class="num">2.0</span>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 6: ENVIRONMENTS -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="environments">
+  <div class="section-label">World Builder</div>
+  <div class="section-title">Environments</div>
+
+  <div class="section-intro">
+    <code>environments.js</code> provides the <code>EnvironmentMode</code> system &mdash;
+    an instanced-mesh world that runs alongside the flight scene (but its updates are
+    <strong>skipped</strong> when the flight scene is active). It maps each track to an
+    environment type and builds terrain, fog, scenery, and gates.
+    <br><br>
+    Note: When <code>buildFlightScene</code> activates, it hides environment visuals
+    (sky sphere, ground plane, instanced scenery, TSL terrain) and disables environment fog.
+  </div>
+
+  <div class="two-col">
+    <div>
+      <h3 style="font-family: 'Outfit', sans-serif; color: #fff; margin-bottom: 16px;">Environment Types</h3>
+      <table class="data-table">
+        <tr><th>Type</th><th>Scenery</th></tr>
+        <tr><td>ocean</td><td>coral (pink/cyan spheres), seaweed (cylinders)</td></tr>
+        <tr><td>meadow</td><td>flowers (stem + petal), grass blades (cones)</td></tr>
+        <tr><td>volcanic</td><td>dark rocks, lava glow spheres</td></tr>
+        <tr><td>cyber</td><td>towers (boxes), neon lines</td></tr>
+        <tr><td>ice</td><td>translucent crystal cones</td></tr>
+        <tr><td>savanna</td><td>trunks + canopy (acacia trees)</td></tr>
+        <tr><td>blossom</td><td>cherry trunks + blossom clusters</td></tr>
+        <tr><td>industrial</td><td>pipes, girders</td></tr>
+        <tr><td>ancient</td><td>pillars, stone blocks</td></tr>
+        <tr><td>desert</td><td>cacti, sand rocks</td></tr>
+      </table>
+    </div>
+
+    <div>
+      <h3 style="font-family: 'Outfit', sans-serif; color: #fff; margin-bottom: 16px;">Track &rarr; Environment</h3>
+      <table class="data-table">
+        <tr><th>Track</th><th>Environment</th></tr>
+        <tr><td>Data Tide</td><td>ocean</td></tr>
+        <tr><td>Soft Systems</td><td>meadow</td></tr>
+        <tr><td>Beast Mode</td><td>volcanic</td></tr>
+        <tr><td>Dreams Bleed Into Dashboards</td><td>cyber</td></tr>
+        <tr><td>Signal Integrity</td><td>ice</td></tr>
+        <tr><td>Trade You My Hands</td><td>blossom</td></tr>
+        <tr><td>Push Harder</td><td>industrial</td></tr>
+        <tr><td>The Last Dragon</td><td>ancient</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div style="max-width: 900px; margin: 30px auto;">
+    <h3 style="font-family: 'Outfit', sans-serif; color: #fff; margin-bottom: 16px;">Instanced Mesh Pools</h3>
+    <p style="font-size: 12px; margin-bottom: 12px;">
+      Each environment type pre-allocates <code>InstancedMesh</code> pools with shared
+      geometries and materials. Scenery spawns per-chunk by allocating from pools and
+      setting transform matrices. Despawning returns instances to the free list.
+    </p>
+
+    <h3 style="font-family: 'Outfit', sans-serif; color: #fff; margin: 24px 0 16px;">Chill Ride Gates</h3>
+    <p style="font-size: 12px; margin-bottom: 8px;">
+      Ring gates spawn ahead of the player. Flying through them awards points and flow.
+    </p>
+    <table class="data-table" style="max-width: 500px;">
+      <tr><th>Size</th><th>Radius</th><th>Score</th><th>Flow Boost</th></tr>
+      <tr><td>Large</td><td>9.0</td><td>25</td><td>Low</td></tr>
+      <tr><td>Medium</td><td>6.5</td><td>50</td><td>Medium</td></tr>
+      <tr><td>Small</td><td>4.5</td><td>100</td><td>High</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 7: EFFECTS -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="effects">
+  <div class="section-label">Visual FX</div>
+  <div class="section-title">Effects Manager</div>
+
+  <div class="section-intro">
+    <code>effects-manager.js</code> provides a centralized visual effects system
+    driven by per-stem audio data via manifest routing. Each stem declares a
+    <code>visualization.target</code> and <code>effect</code> in <code>manifest.json</code>.
+    <br><br>
+    <strong>Note:</strong> Effects are <em>disabled</em> when the flight scene is active.
+    They only run in the environment-mode rendering path.
+  </div>
+
+  <div class="card-grid">
+    <div class="card" style="border-top: 3px solid var(--energy);">
+      <h3>Lightning</h3>
+      <ul>
+        <li>5 pre-created bolt geometries (TubeGeometry, 15 segments)</li>
+        <li>Random-walk path from Y=30 to Y=&minus;5</li>
+        <li>Trigger: <code>band &gt; (1 &minus; freq) &times; 0.8</code> and cooldown &gt; 0.1s</li>
+        <li>Positioned &plusmn;40 units from ship</li>
+        <li>Fade: <code>opacity = intensity &times; (1 &minus; elapsed &times; 5)</code></li>
+      </ul>
+    </div>
+
+    <div class="card" style="border-top: 3px solid var(--mid);">
+      <h3>Aurora</h3>
+      <ul>
+        <li>PlaneGeometry ribbons (60&times;8, 50 segments)</li>
+        <li>Vertex colors: green &rarr; cyan &rarr; blue gradient</li>
+        <li>Per-ribbon phase offset for wave animation</li>
+        <li>Y oscillates with <code>sin(time &times; speed + phase)</code></li>
+        <li>Opacity: <code>0.3 &times; intensity</code></li>
+      </ul>
+    </div>
+
+    <div class="card" style="border-top: 3px solid var(--treble);">
+      <h3>God Rays</h3>
+      <ul>
+        <li>ConeGeometry (radius 3, height 40, open-ended)</li>
+        <li>Additive blending, low opacity</li>
+        <li>Positioned above ship, pointing down</li>
+        <li>Intensity driven by stem energy</li>
+      </ul>
+    </div>
+
+    <div class="card" style="border-top: 3px solid var(--beat);">
+      <h3>Particles</h3>
+      <ul>
+        <li>Points system with per-vertex velocities</li>
+        <li>Size and opacity modulated by audio</li>
+        <li>Burst mode on beat detection</li>
+        <li>Additive blending, size attenuation</li>
+      </ul>
+    </div>
+
+    <div class="card" style="border-top: 3px solid var(--bass);">
+      <h3>Screen Shake</h3>
+      <ul>
+        <li>Camera X/Y perturbation</li>
+        <li>Triggered on bass hits</li>
+        <li>Exponential decay</li>
+        <li>Configurable via <code>effectsConfig.visual.screenShake</code></li>
+      </ul>
+    </div>
+
+    <div class="card" style="border-top: 3px solid var(--sky);">
+      <h3>Stem Routing</h3>
+      <ul>
+        <li>Manifest declares per-stem: <code>target</code>, <code>effect</code>, <code>color</code></li>
+        <li>Targets: terrain, atmosphere, particles, background</li>
+        <li>Effects: impact, deformation, fog, pulse, burst, trails, glow</li>
+        <li>See <a href="audio-reactivity.html" style="color: var(--treble);">Audio Reactivity</a> doc for full details</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 8: BACKGROUNDS -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="backgrounds">
+  <div class="section-label">GPU Shaders</div>
+  <div class="section-title">TSL Backgrounds</div>
+
+  <div class="section-intro">
+    <code>backgrounds.js</code> provides 10 animated backgrounds using TSL
+    (Three.js Shading Language) &mdash; a node-based shader graph that compiles
+    to WGSL (WebGPU) or GLSL (WebGL). No hand-written shader strings.
+    All backgrounds share a common set of uniforms and audio-reactive helpers.
+  </div>
+
+  <div style="max-width: 900px; margin: 20px auto;">
+    <h3 style="font-family: 'Outfit', sans-serif; color: #fff; margin-bottom: 16px;">Shared Uniforms</h3>
+    <div class="code-block">
+<span class="prop">uTime</span>           <span class="cm">// elapsed time</span>
+<span class="prop">uColor1/2/3</span>     <span class="cm">// theme colors (from TRACK_THEMES.backgroundEffect)</span>
+<span class="prop">uAccent</span>         <span class="cm">// accent color</span>
+<span class="prop">uSpeed</span>          <span class="cm">// animation speed multiplier</span>
+<span class="prop">uIntensity</span>      <span class="cm">// visual intensity</span>
+<span class="prop">uScale</span>          <span class="cm">// pattern scale</span>
+<span class="prop">uAudioEnergy</span>    <span class="cm">// overall audio energy (0–1)</span>
+<span class="prop">uAudioBass</span>      <span class="cm">// bass band energy</span>
+<span class="prop">uAudioMid</span>       <span class="cm">// mid band energy</span>
+<span class="prop">uAudioTreble</span>    <span class="cm">// treble band energy</span>
+<span class="prop">uBeatPulse</span>      <span class="cm">// decaying beat pulse (0–1)</span>
+<span class="prop">uSunX/Y</span>        <span class="cm">// sun position (normalized)</span>
+<span class="prop">uSunSize/Color/Intensity</span>
+<span class="prop">uAudioReactivity</span> <span class="cm">// master multiplier for all audio effects</span></div>
+  </div>
+
+  <div style="max-width: 900px; margin: 20px auto;">
+    <h3 style="font-family: 'Outfit', sans-serif; color: #fff; margin-bottom: 16px;">Audio Helpers (TSL Functions)</h3>
+    <div class="code-block">
+<span class="fn">audioScale</span>(uv)     <span class="cm">// UV zoom: 1 &minus; bass&times;0.2 &minus; beat&times;0.15</span>
+<span class="fn">audioBrightness</span>()  <span class="cm">// 1 + beat&times;0.5 + energy&times;0.4</span>
+<span class="fn">beatGlow</span>(color,uv) <span class="cm">// center radial glow from beat pulse</span>
+<span class="fn">audioSaturate</span>(c)   <span class="cm">// boost color saturation by energy/beat</span></div>
+  </div>
+
+  <table class="data-table" style="max-width: 900px; margin: 24px auto;">
+    <tr>
+      <th>Background</th>
+      <th>Description</th>
+      <th>Key Technique</th>
+    </tr>
+    <tr><td style="color: var(--terrain)">topo</td><td>Topographic contour lines</td><td>fBm elevation &rarr; <code>fract()</code> contour bands</td></tr>
+    <tr><td style="color: var(--water)">ocean</td><td>Wave simulation</td><td>Layered sine waves (swell, cross, chop, broad)</td></tr>
+    <tr><td style="color: var(--beat)">nebula</td><td>Spiral clouds</td><td>Polar distortion + fBm cloud layers</td></tr>
+    <tr><td style="color: var(--mid)">matrix</td><td>Digital rain</td><td>Cell-based character spawning + column fade</td></tr>
+    <tr><td style="color: var(--mid)">aurora</td><td>Northern lights ribbons</td><td>4-layer sine ribbons with shimmer</td></tr>
+    <tr><td style="color: var(--bass)">forge</td><td>Molten heat shimmer</td><td>fBm distortion + heat color ramp</td></tr>
+    <tr><td style="color: var(--beat)">sakura</td><td>Soft petal patterns</td><td>Radial petal shapes + drift</td></tr>
+    <tr><td style="color: var(--treble)">circuit</td><td>Circuit board traces</td><td>Grid snapping + scanning line</td></tr>
+    <tr><td style="color: var(--sky)">glacier</td><td>Ice crystal formations</td><td>Voronoi-like crystalline fracture</td></tr>
+    <tr><td style="color: var(--energy)">savanna</td><td>Heat haze</td><td>Gradient banding with thermal distortion</td></tr>
+  </table>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 9: THEMES -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="themes">
+  <div class="section-label">Configuration</div>
+  <div class="section-title">Track Themes</div>
+
+  <div class="section-intro">
+    <code>themes.js</code> exports <code>window.TRACK_THEMES</code> &mdash; a per-track
+    configuration object that controls UI colors, 3D model, viz mode, background shader
+    selection, and all visual style parameters. The environment system reads this to
+    build the 3D world.
+  </div>
+
+  <div class="code-block" style="max-width: 1000px;">
+<span class="cm">// TRACK_THEMES entry structure</span>
+{
+  <span class="prop">name</span>: <span class="str">"Display Name"</span>,
+  <span class="prop">model</span>: <span class="str">"jellyfish"</span>,         <span class="cm">// 3D model ID from models.js</span>
+  <span class="prop">colorTheme</span>: <span class="str">"winamp41"</span>,     <span class="cm">// UI theme: "neo" | "midnight" | "winamp41"</span>
+  <span class="prop">vizMode</span>: <span class="str">"voyage"</span>,          <span class="cm">// visualization mode</span>
+  <span class="prop">vizParams</span>: {
+    <span class="prop">amplitude</span>: <span class="num">0.3</span>,          <span class="cm">// 0.3–2.5</span>
+    <span class="prop">speed</span>: <span class="num">1.0</span>,              <span class="cm">// 0.35–1.8</span>
+    <span class="prop">audioReactivity</span>: <span class="num">0.5</span>,    <span class="cm">// 0–1 (disabled for flight scenes)</span>
+    <span class="prop">zoom</span>: <span class="num">0.25</span>,             <span class="cm">// 0.25–0.55</span>
+    <span class="prop">smoothing</span>: <span class="num">0.15</span>,         <span class="cm">// 0.1–0.9</span>
+  },
+  <span class="prop">spotlightColor</span>: <span class="num">0x00bfff</span>,  <span class="cm">// accent lighting hex color</span>
+
+  <span class="prop">trackColors</span>: {
+    <span class="prop">floorPrimary</span>, <span class="prop">floorSecondary</span>,
+    <span class="prop">wallBase</span>, <span class="prop">wallAccent</span>,
+    <span class="prop">obstacle</span>, <span class="prop">boostPad</span>, <span class="prop">centerMarker</span>,
+    <span class="prop">fogColor</span>, <span class="prop">fogNear</span>, <span class="prop">fogFar</span>,
+    <span class="prop">ambientLight</span>, <span class="prop">ambientIntensity</span>
+  },
+
+  <span class="prop">visualStyle</span>: {
+    <span class="prop">wallStyle</span>: <span class="str">"solid"</span>,      <span class="cm">// solid | wireframe | energy | glass | glow</span>
+    <span class="prop">floorPattern</span>: <span class="str">"grid"</span>,    <span class="cm">// solid | grid | stripes | circuit | waves | hexagon</span>
+    <span class="prop">glowIntensity</span>: <span class="num">0.5</span>,
+    <span class="prop">particleType</span>: <span class="str">"bubbles"</span>, <span class="cm">// none | bubbles | sparks | dust | energy | embers | rain | snow</span>
+    <span class="prop">particleDensity</span>: <span class="num">0.5</span>,
+    <span class="prop">pulseWithBeat</span>: <span class="kw">true</span>,
+
+    <span class="prop">skyGradient</span>: [<span class="num">0x000510</span>, <span class="num">0x001830</span>],  <span class="cm">// [top, bottom]</span>
+
+    <span class="prop">backgroundEffect</span>: {
+      <span class="prop">type</span>: <span class="str">"ocean"</span>,       <span class="cm">// selects TSL background shader</span>
+      <span class="prop">color1/2/3</span>, <span class="prop">accent</span>,  <span class="cm">// shader palette</span>
+      <span class="prop">speed</span>, <span class="prop">intensity</span>, <span class="prop">scale</span>,
+      <span class="prop">sunX</span>, <span class="prop">sunY</span>, <span class="prop">sunSize</span>, <span class="prop">sunColor</span>, <span class="prop">sunIntensity</span>
+    },
+
+    <span class="prop">terrain</span>: {
+      <span class="prop">enabled</span>: <span class="kw">true</span>,
+      <span class="prop">scale</span>, <span class="prop">octaves</span>, <span class="prop">persistence</span>, <span class="prop">amplitude</span>, <span class="prop">baseHeight</span>,
+      <span class="prop">ridged</span>: <span class="kw">false</span>,
+      <span class="prop">colorByHeight</span>: <span class="kw">true</span>,
+      <span class="prop">lowColor</span>, <span class="prop">midColor</span>, <span class="prop">highColor</span>, <span class="prop">peakColor</span>
+    }
+  }
+}</div>
+
+  <div style="max-width: 900px; margin: 30px auto;">
+    <h3 style="font-family: 'Outfit', sans-serif; color: #fff; margin-bottom: 16px;">UI Color Themes</h3>
+    <div class="card-grid" style="grid-template-columns: repeat(3, 1fr);">
+      <div class="card" style="border-top: 3px solid #3cff6b;">
+        <h3 style="color: #3cff6b;">neo</h3>
+        <p>Green accent. Default dark UI with emerald highlights.</p>
+      </div>
+      <div class="card" style="border-top: 3px solid #ffb000;">
+        <h3 style="color: #ffb000;">winamp41</h3>
+        <p>Orange/amber accent. Retro Winamp-inspired warm tones.</p>
+      </div>
+      <div class="card" style="border-top: 3px solid #7c3cff;">
+        <h3 style="color: #7c3cff;">midnight</h3>
+        <p>Purple/magenta accent. Deep violet with pink highlights.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 10: UI & CONTROLS -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="ui">
+  <div class="section-label">Interface</div>
+  <div class="section-title">UI &amp; Controls</div>
+
+  <div class="two-col">
+    <div>
+      <h3 style="font-family: 'Outfit', sans-serif; color: #fff; margin-bottom: 16px;">Keyboard Shortcuts</h3>
+      <table class="data-table">
+        <tr><th>Key</th><th>Action</th></tr>
+        <tr><td><span class="hotkey">M</span></td><td>Mute / unmute</td></tr>
+        <tr><td><span class="hotkey">L</span></td><td>Toggle playlist (Library)</td></tr>
+        <tr><td><span class="hotkey">H</span></td><td>Hide / show control bar</td></tr>
+        <tr><td><span class="hotkey">F</span></td><td>Audio reactivity debug panel</td></tr>
+        <tr><td><span class="hotkey">T</span></td><td>Sun &amp; sky settings panel (scene-tuner)</td></tr>
+        <tr><td><span class="hotkey">Esc</span></td><td>Close playlist / debug panel</td></tr>
+      </table>
+
+      <h3 style="font-family: 'Outfit', sans-serif; color: #fff; margin: 24px 0 16px;">Flight Controls</h3>
+      <table class="data-table">
+        <tr><th>Key</th><th>Action</th></tr>
+        <tr><td><span class="hotkey">W</span> / <span class="hotkey">&uarr;</span></td><td>Pitch up (climb)</td></tr>
+        <tr><td><span class="hotkey">S</span> / <span class="hotkey">&darr;</span></td><td>Pitch down (dive)</td></tr>
+        <tr><td><span class="hotkey">A</span> / <span class="hotkey">&larr;</span></td><td>Yaw left</td></tr>
+        <tr><td><span class="hotkey">D</span> / <span class="hotkey">&rarr;</span></td><td>Yaw right</td></tr>
+        <tr><td><span class="hotkey">Shift</span></td><td>Flap (lift)</td></tr>
+        <tr><td><span class="hotkey">Space</span></td><td>Double speed</td></tr>
+      </table>
+    </div>
+
+    <div>
+      <h3 style="font-family: 'Outfit', sans-serif; color: #fff; margin-bottom: 16px;">Stem Mixer</h3>
+      <p style="font-size: 12px; margin-bottom: 12px;">
+        Five stem buttons (D B V S G) toggle mute/unmute per stem.
+        Each button shows a real-time energy level indicator via
+        <code>--level</code> CSS variable (0&ndash;1).
+      </p>
+      <table class="data-table">
+        <tr><th>Button</th><th>Stem</th></tr>
+        <tr><td><span style="color: var(--bass); font-weight: 700;">D</span></td><td>Drums</td></tr>
+        <tr><td><span style="color: var(--bass); font-weight: 700;">B</span></td><td>Bass</td></tr>
+        <tr><td><span style="color: var(--mid); font-weight: 700;">V</span></td><td>Vocals</td></tr>
+        <tr><td><span style="color: var(--treble); font-weight: 700;">S</span></td><td>Synth</td></tr>
+        <tr><td><span style="color: var(--energy); font-weight: 700;">G</span></td><td>Guitar</td></tr>
+      </table>
+
+      <h3 style="font-family: 'Outfit', sans-serif; color: #fff; margin: 24px 0 16px;">Waveform Visualizer</h3>
+      <p style="font-size: 12px;">
+        Dual-canvas system: <code>sunBackgroundCanvas</code> (sun position overlay)
+        beneath <code>waveformCanvas</code> (stacked stem energy).
+      </p>
+      <ul style="font-size: 12px; list-style: none; padding: 0; margin-top: 8px;">
+        <li>&bull; Per-stem energy history (400 slots per stem)</li>
+        <li>&bull; Fritsch-Carlson monotone cubic interpolation for smooth curves</li>
+        <li>&bull; Variance amplification: power law (&gamma;=2.0) relative to per-stem mean</li>
+        <li>&bull; Cumulative stacking: each stem's top = next stem's bottom</li>
+        <li>&bull; Draw order: drums, bass, vocals, synth, guitar</li>
+        <li>&bull; Muted stems render at &alpha;=0.12, active at &alpha;=0.65</li>
+        <li>&bull; Played portion bright, unplayed portion dimmed</li>
+      </ul>
+
+      <h3 style="font-family: 'Outfit', sans-serif; color: #fff; margin: 24px 0 16px;">Score &amp; Combo</h3>
+      <ul style="font-size: 12px; list-style: none; padding: 0;">
+        <li>&bull; Gate hits: small=100, medium=50, large=25 (base score)</li>
+        <li>&bull; Score = baseScore &times; comboMultiplier</li>
+        <li>&bull; Combo tiers: 2x (low), 3x (mid), 5x (high), 8x (max)</li>
+        <li>&bull; Rhythm sync: measures APM vs BPM harmonics (0.25x&ndash;4x)</li>
+        <li>&bull; Regularity: coefficient of variation of tap intervals</li>
+        <li>&bull; Per-track high scores stored in localStorage</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- SCROLL SPY -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+(function() {
+  const navLinks = document.querySelectorAll('nav a[href^="#"]');
+  const sections = [];
+  navLinks.forEach(link => {
+    const id = link.getAttribute('href').slice(1);
+    const el = document.getElementById(id);
+    if (el) sections.push({ el, link });
+  });
+
+  function onScroll() {
+    const scrollY = window.scrollY + 100;
+    let current = sections[0];
+    for (const s of sections) {
+      if (s.el.offsetTop <= scrollY) current = s;
+    }
+    navLinks.forEach(l => l.classList.remove('active'));
+    if (current) current.link.classList.add('active');
+  }
+
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+})();
+</script>
+
+</body>
+</html>

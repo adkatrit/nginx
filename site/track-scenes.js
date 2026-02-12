@@ -3928,9 +3928,21 @@ window.TrackScenes = (function() {
   // ═══════════════════════════════════════════════════════════════════════════
   // TEST - Simple Preetham sky + flying bird
   // ═══════════════════════════════════════════════════════════════════════════
-  function buildTest(THREE, scene, audioData) {
-    console.log('[Test] buildTest called');
+  function buildFlightScene(THREE, scene, audioData, themeName) {
+    console.log('[Flight] buildFlightScene called, theme:', themeName);
     const group = new THREE.Group();
+
+    // ── Theme system ──
+    const THEMES = window.TERRAIN_THEMES || {};
+    let activeTheme = THEMES[themeName] || THEMES["Terms & Conditions"] || Object.values(THEMES)[0];
+    if (!activeTheme) {
+      console.error('[Flight] No terrain themes available!');
+      return { group, update() {}, dispose() { scene.remove(group); } };
+    }
+    let CHUNK_SIZE = activeTheme.chunkSize || 80;
+    let CHUNK_SEGS = activeTheme.chunkSegs || 20;
+    let CHUNK_RANGE = activeTheme.chunkRange || 5;
+    let currentTime = 0;
 
     // Hide environment visuals — sky sphere, ground plane, scenery (rocks/cacti), effects
     const hiddenEffects = [];
@@ -3958,6 +3970,11 @@ window.TrackScenes = (function() {
         child.visible = false;
         hiddenEffects.push(child);
       }
+      // Hide environment audio-reactive terrain chunks (terrain.js TSL shaders)
+      if (child.isMesh && child.material?._tslUniforms) {
+        child.visible = false;
+        hiddenEffects.push(child);
+      }
     });
 
     // Kill environment fog — we want a clear day
@@ -3966,7 +3983,7 @@ window.TrackScenes = (function() {
     if (window.EnvironmentMode?.instance) {
       window.EnvironmentMode.instance.theme.fogNear = 99999;
       window.EnvironmentMode.instance.theme.fogFar = 100000;
-      console.log('[Test] Disabled environment fog');
+      console.log('[Flight] Disabled environment fog');
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -3974,10 +3991,10 @@ window.TrackScenes = (function() {
     // ═══════════════════════════════════════════════════════════════════════
     const TSL = window._TSL;
     if (!TSL) {
-      console.error('[Test] window._TSL not available! Preetham sky cannot be created.');
+      console.error('[Flight] window._TSL not available! Preetham sky cannot be created.');
       return { group, update() {}, dispose() { scene.remove(group); } };
     }
-    console.log('[Test] TSL available, building Preetham sky');
+    console.log('[Flight] TSL available, building Preetham sky');
     const {
       Fn, float, vec2, vec3, vec4, uniform,
       positionWorld, cameraPosition: tslCameraPosition,
@@ -3996,6 +4013,9 @@ window.TrackScenes = (function() {
       up: uniform(new THREE.Vector3(0, 1, 0)),
       exposure: uniform(0.5),
     };
+
+    // Time uniform for GPU-animated terrain (e.g. ocean waves in Data Tide)
+    const oceanTimeUniform = uniform(0);
 
     const preethamColorNode = Fn(() => {
       const worldPos = positionWorld;
@@ -4070,6 +4090,22 @@ window.TrackScenes = (function() {
         0, 1));
 
       retColor.assign(tslPow(retColor, vec3(1.0 / 2.2)));
+
+      // Night sky enhancement — natural deep-blue gradient + airglow when sun is below horizon
+      const sunDirUp = tslDot(sunDirection, upDir);
+      const nightFade = float(1).sub(smoothstep(float(-0.15), float(0.0), sunDirUp));
+      const skyAlt = tslClamp(tslDot(direction, upDir), float(0), float(1));
+      // Deep blue zenith → warm-grey horizon
+      const nightZenith = vec3(0.012, 0.012, 0.04);
+      const nightHoriz = vec3(0.03, 0.024, 0.022);
+      const nightGrad = mix(nightHoriz, nightZenith, tslPow(skyAlt, float(0.5)));
+      // Airglow band ~10° above horizon (real atmospheric phenomenon — faint green/amber)
+      // Use x*x instead of pow(x,2) — WGSL pow() is undefined for negative bases
+      const agDist = skyAlt.sub(float(0.17)).div(float(0.06));
+      const agStrength = tslExp(agDist.mul(agDist).negate());
+      const airglowCol = vec3(0.008, 0.013, 0.004).mul(agStrength);
+      retColor.addAssign(nightGrad.add(airglowCol).mul(nightFade));
+
       return vec4(retColor, 1);
     })();
 
@@ -4082,16 +4118,331 @@ window.TrackScenes = (function() {
     const skyGeom = new THREE.SphereGeometry(500, 32, 32);
     const sky = new THREE.Mesh(skyGeom, skyMat);
     group.add(sky);  // child of group so it auto-follows shipZ
-    console.log('[Test] Sky sphere added to group, radius=500, material side=BackSide');
+    console.log('[Flight] Sky sphere added to group, radius=500, material side=BackSide');
 
-    // Sun position (base values - tuner can override)
-    let baseSunElevation = -5;
-    let sunAzimuth = 0;
-    let baseTurbidity = 4;
-    let baseRayleigh = 3.5;
-    let baseMieCoefficient = 0.005;
-    let baseMieDirectionalG = 0.8;
-    let baseExposure = 0.05;
+    // ═══════════════════════════════════════════════════════════════════════
+    // NIGHT SKY DOME — stars, moon and milky way painted on a texture mapped
+    // to a sphere. Renders at infinite apparent distance (no parallax).
+    // ═══════════════════════════════════════════════════════════════════════
+    const STAR_MAP_W = 2048, STAR_MAP_H = 1024;
+    const starMapCanvas = document.createElement('canvas');
+    starMapCanvas.width = STAR_MAP_W;
+    starMapCanvas.height = STAR_MAP_H;
+    const smCtx = starMapCanvas.getContext('2d');
+
+    // Tunable star dome parameters (defaults match scene-tuner.js)
+    const starCfg = {
+      starCount: 4600, starBrtMin: 0.56, starBrtPow: 5.0,
+      starSizeMin: 0.1, starSizeMax: 2.1, starWarmth: 0.8,
+      brightCount: 35, brightSize: 1.0, brightAlpha: 1.0,
+      mwCount: 1400, mwBrt: 0.18, mwTilt: 63, mwAzimuth: 25, mwWidth: 0.12,
+      moonElev: 55, moonAz: 135, moonSize: 18, moonGlow: 3.0, moonBrt: 0.95,
+      domeOpacity: 0.15, fadePower: 4.1,
+    };
+
+    // Seeded PRNG so repaints with same params give identical star placement
+    function mulberry32(seed) {
+      return function() {
+        seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+        let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+      };
+    }
+
+    function paintStarDome(cfg) {
+      const rand = mulberry32(42);  // deterministic seed
+      const W = STAR_MAP_W, H = STAR_MAP_H;
+
+      // Helpers
+      function skyToPixel(theta, phi) {
+        return [theta / (Math.PI * 2) * W, phi / Math.PI * H];
+      }
+      function paintGlow(cx, cy, radius, r, g, b, alpha) {
+        const grad = smCtx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+        grad.addColorStop(0, `rgba(${r},${g},${b},${alpha})`);
+        grad.addColorStop(0.3, `rgba(${r},${g},${b},${alpha * 0.6})`);
+        grad.addColorStop(0.7, `rgba(${r},${g},${b},${alpha * 0.15})`);
+        grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+        smCtx.fillStyle = grad;
+        smCtx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
+      }
+
+      smCtx.clearRect(0, 0, W, H);
+      smCtx.fillStyle = '#000';
+      smCtx.fillRect(0, 0, W, H);
+
+      // ── Background stars ──
+      const sizeRange = cfg.starSizeMax - cfg.starSizeMin;
+      for (let i = 0; i < cfg.starCount; i++) {
+        const theta = rand() * Math.PI * 2;
+        const phi = Math.acos(-0.08 + rand() * 1.08);
+        const [px, py] = skyToPixel(theta, phi);
+
+        const brt = cfg.starBrtMin + Math.pow(rand(), cfg.starBrtPow) * (1 - cfg.starBrtMin);
+        const temp = rand() * cfg.starWarmth;
+        const sr = Math.round((1.0 - temp) * brt * 255);
+        const sg = Math.round((0.9 - temp * 0.33) * brt * 255);
+        const sb = Math.round((0.7 + temp) * brt * 255);
+        const size = cfg.starSizeMin + brt * sizeRange;
+
+        if (size < 1.2) {
+          smCtx.fillStyle = `rgba(${sr},${sg},${sb},${brt})`;
+          smCtx.fillRect(Math.round(px) - 0.5, Math.round(py) - 0.5, 1.5, 1.5);
+        } else {
+          paintGlow(px, py, size, sr, sg, sb, brt);
+        }
+      }
+
+      // ── Bright prominent stars ──
+      for (let i = 0; i < cfg.brightCount; i++) {
+        const theta = rand() * Math.PI * 2;
+        const phi = Math.acos(0.1 + rand() * 0.9);
+        const [px, py] = skyToPixel(theta, phi);
+
+        const spectral = rand();
+        let cr, cg, cb;
+        if (spectral < 0.2) { cr = 180; cg = 205; cb = 255; }
+        else if (spectral < 0.4) { cr = 255; cg = 242; cb = 204; }
+        else if (spectral < 0.55) { cr = 255; cg = 191; cb = 128; }
+        else if (spectral < 0.65) { cr = 255; cg = 140; cb = 102; }
+        else { cr = 242; cg = 242; cb = 255; }
+
+        const bSize = cfg.brightSize * (0.75 + rand() * 0.5);
+        paintGlow(px, py, bSize, cr, cg, cb, cfg.brightAlpha);
+        smCtx.fillStyle = `rgba(${cr},${cg},${cb},1.0)`;
+        smCtx.beginPath();
+        smCtx.arc(px, py, 0.8, 0, Math.PI * 2);
+        smCtx.fill();
+      }
+
+      // ── Milky Way band ──
+      if (cfg.mwCount > 0) {
+        const tiltRad = cfg.mwTilt * Math.PI / 180;
+        const azRad = cfg.mwAzimuth * Math.PI / 180;
+        const ct = Math.cos(tiltRad), st = Math.sin(tiltRad);
+        const ca = Math.cos(azRad), sa = Math.sin(azRad);
+
+        for (let i = 0; i < cfg.mwCount; i++) {
+          const mwAngle = rand() * Math.PI * 2;
+          const mwSpread = (rand() + rand() + rand() - 1.5) * cfg.mwWidth;
+          let mx = Math.cos(mwAngle), my = mwSpread, mz = Math.sin(mwAngle);
+
+          // Tilt around X
+          const rmy = my * ct - mz * st, rmz = my * st + mz * ct;
+          my = rmy; mz = rmz;
+          // Rotate around Y
+          const rmx = mx * ca + mz * sa;
+          mz = -mx * sa + mz * ca; mx = rmx;
+
+          const len = Math.sqrt(mx * mx + my * my + mz * mz);
+          mx /= len; my /= len; mz /= len;
+
+          const mwPhi = Math.acos(my);
+          const mwTheta = Math.atan2(mz, mx);
+          const mwThetaPos = mwTheta < 0 ? mwTheta + Math.PI * 2 : mwTheta;
+          const [mwPx, mwPy] = skyToPixel(mwThetaPos, mwPhi);
+
+          const distFromCenter = Math.min(1, Math.abs(mwSpread) / Math.max(0.01, cfg.mwWidth));
+          const densityNoise = Math.sin(mwAngle * 3 + 1.5) * 0.3 + Math.cos(mwAngle * 7) * 0.15 + 0.55;
+          const mwB = (cfg.mwBrt * 0.33 + rand() * cfg.mwBrt) * (1 - distFromCenter * 0.5) * densityNoise;
+
+          const mr = Math.round(mwB * 0.9 * 255);
+          const mg = Math.round(mwB * 0.92 * 255);
+          const mb = Math.round(mwB * 255);
+          smCtx.fillStyle = `rgba(${mr},${mg},${mb},${mwB})`;
+          smCtx.fillRect(Math.round(mwPx), Math.round(mwPy), 1.5, 1.5);
+        }
+      }
+
+    }
+
+    // Initial paint
+    paintStarDome(starCfg);
+
+    const starMapTexture = new THREE.CanvasTexture(starMapCanvas);
+    starMapTexture.magFilter = THREE.LinearFilter;
+    starMapTexture.minFilter = THREE.LinearMipmapLinearFilter;
+
+    const starDomeMat = new THREE.MeshBasicMaterial({
+      map: starMapTexture,
+      side: THREE.BackSide,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+      opacity: 0,
+    });
+    const starDomeGeom = new THREE.SphereGeometry(499, 48, 24);
+    const starDome = new THREE.Mesh(starDomeGeom, starDomeMat);
+    starDome.renderOrder = 1;
+    starDome.frustumCulled = false;
+    group.add(starDome);
+
+    // Repaint debounce for tuner interaction
+    let starRepaintTimer = 0;
+    function scheduleStarRepaint() {
+      clearTimeout(starRepaintTimer);
+      starRepaintTimer = setTimeout(() => {
+        paintStarDome(starCfg);
+        starMapTexture.needsUpdate = true;
+      }, 80);
+    }
+
+    // ── Moon sprite — separate from dome so it can track opposite the sun ──
+    function paintMoonCanvas(cfg) {
+      const mCanvas = document.createElement('canvas');
+      mCanvas.width = 128; mCanvas.height = 128;
+      const mc = mCanvas.getContext('2d');
+      const cx = 64, cy = 64, r = 22;
+
+      // Atmospheric glow
+      const glowR = r * cfg.moonGlow;
+      const glow = mc.createRadialGradient(cx, cy, r * 0.5, cx, cy, glowR);
+      glow.addColorStop(0, `rgba(200, 210, 240, ${0.3 * cfg.moonBrt})`);
+      glow.addColorStop(0.4, `rgba(180, 195, 230, ${0.12 * cfg.moonBrt})`);
+      glow.addColorStop(0.7, `rgba(140, 160, 210, ${0.03 * cfg.moonBrt})`);
+      glow.addColorStop(1, 'rgba(100, 130, 190, 0)');
+      mc.fillStyle = glow;
+      mc.fillRect(0, 0, 128, 128);
+
+      // Moon disc
+      const disc = mc.createRadialGradient(cx - 2, cy - 2, 0, cx, cy, r);
+      disc.addColorStop(0, `rgba(235, 235, 245, ${0.95 * cfg.moonBrt})`);
+      disc.addColorStop(0.7, `rgba(215, 215, 230, ${0.9 * cfg.moonBrt})`);
+      disc.addColorStop(1, `rgba(180, 185, 200, ${0.75 * cfg.moonBrt})`);
+      mc.beginPath(); mc.arc(cx, cy, r, 0, Math.PI * 2);
+      mc.fillStyle = disc; mc.fill();
+
+      // Mare features (relative to disc radius)
+      const mare = [
+        { dx: -0.22, dy: -0.17, r: 0.33, a: 0.18 },
+        { dx: 0.22,  dy: -0.28, r: 0.22, a: 0.15 },
+        { dx: -0.06, dy: 0.22,  r: 0.39, a: 0.12 },
+        { dx: 0.33,  dy: 0.11,  r: 0.17, a: 0.14 },
+        { dx: -0.33, dy: 0.17,  r: 0.17, a: 0.11 },
+      ];
+      for (const m of mare) {
+        const mx2 = cx + m.dx * r, my2 = cy + m.dy * r, mr2 = m.r * r;
+        const mg = mc.createRadialGradient(mx2, my2, 0, mx2, my2, mr2);
+        mg.addColorStop(0, `rgba(90, 95, 115, ${m.a * cfg.moonBrt})`);
+        mg.addColorStop(0.7, `rgba(90, 95, 115, ${m.a * 0.4 * cfg.moonBrt})`);
+        mg.addColorStop(1, 'rgba(90, 95, 115, 0)');
+        mc.fillStyle = mg;
+        mc.fillRect(mx2 - mr2, my2 - mr2, mr2 * 2, mr2 * 2);
+      }
+      return mCanvas;
+    }
+
+    let moonTexture = new THREE.CanvasTexture(paintMoonCanvas(starCfg));
+    const moonMat = new THREE.SpriteMaterial({
+      map: moonTexture,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const moon = new THREE.Sprite(moonMat);
+    moon.renderOrder = 1;
+    moon.visible = false;
+    group.add(moon);
+
+    // Pre-allocated vector for moon positioning
+    const _moonPos = new THREE.Vector3();
+
+    function updateMoonSprite() {
+      const scale = starCfg.moonSize * 3;
+      moon.scale.set(scale, scale, 1);
+    }
+    updateMoonSprite();
+
+    function repaintMoon() {
+      moonTexture.dispose();
+      moonTexture = new THREE.CanvasTexture(paintMoonCanvas(starCfg));
+      moonMat.map = moonTexture;
+      moonMat.needsUpdate = true;
+      updateMoonSprite();
+    }
+
+    console.log('[Flight] Star dome texture (%dx%d) + moon sprite ready', STAR_MAP_W, STAR_MAP_H);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // SHOOTING STARS — audio-reactive, triggered by drum hits
+    // ═══════════════════════════════════════════════════════════════════════
+    const SHOOTING_POOL = 3;
+    const SHOOTING_TRAIL = 10;
+    const shootingStars = [];
+
+    for (let si = 0; si < SHOOTING_POOL; si++) {
+      const positions = new Float32Array(SHOOTING_TRAIL * 3);
+      const colors = new Float32Array(SHOOTING_TRAIL * 3);
+      const geom = new THREE.BufferGeometry();
+      geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+      const mat = new THREE.LineBasicMaterial({
+        vertexColors: true,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        toneMapped: false,
+      });
+
+      const line = new THREE.Line(geom, mat);
+      line.visible = false;
+      line.frustumCulled = false;
+      line.renderOrder = 2;
+      group.add(line);
+
+      shootingStars.push({
+        active: false, progress: 0,
+        startPos: new THREE.Vector3(),
+        direction: new THREE.Vector3(),
+        speed: 0,
+        line, geom, mat,
+      });
+    }
+
+    function launchShootingStar() {
+      const star = shootingStars.find(s => !s.active);
+      if (!star) return;
+
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.random() * Math.PI * 0.35; // upper sky
+      const r = 480;
+
+      star.startPos.set(
+        r * Math.sin(phi) * Math.cos(theta),
+        r * Math.cos(phi),
+        r * Math.sin(phi) * Math.sin(theta)
+      );
+
+      // Direction tangent to sphere with slight downward drift
+      const radial = star.startPos.clone().normalize();
+      const arbitrary = Math.abs(radial.y) < 0.9
+        ? new THREE.Vector3(0, 1, 0)
+        : new THREE.Vector3(1, 0, 0);
+      const tangent = new THREE.Vector3().crossVectors(radial, arbitrary).normalize();
+      tangent.y -= 0.3;
+      tangent.normalize();
+
+      star.direction.copy(tangent);
+      star.speed = 180 + Math.random() * 120;
+      star.progress = 0;
+      star.active = true;
+      star.line.visible = true;
+    }
+
+    let lastStarTime = 0;
+
+    // Sun position (base values from theme - tuner can override)
+    let baseSunElevation = activeTheme.baseSunElevation;
+    let sunAzimuth = activeTheme.sunAzimuth;
+    let baseTurbidity = activeTheme.baseTurbidity;
+    let baseRayleigh = activeTheme.baseRayleigh;
+    let baseMieCoefficient = activeTheme.baseMieCoefficient;
+    let baseMieDirectionalG = activeTheme.baseMieDirectionalG;
+    let baseExposure = activeTheme.baseExposure;
 
     const sunPos = new THREE.Vector3();
     const phi = (90 - baseSunElevation) * Math.PI / 180;
@@ -4117,7 +4468,7 @@ window.TrackScenes = (function() {
     scene.add(hemiLight);
 
     // Fog starts thin, dissipates as sun rises
-    scene.fog = new THREE.FogExp2(0x0a0a14, 0.0018);
+    scene.fog = new THREE.FogExp2(activeTheme.fogColor, activeTheme.fogDensity);
 
     // ═══════════════════════════════════════════════════════════════════════
     // NOISE — hash-based 2D value noise + fBm
@@ -4150,52 +4501,38 @@ window.TrackScenes = (function() {
     // ═══════════════════════════════════════════════════════════════════════
     // TERRAIN — noise-based mountains, valleys & water
     // ═══════════════════════════════════════════════════════════════════════
-    const CHUNK_SIZE = 80, CHUNK_SEGS = 20, CHUNK_RANGE = 5;
-    const WATER_Y = -6;
+    // Chunk constants come from activeTheme (updated by setTheme)
+    // CHUNK_SIZE, CHUNK_SEGS, CHUNK_RANGE declared at top of function
     const terrainChunks = new Map();  // "cx,cz" → { mesh }
     const waterChunks = new Map();
     const sceneryChunks = new Map();
 
     function terrainHeight(x, z) {
-      // Rolling hills everywhere — multiple octaves
-      const base = (fbm(x * 0.005, z * 0.005, 6) - 0.5) * 2;       // broad landscape
-      const mid = (fbm(x * 0.015 + 37, z * 0.012 + 19, 4) - 0.5) * 2;  // medium hills
-      const fine = (fbm(x * 0.04 + 100, z * 0.04 + 80, 3) - 0.5) * 2;  // bumps & texture
-      const micro = (fbm(x * 0.12 + 200, z * 0.12 + 150, 2) - 0.5) * 2; // fine roughness
-
-      // Ridge features — abs of noise gives sharp creases
-      const ridge = 1 - Math.abs(fbm(x * 0.008 + 100, z * 0.006 + 50, 4) - 0.5) * 2;
-
-      // Noise-driven mountain field — mountains appear naturally in all directions
-      const mountainNoise = fbm(x * 0.003 + 500, z * 0.003 + 500, 3);
-      const mountainScale = clamp((mountainNoise - 0.4) / 0.3, 0, 1);
-      const valleyScale = 1 - mountainScale;
-
-      let h = base * 10                               // broad rolling everywhere
-            + mid * 6 * (0.4 + valleyScale * 0.6)     // medium hills (stronger in valleys)
-            + fine * 2.5                               // bumps everywhere
-            + micro * 0.8                              // fine roughness everywhere
-            + ridge * mountainScale * 50               // tall ridges in mountain regions
-            + mountainScale * base * 25;               // mountain mass
-
-      // Occasional deeper valleys that can hold water
-      const valleyNoise = fbm(x * 0.007 + 300, z * 0.007 + 250, 3);
-      if (valleyNoise < 0.35) {
-        const depth = (0.35 - valleyNoise) / 0.35; // 0 at edge, 1 at deepest
-        h -= depth * depth * 12;
-      }
-
-      return h;
+      return activeTheme.terrainHeight(x, z, noise2D, fbm, currentTime);
     }
 
-    const terrainMat = new THREE.MeshStandardMaterial({
-      vertexColors: true, flatShading: true, roughness: 0.85, metalness: 0.05,
-      emissiveIntensity: 0.12, emissive: new THREE.Color(0xffffff),  // slight self-illumination so colors read in dusk light
-    });
+    let terrainMat = null;
+    if (activeTheme.gpuAnimated && activeTheme.createTerrainMaterial) {
+      terrainMat = activeTheme.createTerrainMaterial(THREE, oceanTimeUniform);
+    }
+    if (!terrainMat) {
+      terrainMat = new THREE.MeshStandardMaterial({
+        vertexColors: true,
+        flatShading: activeTheme.terrainMatProps.flatShading,
+        roughness: activeTheme.terrainMatProps.roughness,
+        metalness: activeTheme.terrainMatProps.metalness,
+        emissiveIntensity: activeTheme.terrainMatProps.emissiveIntensity,
+        emissive: new THREE.Color(0xffffff),
+      });
+    }
 
-    const waterMat = new THREE.MeshStandardMaterial({
-      color: 0x1a5c6e, transparent: true, opacity: 0.6,
-      roughness: 0.05, metalness: 0.4, side: THREE.DoubleSide,
+    let waterMat = new THREE.MeshStandardMaterial({
+      color: activeTheme.waterColor,
+      transparent: true,
+      opacity: activeTheme.waterOpacity,
+      roughness: activeTheme.waterRoughness,
+      metalness: activeTheme.waterMetalness,
+      side: THREE.DoubleSide,
     });
 
     function spawnTerrainChunk(cx, cz) {
@@ -4216,77 +4553,13 @@ window.TrackScenes = (function() {
         const slope = Math.sqrt((hx - h) * (hx - h) + (hz - h) * (hz - h));
 
         // Two noise frequencies — coarse patches + fine grain
-        const n1 = fbm(wx * 0.02 + 200, wz * 0.02 + 200, 2);  // large patches
-        const n2 = fbm(wx * 0.1 + 500, wz * 0.1 + 500, 2);    // fine grain
-        const nPatch = (n1 - 0.5) * 2;  // -1 to 1
+        const n1 = fbm(wx * 0.02 + 200, wz * 0.02 + 200, 2);
+        const n2 = fbm(wx * 0.1 + 500, wz * 0.1 + 500, 2);
+        const nPatch = (n1 - 0.5) * 2;
         const nGrain = (n2 - 0.5) * 2;
 
-        let r, g, b;
-        if (h < WATER_Y - 2) {
-          // Deep underwater — dark silt / clay
-          r = 0.18 + nGrain * 0.06;
-          g = 0.14 + nGrain * 0.05;
-          b = 0.10 + nPatch * 0.04;
-        } else if (h < WATER_Y + 1) {
-          // Shoreline — wet sand/mud, patchy
-          r = 0.42 + nPatch * 0.12 + nGrain * 0.06;
-          g = 0.32 + nPatch * 0.08 + nGrain * 0.04;
-          b = 0.18 + nPatch * 0.05;
-        } else if (h < 3) {
-          // Low grass — lush, patchy greens
-          const t = (h - WATER_Y) / (3 - WATER_Y);
-          r = 0.12 + nPatch * 0.08 + t * 0.06;
-          g = 0.42 + nPatch * 0.15 + nGrain * 0.08 + t * 0.08;
-          b = 0.08 + nPatch * 0.04;
-          // Random dirt patches
-          if (nPatch > 0.4) {
-            r += 0.18; g -= 0.12; b += 0.03;
-          }
-        } else if (h < 15) {
-          // Mid grass → dry scrub, more varied
-          const t = (h - 3) / 12;
-          r = 0.22 + t * 0.30 + nPatch * 0.12 + nGrain * 0.06;
-          g = 0.50 - t * 0.22 + nPatch * 0.10 + nGrain * 0.05;
-          b = 0.10 + t * 0.06 + nGrain * 0.03;
-          // Patchy dry yellow areas
-          if (nPatch > 0.3) {
-            r += 0.12 * t; g += 0.05 * t; b -= 0.02;
-          }
-        } else if (h < 35) {
-          // Rock — grey/brown with lichen patches
-          const t = Math.min(1, (h - 15) / 20 + slope * 0.12);
-          r = 0.45 + t * 0.10 + nPatch * 0.10 + nGrain * 0.06;
-          g = 0.40 + t * 0.08 + nPatch * 0.08 + nGrain * 0.05;
-          b = 0.32 + t * 0.12 + nPatch * 0.06 + nGrain * 0.04;
-          // Greenish lichen patches on rock
-          if (nPatch < -0.3) {
-            g += 0.10; r -= 0.05;
-          }
-        } else {
-          // Snow / ice caps — not pure white, has blue/grey variation
-          const t = Math.min(1, (h - 35) / 15);
-          r = 0.75 + t * 0.15 + nGrain * 0.05;
-          g = 0.78 + t * 0.12 + nGrain * 0.04;
-          b = 0.82 + t * 0.10 + nPatch * 0.06;
-        }
-
-        // Steep slopes → exposed rock regardless of height
-        if (slope > 1.5 && h > WATER_Y + 1) {
-          const rockBlend = Math.min(1, (slope - 1.5) / 3);
-          const rr = 0.48 + nPatch * 0.08 + nGrain * 0.05;
-          const rg = 0.42 + nPatch * 0.06 + nGrain * 0.04;
-          const rb = 0.36 + nPatch * 0.05 + nGrain * 0.03;
-          r = r * (1 - rockBlend) + rr * rockBlend;
-          g = g * (1 - rockBlend) + rg * rockBlend;
-          b = b * (1 - rockBlend) + rb * rockBlend;
-        }
-
-        // Clamp
-        r = Math.max(0, Math.min(1, r));
-        g = Math.max(0, Math.min(1, g));
-        b = Math.max(0, Math.min(1, b));
-
-        colors[i * 3] = r; colors[i * 3 + 1] = g; colors[i * 3 + 2] = b;
+        const c = activeTheme.colorVertex(h, slope, nPatch, nGrain, activeTheme.waterY);
+        colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
       }
 
       geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
@@ -4303,110 +4576,28 @@ window.TrackScenes = (function() {
     // WATER — flat plane at WATER_Y, fills valleys naturally
     // ═══════════════════════════════════════════════════════════════════════
     function spawnWaterChunk(cx, cz) {
+      if (activeTheme.waterY <= -500) return;  // water disabled for this theme
       const geom = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, 1, 1);
       geom.rotateX(-Math.PI / 2);
       const mesh = new THREE.Mesh(geom, waterMat);
-      mesh.position.set(cx * CHUNK_SIZE, WATER_Y, cz * CHUNK_SIZE);
+      mesh.position.set(cx * CHUNK_SIZE, activeTheme.waterY, cz * CHUNK_SIZE);
       mesh.receiveShadow = true;
       scene.add(mesh);
       waterChunks.set(`${cx},${cz}`, { mesh });
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // SCENERY — trees, boulders, grass clumps
+    // SCENERY — theme-driven materials, geometries, spawning
     // ═══════════════════════════════════════════════════════════════════════
-    // Shared materials
-    const treeTrunkMat = new THREE.MeshStandardMaterial({ color: 0x5c3a1e, roughness: 0.9 });
-    const treeLeafMat = new THREE.MeshStandardMaterial({ color: 0x2d6b2e, roughness: 0.8, emissive: 0x0a1a0a, emissiveIntensity: 0.15 });
-    const treeLeafDarkMat = new THREE.MeshStandardMaterial({ color: 0x1e4d20, roughness: 0.8, emissive: 0x0a150a, emissiveIntensity: 0.15 });
-    const pineLeafMat = new THREE.MeshStandardMaterial({ color: 0x1a4a2a, roughness: 0.7, emissive: 0x081408, emissiveIntensity: 0.15 });
-    const boulderMat = new THREE.MeshStandardMaterial({ color: 0x6b6b6b, roughness: 0.95, emissive: 0x111111, emissiveIntensity: 0.08 });
-    const bushMat = new THREE.MeshStandardMaterial({ color: 0x3a7a3a, roughness: 0.85, emissive: 0x0a1a0a, emissiveIntensity: 0.15 });
-    const sceneryMats = [treeTrunkMat, treeLeafMat, treeLeafDarkMat, pineLeafMat, boulderMat, bushMat];
-
-    // Shared geometries
-    const trunkGeom = new THREE.CylinderGeometry(0.15, 0.25, 1, 6);
-    const canopyGeom = new THREE.SphereGeometry(1, 6, 5);
-    const coneGeom = new THREE.ConeGeometry(1, 1, 6);
-    const boulderGeom = new THREE.DodecahedronGeometry(1, 1);
-    const bushGeom = new THREE.SphereGeometry(1, 5, 4);
-    const sceneryGeoms = [trunkGeom, canopyGeom, coneGeom, boulderGeom, bushGeom];
-
-    function makeTree(x, z, h, rng) {
-      const treeGroup = new THREE.Group();
-      const trunkH = 2 + rng * 2;
-      const trunk = new THREE.Mesh(trunkGeom, treeTrunkMat);
-      trunk.scale.set(1, trunkH, 1);
-      trunk.position.set(0, trunkH / 2, 0);
-      trunk.castShadow = true;
-      treeGroup.add(trunk);
-
-      const canopySize = 1.5 + rng * 1.5;
-      const leafMat = rng > 0.5 ? treeLeafMat : treeLeafDarkMat;
-      const canopy = new THREE.Mesh(canopyGeom, leafMat);
-      canopy.scale.setScalar(canopySize);
-      canopy.position.set((rng - 0.5) * 0.5, trunkH + canopySize * 0.6, 0);
-      canopy.castShadow = true;
-      treeGroup.add(canopy);
-
-      treeGroup.position.set(x, h, z);
-      treeGroup.rotation.y = rng * Math.PI * 2;
-      return treeGroup;
-    }
-
-    function makePine(x, z, h, rng) {
-      const pineGroup = new THREE.Group();
-      const trunkH = 3 + rng * 3;
-      const trunk = new THREE.Mesh(trunkGeom, treeTrunkMat);
-      trunk.scale.set(0.8, trunkH, 0.8);
-      trunk.position.set(0, trunkH / 2, 0);
-      trunk.castShadow = true;
-      pineGroup.add(trunk);
-
-      // Stack of cones
-      const layers = 2 + Math.floor(rng * 2);
-      for (let l = 0; l < layers; l++) {
-        const layerSize = (1.8 - l * 0.3) * (0.8 + rng * 0.4);
-        const layerH = 2 * layerSize;
-        const cone = new THREE.Mesh(coneGeom, pineLeafMat);
-        cone.scale.set(layerSize, layerH, layerSize);
-        cone.position.set(0, trunkH * 0.5 + l * layerH * 0.5 + layerH / 2, 0);
-        cone.castShadow = true;
-        pineGroup.add(cone);
-      }
-
-      pineGroup.position.set(x, h, z);
-      pineGroup.rotation.y = rng * Math.PI * 2;
-      return pineGroup;
-    }
-
-    function makeBoulder(x, z, h, rng) {
-      const size = 0.5 + rng * 2;
-      const boulder = new THREE.Mesh(boulderGeom, boulderMat);
-      boulder.scale.set(size * (0.8 + rng * 0.4), size * (0.6 + rng * 0.4), size * (0.8 + rng * 0.4));
-      boulder.position.set(x, h + size * 0.2, z);
-      boulder.rotation.set(rng * 0.5, rng * Math.PI, rng * 0.3);
-      boulder.castShadow = true;
-      boulder.receiveShadow = true;
-      return boulder;
-    }
-
-    function makeBush(x, z, h, rng) {
-      const size = 0.4 + rng * 0.8;
-      const bush = new THREE.Mesh(bushGeom, bushMat);
-      bush.scale.set(size * (0.8 + rng * 0.5), size * (0.6 + rng * 0.3), size * (0.8 + rng * 0.5));
-      bush.position.set(x, h + size * 0.15, z);
-      bush.castShadow = true;
-      return bush;
-    }
+    let sceneryMats = activeTheme.sceneryMaterials ? activeTheme.sceneryMaterials(THREE) : {};
+    let sceneryGeoms = activeTheme.sceneryGeometries ? activeTheme.sceneryGeometries(THREE) : {};
 
     function spawnSceneryChunk(cx, cz) {
       const objects = [];
-      // Deterministic pseudo-random per chunk based on position
       const seed = Math.abs(cx * 374761 + cz * 668265) % 100000;
+      const density = activeTheme.sceneryDensity != null ? activeTheme.sceneryDensity : 8;
 
-      for (let i = 0; i < 8; i++) {
-        // Deterministic random from seed + index
+      for (let i = 0; i < density; i++) {
         const s = _hash(seed + i * 3, seed + i * 7 + 1000);
         const s2 = _hash(seed + i * 5 + 500, seed + i * 11 + 2000);
         const s3 = _hash(seed + i * 13 + 800, seed + i * 17 + 3000);
@@ -4415,26 +4606,9 @@ window.TrackScenes = (function() {
         const z = (s2 - 0.5) * CHUNK_SIZE * 0.9 + cz * CHUNK_SIZE;
         const h = terrainHeight(x, z);
 
-        // Skip if underwater
-        if (h < WATER_Y + 0.5) continue;
-
-        let obj;
-        if (h > 20) {
-          // High altitude: boulders and occasional pine
-          if (s3 < 0.6) obj = makeBoulder(x, z, h, s3);
-          else obj = makePine(x, z, h, s3);
-        } else if (h > 5) {
-          // Mid altitude: pines and boulders
-          if (s3 < 0.35) obj = makePine(x, z, h, s3);
-          else if (s3 < 0.55) obj = makeBoulder(x, z, h, s3);
-          else obj = makeBush(x, z, h, s3);
-        } else {
-          // Low: deciduous trees, bushes
-          if (s3 < 0.3) obj = makeTree(x, z, h, s3);
-          else if (s3 < 0.55) obj = makeBush(x, z, h, s3);
-          else if (s3 < 0.7) obj = makePine(x, z, h, s3);
-          else obj = makeBoulder(x, z, h, s3);
-        }
+        if (!activeTheme.spawnSceneryObject) continue;
+        const obj = activeTheme.spawnSceneryObject(x, z, h, activeTheme.waterY, s, s3, THREE, sceneryMats, sceneryGeoms);
+        if (!obj) continue;
 
         scene.add(obj);
         objects.push(obj);
@@ -4481,62 +4655,64 @@ window.TrackScenes = (function() {
     // ═══════════════════════════════════════════════════════════════════════
     // BIRD - fly-by style rotation-based flight
     // ═══════════════════════════════════════════════════════════════════════
-    let bird = null;
+    let bird = null;       // movement container (position, yaw)
+    let birdModel = null;  // visual model inside bird (pitch applied here)
     let birdMixer = null;
     let birdAction = null;
     let wasFlapping = false;
     let charNeck = null;
     let charBody = null;
+    let birdPitch = 0;     // current whole-body pitch (+ = nose down, - = nose up)
 
     import('three/addons/loaders/GLTFLoader.js').then(({ GLTFLoader }) => {
       const loader = new GLTFLoader();
       loader.load('./models/fly-by-bird/scene.gltf', (gltf) => {
-        bird = gltf.scene;
-        bird.scale.setScalar(0.9);
-        bird.position.set(0, 25, 0);
-        bird.traverse(child => {
+        birdModel = gltf.scene;
+        birdModel.scale.setScalar(0.9);
+        birdModel.traverse(child => {
           if (child.isMesh) {
             child.castShadow = true;
             child.receiveShadow = true;
           }
         });
-        charNeck = bird.getObjectByName('Neck_Armature') || null;
-        charBody = bird.getObjectByName('Armature_rootJoint') || null;
+        // Wrap model in a movement container — pitch goes on birdModel,
+        // position/yaw go on bird. This keeps dive angle visual-only.
+        bird = new THREE.Group();
+        bird.position.set(0, 25, 0);
+        bird.add(birdModel);
+        charNeck = birdModel.getObjectByName('Neck_Armature') || null;
+        charBody = birdModel.getObjectByName('Armature_rootJoint') || null;
         scene.add(bird);
 
         if (gltf.animations && gltf.animations.length > 0) {
-          birdMixer = new THREE.AnimationMixer(bird);
+          birdMixer = new THREE.AnimationMixer(birdModel);
           birdAction = birdMixer.clipAction(gltf.animations[0]);
           birdAction.play();
           birdAction.fadeOut(0.01);
         }
-        console.log('[Test] Bird loaded (fly-by rotation mode)');
+        console.log('[Flight] Bird loaded (fly-by rotation mode)');
       });
-    }).catch(err => console.warn('[Test] Could not load bird:', err));
+    }).catch(err => console.warn('[Flight] Could not load bird:', err));
 
     scene.add(group);
 
 
-    console.log('[Test] Sun position:', sunPos.x.toFixed(3), sunPos.y.toFixed(3), sunPos.z.toFixed(3));
-    console.log('[Test] Sky sphere radius: 500, camera far should be >= 500');
-    console.log('[Test] Scene children:', scene.children.length);
+    console.log('[Flight] Sun position:', sunPos.x.toFixed(3), sunPos.y.toFixed(3), sunPos.z.toFixed(3));
+    console.log('[Flight] Sky sphere radius: 500, camera far should be >= 500');
+    console.log('[Flight] Scene children:', scene.children.length);
 
     // ═══════════════════════════════════════════════════════════════════════
     // STATE
     // ═══════════════════════════════════════════════════════════════════════
-    let smoothVocal = 0;
-    let smoothDrum = 0;
-
     // Fly-by rotation state (matches github.com/jessehhydee/fly-by)
     let charRotateYIncrement = 0;
-    let charPosYIncrement = 0;
+    // charPosYIncrement removed — altitude is now driven by birdPitch
     const FLY = {
       forwardSpeed: 0.25,
       doubleSpeed: 0.6,
       rotateYMax: 0.0015,
       rotateYAccel: 0.000075,
-      posYAccel: 0.0025,
-      posYMax: 0.045,
+      pitchAltScale: 2.0,   // multiplier for pitch-driven altitude change
       minY: 2,
       maxY: 90,
       neckYStep: 0.018, neckYMax: 0.7,
@@ -4548,6 +4724,12 @@ window.TrackScenes = (function() {
       camY: 7,
       camZ: -10,
       lookAtZ: 15,
+      // Whole-body pitch for dive/climb
+      divePitchMax: 0.55,     // ~32° nose-down — steep hawk dive
+      divePitchStep: 0.018,   // fast tilt into dive
+      climbPitchMax: 0.22,    // ~13° nose-up — gentler climb
+      climbPitchStep: 0.010,  // slower tilt into climb
+      pitchReturn: 0.025,     // how fast pitch returns to level
     };
     let isDoubleSpeed = false;
     let lookAtPosZ = FLY.lookAtZ;
@@ -4564,6 +4746,38 @@ window.TrackScenes = (function() {
     const onBirdKeyUp = (e) => { birdKeys[e.code] = false; };
     document.addEventListener('keydown', onBirdKeyDown);
     document.addEventListener('keyup', onBirdKeyUp);
+
+    // ── Mouse look-around: click-drag to orbit camera, release to spring back ──
+    let mouseDragging = false;
+    let dragYaw = 0;
+    let dragPitch = 0;
+    const MOUSE_SENS = 0.003;
+    const DRAG_RETURN = 0.08;
+    const PITCH_LIMIT = Math.PI / 3; // ±60°
+    // Pre-allocate camera math objects (never allocate in render loop)
+    const _dragEuler = new THREE.Euler(0, 0, 0, 'YXZ');
+    const _dragQuat = new THREE.Quaternion();
+    const _camQuat = new THREE.Quaternion();
+    const _idealPos = new THREE.Vector3();
+    const _idealTarget = new THREE.Vector3();
+
+    const onMouseDown = (e) => {
+      if (e.button === 0 && bird && e.target.tagName === 'CANVAS') {
+        mouseDragging = true;
+      }
+    };
+    const onMouseMove = (e) => {
+      if (!mouseDragging) return;
+      dragYaw -= e.movementX * MOUSE_SENS;
+      dragPitch += e.movementY * MOUSE_SENS;
+      dragPitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, dragPitch));
+    };
+    const onMouseUp = (e) => {
+      if (e.button === 0) mouseDragging = false;
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
 
     // ═══════════════════════════════════════════════════════════════════════
     // SCENE TUNER WIRING
@@ -4584,31 +4798,150 @@ window.TrackScenes = (function() {
       } else if (section === 'fog') {
         if (param === 'near' && scene.fog) scene.fog.near = value;
         else if (param === 'far' && scene.fog) scene.fog.far = value;
+      } else if (section === 'stars') {
+        if (param in starCfg) {
+          starCfg[param] = value;
+          const moonParams = ['moonBrt', 'moonGlow', 'moonSize'];
+          const runtimeOnly = ['domeOpacity', 'fadePower', 'moonElev', 'moonAz'];
+          if (moonParams.includes(param)) {
+            repaintMoon();
+          } else if (!runtimeOnly.includes(param)) {
+            scheduleStarRepaint();
+          }
+          if (param === 'moonSize') updateMoonSprite();
+        }
       }
     };
     if (window.SceneTuner) window.SceneTuner.onUpdate(tunerCallback);
 
     return {
       group,
-      stemEffects: {
-        drums: { target: 'sky', effect: 'flash', color: '#ffaa44' },
-        bass: { target: 'sky', effect: 'turbidity', color: '#ff8844' },
-        vocals: { target: 'sky + sun', effect: 'elevation', color: '#ffddcc' },
-        synth: { target: 'bird speed', effect: 'orbit', color: '#aaddff' },
+      // Tell app.js not to force-enable EffectsManager effects (grid, aurora, etc.)
+      disableEffects: { grid: true, aurora: true, lightning: true, lights: true },
+      setTheme(newThemeName) {
+        const newTheme = THEMES[newThemeName];
+        if (!newTheme) {
+          console.warn('[Flight] Unknown theme:', newThemeName, '— keeping current');
+          return;
+        }
+        if (newTheme === activeTheme) return;
+        console.log('[Flight] Hot-swapping theme to:', newThemeName);
+
+        // 1. Dispose current theme materials & geometries
+        terrainMat.dispose();
+        waterMat.dispose();
+        for (const m of Object.values(sceneryMats)) m.dispose();
+        for (const g of Object.values(sceneryGeoms)) g.dispose();
+
+        // 2. Clear all terrain/water/scenery chunks
+        for (const [, ch] of terrainChunks) {
+          ch.mesh.geometry.dispose();
+          scene.remove(ch.mesh);
+        }
+        terrainChunks.clear();
+
+        for (const [, ch] of waterChunks) {
+          ch.mesh.geometry.dispose();
+          scene.remove(ch.mesh);
+        }
+        waterChunks.clear();
+
+        for (const [, ch] of sceneryChunks) {
+          for (const obj of ch.objects) {
+            obj.traverse(c => { if (c.geometry) c.geometry.dispose(); });
+            scene.remove(obj);
+          }
+        }
+        sceneryChunks.clear();
+
+        // 3. Swap theme reference
+        activeTheme = newTheme;
+
+        // 4. Recreate materials from new theme
+        terrainMat = null;
+        if (activeTheme.gpuAnimated && activeTheme.createTerrainMaterial) {
+          terrainMat = activeTheme.createTerrainMaterial(THREE, oceanTimeUniform);
+        }
+        if (!terrainMat) {
+          terrainMat = new THREE.MeshStandardMaterial({
+            vertexColors: true,
+            flatShading: activeTheme.terrainMatProps.flatShading,
+            roughness: activeTheme.terrainMatProps.roughness,
+            metalness: activeTheme.terrainMatProps.metalness,
+            emissiveIntensity: activeTheme.terrainMatProps.emissiveIntensity,
+            emissive: new THREE.Color(0xffffff),
+          });
+        }
+
+        waterMat = new THREE.MeshStandardMaterial({
+          color: activeTheme.waterColor,
+          transparent: true,
+          opacity: activeTheme.waterOpacity,
+          roughness: activeTheme.waterRoughness,
+          metalness: activeTheme.waterMetalness,
+          side: THREE.DoubleSide,
+        });
+
+        // 5. Create new scenery materials/geometries
+        sceneryMats = activeTheme.sceneryMaterials ? activeTheme.sceneryMaterials(THREE) : {};
+        sceneryGeoms = activeTheme.sceneryGeometries ? activeTheme.sceneryGeometries(THREE) : {};
+
+        // 6. Update atmosphere variables
+        baseSunElevation = activeTheme.baseSunElevation;
+        sunAzimuth = activeTheme.sunAzimuth;
+        baseTurbidity = activeTheme.baseTurbidity;
+        baseRayleigh = activeTheme.baseRayleigh;
+        baseMieCoefficient = activeTheme.baseMieCoefficient;
+        baseMieDirectionalG = activeTheme.baseMieDirectionalG;
+        baseExposure = activeTheme.baseExposure;
+
+        // Update fog
+        if (scene.fog) {
+          scene.fog.color.setHex(activeTheme.fogColor);
+          scene.fog.density = activeTheme.fogDensity;
+        }
+
+        // 7. Update chunk constants
+        CHUNK_SIZE = activeTheme.chunkSize || 80;
+        CHUNK_SEGS = activeTheme.chunkSegs || 20;
+        CHUNK_RANGE = activeTheme.chunkRange || 5;
+
+        // 8. Re-hide any new environment objects (ground plane, sky, etc.)
+        scene.traverse(child => {
+          if (child.name === 'grid-effects' || child.name === 'lightning-effects' ||
+              child.name === 'aurora-effects' || child.name === 'lights-effects' ||
+              child.name === 'ride-path' || child.name === 'parallax-backdrop') {
+            child.visible = false;
+            if (!hiddenEffects.includes(child)) hiddenEffects.push(child);
+          }
+          if (child.isMesh && child.geometry?.parameters?.width > 1000 &&
+              child.rotation?.x === -Math.PI / 2) {
+            child.visible = false;
+            if (!hiddenEffects.includes(child)) hiddenEffects.push(child);
+          }
+          if (child.isInstancedMesh) {
+            child.visible = false;
+            if (!hiddenEffects.includes(child)) hiddenEffects.push(child);
+          }
+          if (child.isMesh && child.material?._tslUniforms) {
+            child.visible = false;
+            if (!hiddenEffects.includes(child)) hiddenEffects.push(child);
+          }
+        });
+
+        // 9. Regenerate chunks around bird
+        const posX = bird ? bird.position.x : 0;
+        const posZ = bird ? bird.position.z : 0;
+        updateChunks2D(posX, posZ);
+
+        console.log('[Flight] Theme swap complete:', newThemeName);
       },
 
       update(time, freq, amplitude, shipPos, shipSpeed, stemData) {
+        currentTime = time;
+        oceanTimeUniform.value = time;
         const shipX = shipPos ? shipPos.x : 0;
         const shipZ = shipPos ? shipPos.z : 0;
-
-        // Stem energies
-        const drumEnergy = getEffectiveStemEnergy('drums', stemData?.drums?.energy || 0);
-        const bassEnergy = getEffectiveStemEnergy('bass', stemData?.bass?.energy || 0);
-        const vocalEnergy = getEffectiveStemEnergy('vocals', stemData?.vocals?.energy || 0);
-        const synthEnergy = getEffectiveStemEnergy('synth', stemData?.synth?.energy || 0);
-
-        smoothVocal = smoothVocal * 0.9 + vocalEnergy * 0.1;
-        smoothDrum = smoothDrum * 0.85 + drumEnergy * 0.15;
 
         // Keep effects hidden
         for (const fx of hiddenEffects) fx.visible = false;
@@ -4637,19 +4970,19 @@ window.TrackScenes = (function() {
 
         // Atmosphere: golden-hour haze near horizon, cleaner sky when sun is up
         const horizonProximity = 1 - Math.abs(dynElevation) / Math.max(Math.abs(SUN_START), Math.abs(SUN_END));
-        skyUniforms.turbidity.value = baseTurbidity + (1 - sunFactor) * 3 + horizonProximity * 2 + bassEnergy * 2;
+        skyUniforms.turbidity.value = baseTurbidity + (1 - sunFactor) * 3 + horizonProximity * 2;
         skyUniforms.rayleigh.value = baseRayleigh + sunFactor * 1.5;
-        skyUniforms.mieCoefficient.value = baseMieCoefficient + horizonProximity * 0.02 + smoothVocal * 0.003;
+        skyUniforms.mieCoefficient.value = baseMieCoefficient + horizonProximity * 0.02;
         skyUniforms.mieDirectionalG.value = baseMieDirectionalG + horizonProximity * 0.12;
-        skyUniforms.exposure.value = baseExposure + sunFactor * 0.5 + smoothDrum * 0.05;
+        skyUniforms.exposure.value = baseExposure + sunFactor * 0.5;
 
         // Light intensities driven by sun elevation
-        sunLight.intensity = 0.1 + sunFactor * 2.8;     // 0.1 (below horizon) → 2.9 (above)
-        hemiLight.intensity = 0.04 + sunFactor * 0.65;   // 0.04 (dark) → 0.69 (bright)
+        sunLight.intensity = 0.1 + sunFactor * 1.6;     // 0.1 (below horizon) → 1.7 (above)
+        hemiLight.intensity = 0.04 + sunFactor * 0.46;   // 0.04 (dark) → 0.5 (bright)
 
-        // Sun color shifts: warm orange near horizon → whiter when higher
-        const warmth = 1 - sunFactor * 0.4;  // 1.0 (warm) → 0.6 (less warm)
-        sunLight.color.setRGB(1, 0.53 + sunFactor * 0.3, 0.27 + sunFactor * 0.45);
+        // Sun color shifts: warm orange near horizon → warm golden when higher
+        const warmth = 1 - sunFactor * 0.15;  // 1.0 (warm) → 0.85 (stays warm)
+        sunLight.color.setRGB(1, 0.53 + sunFactor * 0.17, 0.27 + sunFactor * 0.23);
         hemiLight.color.setRGB(1 * warmth, 0.8 * warmth, 0.67 * warmth);
 
         // Renderer tone mapping exposure — darkens/brightens the ENTIRE scene (terrain, water, bird, everything)
@@ -4658,18 +4991,81 @@ window.TrackScenes = (function() {
           if (envRenderer.toneMapping === THREE.NoToneMapping) {
             envRenderer.toneMapping = THREE.ACESFilmicToneMapping;
           }
-          envRenderer.toneMappingExposure = 0.15 + sunFactor * 1.35;  // 0.15 (dark) → 1.5 (bright)
+          envRenderer.toneMappingExposure = 0.15 + sunFactor * 0.85;  // 0.15 (dark) → 1.0 (bright)
         }
 
         // Fog dissipates as sun rises — thick at dawn, nearly gone in daylight
         if (scene.fog) {
-          scene.fog.density = 0.0018 * (1 - sunFactor * 0.85);  // 0.0018 (subtle) → ~0.0003 (nearly clear)
+          scene.fog.density = activeTheme.fogDensity * (1 - sunFactor * 0.85);
           // Fog color warms with sunrise: dark blue-grey → warm haze
           const fogR = 0.04 + sunFactor * 0.55;
           const fogG = 0.04 + sunFactor * 0.45;
           const fogB = 0.08 + sunFactor * 0.35;
           scene.fog.color.setRGB(fogR, fogG, fogB);
         }
+
+        // ── Star dome fade + moon + shooting stars ──
+        const starDarkness = Math.max(0, 1 - sunFactor * starCfg.fadePower);
+        const dt = lastStarTime > 0 ? time - lastStarTime : 0.016;
+        if (starDarkness > 0) {
+          starDome.visible = true;
+          starDomeMat.opacity = starDarkness * starCfg.domeOpacity;
+
+          // Moon tracks opposite the sun (180° offset in azimuth, mirrored elevation)
+          const moonElev = -dynElevation + starCfg.moonElev;  // rises as sun sets
+          const moonAz = (sunAzimuth + 180 + starCfg.moonAz) % 360;
+          const moonPhiRad = (90 - moonElev) * Math.PI / 180;
+          const moonThetaRad = moonAz * Math.PI / 180;
+          const moonDist = 498;
+          _moonPos.setFromSphericalCoords(moonDist, moonPhiRad, moonThetaRad);
+          moon.position.copy(_moonPos);
+          moon.visible = true;
+          moonMat.opacity = starDarkness * starCfg.moonBrt;
+
+          // Shooting stars — random chance per frame at night
+          if (Math.random() < 0.003 && starDarkness > 0.3) {
+            launchShootingStar();
+          }
+
+          // Animate active shooting stars
+          for (const ss of shootingStars) {
+            if (!ss.active) continue;
+            ss.progress += dt;
+            const t = ss.progress / 0.8; // 0→1 over 0.8s
+            if (t >= 1) {
+              ss.active = false;
+              ss.line.visible = false;
+              continue;
+            }
+            const dist = ss.speed * ss.progress;
+            const posAttr = ss.geom.getAttribute('position');
+            const colAttr = ss.geom.getAttribute('color');
+            const fadeOut = t < 0.4 ? 1 : 1 - (t - 0.4) / 0.6;
+            for (let j = 0; j < SHOOTING_TRAIL; j++) {
+              const trailFrac = j / (SHOOTING_TRAIL - 1);
+              const offset = dist - trailFrac * 35;
+              const px = ss.startPos.x + ss.direction.x * offset;
+              const py = ss.startPos.y + ss.direction.y * offset;
+              const pz = ss.startPos.z + ss.direction.z * offset;
+              posAttr.array[j * 3]     = px;
+              posAttr.array[j * 3 + 1] = py;
+              posAttr.array[j * 3 + 2] = pz;
+              const brt = (1 - trailFrac) * fadeOut * starDarkness;
+              colAttr.array[j * 3]     = brt;
+              colAttr.array[j * 3 + 1] = brt;
+              colAttr.array[j * 3 + 2] = brt * 0.85;
+            }
+            posAttr.needsUpdate = true;
+            colAttr.needsUpdate = true;
+          }
+        } else {
+          starDome.visible = false;
+          moon.visible = false;
+          for (const ss of shootingStars) {
+            if (ss.active) { ss.active = false; ss.line.visible = false; }
+          }
+        }
+        lastStarTime = time;
 
         // Use bird's actual position for terrain/sun (bird uses translateZ, so position tracks real flight path)
         const posX = bird ? bird.position.x : shipX;
@@ -4685,6 +5081,11 @@ window.TrackScenes = (function() {
         // Spawn/cleanup terrain + water + scenery in 2D grid around bird
         updateChunks2D(posX, posZ);
 
+        // Animate terrain if theme requires it (e.g. ocean waves)
+        if (activeTheme.animated && activeTheme.animateChunks) {
+          activeTheme.animateChunks(terrainChunks, time, activeTheme, noise2D, fbm, CHUNK_SIZE);
+        }
+
         // ── Fly-by bird flight (rotation-based, matches jessehhydee/fly-by) ──
         if (bird) {
           const leftDown  = birdKeys['ArrowLeft']  || birdKeys['KeyA'];
@@ -4694,42 +5095,33 @@ window.TrackScenes = (function() {
           const flapping  = birdKeys['ShiftLeft']  || birdKeys['ShiftRight'];
 
           // Always move forward in facing direction
-          bird.translateZ(isDoubleSpeed ? FLY.doubleSpeed : FLY.forwardSpeed);
+          const fwdSpeed = isDoubleSpeed ? FLY.doubleSpeed : FLY.forwardSpeed;
+          bird.translateZ(fwdSpeed);
 
           // ── Flapping: gentle lift ──
           if (flapping && bird.position.y < FLY.maxY) {
             bird.position.y += FLY.flapLift;
           }
 
-          // ── Up: ascend (slower — climbing is harder) ──
+          // ── Up: pitch nose-up (climb) ──
           if (upDown) {
-            if (bird.position.y < FLY.maxY) {
-              bird.position.y += charPosYIncrement * 0.5;
-              if (charPosYIncrement < FLY.posYMax) charPosYIncrement += FLY.posYAccel * 0.5;
-              if (charNeck && charNeck.rotation.x > -FLY.neckXMax) charNeck.rotation.x -= FLY.neckXStep * 0.5;
-              if (charBody && charBody.rotation.x > -FLY.bodyXMax) charBody.rotation.x -= FLY.bodyXStep * 0.5;
-            } else {
-              if ((charNeck && charNeck.rotation.x < 0) || (charBody && charBody.rotation.x < 0)) {
-                bird.position.y += charPosYIncrement * 0.5;
-                if (charNeck) charNeck.rotation.x += FLY.neckXStep * 0.5;
-                if (charBody) charBody.rotation.x += FLY.bodyXStep * 0.5;
-              }
-            }
+            if (birdPitch > -FLY.climbPitchMax) birdPitch -= FLY.climbPitchStep;
+            if (charNeck && charNeck.rotation.x > -FLY.neckXMax) charNeck.rotation.x -= FLY.neckXStep * 0.5;
+            if (charBody && charBody.rotation.x > -FLY.bodyXMax) charBody.rotation.x -= FLY.bodyXStep * 0.5;
           }
-          // ── Down: descend ──
+          // ── Down: pitch nose-down (dive) ──
           if (downDown) {
-            if (bird.position.y > FLY.minY) {
-              bird.position.y -= charPosYIncrement;
-              if (charPosYIncrement < FLY.posYMax) charPosYIncrement += FLY.posYAccel;
-              if (charNeck && charNeck.rotation.x < FLY.neckXMax) charNeck.rotation.x += FLY.neckXStep;
-              if (charBody && charBody.rotation.x < FLY.bodyXMax) charBody.rotation.x += FLY.bodyXStep;
-            } else {
-              if ((charNeck && charNeck.rotation.x > 0) || (charBody && charBody.rotation.x > 0)) {
-                bird.position.y -= charPosYIncrement;
-                if (charNeck) charNeck.rotation.x -= FLY.neckXStep;
-                if (charBody) charBody.rotation.x -= FLY.bodyXStep;
-              }
-            }
+            if (birdPitch < FLY.divePitchMax) birdPitch += FLY.divePitchStep;
+            if (charNeck && charNeck.rotation.x < FLY.neckXMax) charNeck.rotation.x += FLY.neckXStep;
+            if (charBody && charBody.rotation.x < FLY.bodyXMax) charBody.rotation.x += FLY.bodyXStep;
+          }
+
+          // ── Pitch-driven altitude: sin(pitch) * speed ──
+          // Positive pitch = nose down = descend, negative = nose up = ascend
+          if (birdPitch !== 0) {
+            const altDelta = Math.sin(birdPitch) * fwdSpeed * FLY.pitchAltScale;
+            bird.position.y -= altDelta;
+            bird.position.y = Math.max(FLY.minY, Math.min(FLY.maxY, bird.position.y));
           }
 
           // ── Left: yaw left ──
@@ -4749,20 +5141,21 @@ window.TrackScenes = (function() {
             if (charBody && charBody.rotation.y > -FLY.bodyYMax) charBody.rotation.y -= FLY.bodyYStep;
           }
 
-          // ── Revert altitude (no up/down) ──
+          // ── Revert pitch & neck/body (no up/down) ──
           if ((!upDown && !downDown) || (upDown && downDown)) {
-            if (charPosYIncrement > 0) charPosYIncrement -= FLY.posYAccel;
-            if ((charNeck && charNeck.rotation.x < 0) || (charBody && charBody.rotation.x < 0)) {
-              bird.position.y += charPosYIncrement;
-              if (charNeck) charNeck.rotation.x += FLY.neckXStep;
-              if (charBody) charBody.rotation.x += FLY.bodyXStep;
-            }
-            if ((charNeck && charNeck.rotation.x > 0) || (charBody && charBody.rotation.x > 0)) {
-              bird.position.y -= charPosYIncrement;
-              if (charNeck) charNeck.rotation.x -= FLY.neckXStep;
-              if (charBody) charBody.rotation.x -= FLY.bodyXStep;
-            }
+            // Smoothly return whole-body pitch to level
+            if (birdPitch > FLY.pitchReturn) birdPitch -= FLY.pitchReturn;
+            else if (birdPitch < -FLY.pitchReturn) birdPitch += FLY.pitchReturn;
+            else birdPitch = 0;
+            // Revert neck/body bone tilt toward neutral
+            if (charNeck && charNeck.rotation.x < 0) charNeck.rotation.x += FLY.neckXStep;
+            if (charNeck && charNeck.rotation.x > 0) charNeck.rotation.x -= FLY.neckXStep;
+            if (charBody && charBody.rotation.x < 0) charBody.rotation.x += FLY.bodyXStep;
+            if (charBody && charBody.rotation.x > 0) charBody.rotation.x -= FLY.bodyXStep;
           }
+
+          // ── Apply whole-body pitch to visual model ──
+          if (birdModel) birdModel.rotation.x = birdPitch;
 
           // ── Revert yaw (no left/right) ──
           if ((!leftDown && !rightDown) || (leftDown && rightDown)) {
@@ -4777,6 +5170,14 @@ window.TrackScenes = (function() {
               if (charNeck) charNeck.rotation.y -= FLY.neckYStep;
               if (charBody) charBody.rotation.y += FLY.bodyYStep;
             }
+          }
+
+          // ── Ground collision: never clip through terrain, water, or scenery ──
+          const groundH = Math.max(terrainHeight(bird.position.x, bird.position.z), activeTheme.waterY);
+          const clearance = 3; // above treetops/rocks
+          if (bird.position.y < groundH + clearance) {
+            bird.position.y = groundH + clearance;
+            if (birdPitch > 0) birdPitch = 0; // level out on ground hit (cancel dive)
           }
 
           // ── Wing animation on flap ──
@@ -4794,11 +5195,24 @@ window.TrackScenes = (function() {
           const env = window.EnvironmentMode?.instance;
           if (env?.player) env.player.visible = false;
 
-          // ── Camera: quaternion-based trailing follow (fly-by style) ──
+          // ── Camera: quaternion-based trailing follow + mouse look-around ──
           const cam = env?.camera;
           if (cam) {
-            const idealPos = new THREE.Vector3(0, FLY.camY, FLY.camZ)
-              .applyQuaternion(bird.quaternion)
+            // Smooth spring-back when not dragging
+            if (!mouseDragging) {
+              dragYaw *= (1 - DRAG_RETURN);
+              dragPitch *= (1 - DRAG_RETURN);
+              if (Math.abs(dragYaw) < 0.001) dragYaw = 0;
+              if (Math.abs(dragPitch) < 0.001) dragPitch = 0;
+            }
+
+            // Combine bird orientation with mouse drag orbit
+            _dragEuler.set(dragPitch, dragYaw, 0);
+            _dragQuat.setFromEuler(_dragEuler);
+            _camQuat.multiplyQuaternions(bird.quaternion, _dragQuat);
+
+            _idealPos.set(0, FLY.camY, FLY.camZ)
+              .applyQuaternion(_camQuat)
               .add(bird.position);
 
             // Dynamic look-ahead (pulls in at high altitude)
@@ -4807,16 +5221,16 @@ window.TrackScenes = (function() {
               if (bird.position.y <= 60 && lookAtPosZ < FLY.lookAtZ) lookAtPosZ += 0.2;
             }
 
-            const idealTarget = new THREE.Vector3(0, -1.2, lookAtPosZ)
-              .applyQuaternion(bird.quaternion)
+            _idealTarget.set(0, -1.2, lookAtPosZ)
+              .applyQuaternion(_camQuat)
               .add(bird.position);
 
             if (!camSmooth) {
-              camSmooth = idealPos.clone();
-              camSmoothTarget = idealTarget.clone();
+              camSmooth = _idealPos.clone();
+              camSmoothTarget = _idealTarget.clone();
             } else {
-              camSmooth.lerp(idealPos, FLY.camLerp);
-              camSmoothTarget.lerp(idealTarget, FLY.camLerp);
+              camSmooth.lerp(_idealPos, FLY.camLerp);
+              camSmoothTarget.lerp(_idealTarget, FLY.camLerp);
             }
             cam.position.copy(camSmooth);
             cam.lookAt(camSmoothTarget);
@@ -4830,9 +5244,12 @@ window.TrackScenes = (function() {
       },
 
       dispose() {
-        // Remove bird keyboard listeners
+        // Remove bird keyboard + mouse listeners
         document.removeEventListener('keydown', onBirdKeyDown);
         document.removeEventListener('keyup', onBirdKeyUp);
+        document.removeEventListener('mousedown', onMouseDown);
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
 
         // Restore renderer tone mapping
         const envRenderer = window.EnvironmentMode?.instance?.renderer;
@@ -4887,8 +5304,8 @@ window.TrackScenes = (function() {
           }
         }
         sceneryChunks.clear();
-        for (const m of sceneryMats) m.dispose();
-        for (const g of sceneryGeoms) g.dispose();
+        for (const m of Object.values(sceneryMats)) m.dispose();
+        for (const g of Object.values(sceneryGeoms)) g.dispose();
 
         // Tuner
         if (window.SceneTuner) window.SceneTuner.offUpdate(tunerCallback);
@@ -4898,7 +5315,12 @@ window.TrackScenes = (function() {
         scene.remove(hemiLight);
         scene.fog = null;
 
-        // Group (sky)
+        // Star dome + moon textures (not auto-disposed by material.dispose)
+        clearTimeout(starRepaintTimer);
+        starMapTexture.dispose();
+        moonTexture.dispose();
+
+        // Group (sky, stars, shooting stars)
         group.traverse(c => {
           if (c.geometry) c.geometry.dispose();
           if (c.material) c.material.dispose();
@@ -4914,19 +5336,19 @@ window.TrackScenes = (function() {
   // ═══════════════════════════════════════════════════════════════════════════
   return {
     builders: {
-      "Data Tide": buildDataTide,
-      "Soft Systems": buildSoftSystems,
-      "Beast Mode": buildBeastMode,
-      "Dreams Bleed Into Dashboards": buildDreamsDashboards,
-      "Signal Integrity": buildSignalIntegrity,
-      "Gi Mi Di Reins": buildGiMiDiReins,
-      "Trade You My Hands": buildTradeHands,
-      "Push Harder": buildPushHarder,
-      "The Last Dragon": buildLastDragon,
-      "Who's Learning Who": buildWhosLearning,
-      "Terms & Conditions": buildTermsConditions,
-      "Turn Your Phone Face Down": buildPhoneFaceDown,
-      "Test": buildTest
+      "Terms & Conditions": (T, s, a) => buildFlightScene(T, s, a, "Terms & Conditions"),
+      "Data Tide": (T, s, a) => buildFlightScene(T, s, a, "Data Tide"),
+      "Soft Systems": (T, s, a) => buildFlightScene(T, s, a, "Soft Systems"),
+      "Beast Mode": (T, s, a) => buildFlightScene(T, s, a, "Beast Mode"),
+      "Dreams Bleed Into Dashboards": (T, s, a) => buildFlightScene(T, s, a, "Dreams Bleed Into Dashboards"),
+      "Signal Integrity": (T, s, a) => buildFlightScene(T, s, a, "Signal Integrity"),
+      "Gi Mi Di Reins": (T, s, a) => buildFlightScene(T, s, a, "Gi Mi Di Reins"),
+      "Trade You My Hands": (T, s, a) => buildFlightScene(T, s, a, "Trade You My Hands"),
+      "Push Harder": (T, s, a) => buildFlightScene(T, s, a, "Push Harder"),
+      "The Last Dragon": (T, s, a) => buildFlightScene(T, s, a, "The Last Dragon"),
+      "Who's Learning Who": (T, s, a) => buildFlightScene(T, s, a, "Who's Learning Who"),
+      "Turn Your Phone Face Down": (T, s, a) => buildFlightScene(T, s, a, "Turn Your Phone Face Down"),
+      "Test": (T, s, a) => buildFlightScene(T, s, a, "Test"),
     },
 
     build(trackTitle, THREE, scene, audioData) {

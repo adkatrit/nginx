@@ -90,8 +90,9 @@
     <link rel="manifest" href="./site.webmanifest" />
     <!-- Preload critical assets -->
     <link rel="preload" href="./styles.css?v=24" as="style" />
-    <link rel="preload" href="./app.js?v=33" as="script" />
-    <link rel="preload" href="./track-scenes.js?v=36" as="script" />
+    <link rel="preload" href="./app.js?v=34" as="script" />
+    <link rel="preload" href="./terrain-themes.js?v=2" as="script" />
+    <link rel="preload" href="./track-scenes.js?v=38" as="script" />
     <link rel="preload" href="./environments.js?v=12" as="script" />
 
     <link rel="stylesheet" href="./styles.css?v=24" />
@@ -322,13 +323,13 @@
             <kbd class="kbd--wasd">D</kbd>
           </div>
         </div>
-        <span class="keyboard-hint__label">Flight</span>
+        <span class="keyboard-hint__label">Rotate</span>
       </div>
       <div class="keyboard-hint">
         <span class="keyboard-hint__keys">
           <kbd class="kbd--wide">Shift</kbd>
         </span>
-        <span class="keyboard-hint__label">Fast Turn</span>
+        <span class="keyboard-hint__label">Flap Wings</span>
       </div>
       <div class="keyboard-hint">
         <span class="keyboard-hint__keys">
@@ -402,7 +403,7 @@
             <button class="ctrl-btn ctrl-btn--playlist" id="playlistBtn" type="button" aria-label="Open playlist" aria-expanded="false" title="Library">
               &#x2630;
             </button>
-            <a class="ctrl-btn ctrl-btn--docs" href="./docs/audio-reactivity.html" target="_blank" aria-label="Documentation" title="How it works">
+            <a class="ctrl-btn ctrl-btn--docs" href="./docs/architecture.html" target="_blank" aria-label="Documentation" title="Docs">
               ?
             </a>
             <button class="ctrl-btn ctrl-btn--sm ctrl-btn--fullscreen" id="fullscreenBtn" type="button" aria-label="Toggle fullscreen" title="Fullscreen">
@@ -491,7 +492,8 @@
     <script src="./models.js?v=9"></script>
     <script src="./themes.js?v=15"></script>
     <script src="./backgrounds.js?v=12"></script>
-    <script src="./track-scenes.js?v=36"></script>
+    <script src="./terrain-themes.js?v=2"></script>
+    <script src="./track-scenes.js?v=38"></script>
     <script src="./effects-manager.js?v=10"></script>
     <script src="./noise.js?v=9"></script>
     <script src="./terrain.js?v=9"></script>
@@ -499,6 +501,6 @@
     <script src="./stem-player.js?v=13"></script>
     <script src="./ios-viz.js?v=9"></script>
     <script src="./scene-tuner.js?v=4"></script>
-    <script src="./app.js?v=33"></script>
+    <script src="./app.js?v=34"></script>
   </body>
 </html>

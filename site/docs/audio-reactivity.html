@@ -422,6 +422,25 @@ canvas.diagram {
   background: var(--bg);
 }
 
+.back-link {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 100;
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--dim);
+  text-decoration: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 11px;
+  transition: all 0.3s;
+}
+.back-link:hover {
+  color: #fff;
+  border-color: var(--treble);
+}
+
 </style>
 
 <!-- Google tag (gtag.js) -->
@@ -444,7 +463,10 @@ canvas.diagram {
   <a href="#stage4">4. Visual Routing</a>
   <a href="#stage5">5. Consumer Systems</a>
   <a href="#stage6">6. GPU Shaders</a>
+  <a href="architecture.html">Site Architecture</a>
 </nav>
+
+<a href="/" class="back-link">Back to App</a>
 
 <!-- ==================== STAGE 1 ==================== -->
 <section id="stage1">
