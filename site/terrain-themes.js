@@ -165,7 +165,8 @@ window.TERRAIN_THEMES = (function() {
     },
 
     fogColor: 0x0a0a14,
-    fogDensity: 0.0018,
+    fogDensity: 0.0089,
+    fogDissipation: 0.989,
 
     baseSunElevation: -5,
     sunAzimuth: 0,
@@ -250,7 +251,8 @@ window.TERRAIN_THEMES = (function() {
     sceneryDensity: 0,
 
     fogColor: 0x0d1520,
-    fogDensity: 0.0006,
+    fogDensity: 0.0089,
+    fogDissipation: 0.989,
 
     baseSunElevation: -5,
     sunAzimuth: 0,
@@ -258,23 +260,36 @@ window.TERRAIN_THEMES = (function() {
     baseRayleigh: 3.0,
     baseMieCoefficient: 0.012,
     baseMieDirectionalG: 0.85,
-    baseExposure: 0.06,
+    baseExposure: 0.15,
 
     animated: false,
     gpuAnimated: true,
 
     // Returns a MeshStandardMaterial with TSL vertex shader that animates
-    // wave height on GPU. Eliminates all per-frame CPU vertex updates.
+    // wave height on GPU, plus a colorNode for Fresnel, sun specular,
+    // subsurface scattering, and scrolling noise micro-detail.
     createTerrainMaterial(THREE, timeUniform) {
       const TSL = window._TSL;
       if (!TSL) return null;
 
       const {
-        Fn, float, vec3, vec4,
-        positionLocal, normalLocal, modelWorldMatrix,
-        sin: tslSin, cos: tslCos,
-        normalize: tslNormalize, mix, smoothstep,
+        Fn, float, vec2, vec3, vec4, uniform,
+        positionLocal, positionWorld, normalLocal, normalWorld, modelWorldMatrix,
+        cameraPosition: tslCameraPosition,
+        sin: tslSin, cos: tslCos, pow: tslPow,
+        normalize: tslNormalize, mix, smoothstep, clamp: tslClamp,
+        dot: tslDot, max: tslMax, negate,
+        mx_noise_float,
       } = TSL;
+
+      // Sun direction uniform — updated per-frame from track-scenes.js
+      const sunDirUniform = uniform(new THREE.Vector3(0, 0.3, 1).normalize());
+
+      // Tunable water shader uniforms (scene tuner can update these at runtime)
+      const uFresnelStrength = uniform(0.7);
+      const uSpecIntensity   = uniform(1.5);
+      const uSpecPower       = uniform(256);
+      const uSssStrength     = uniform(0.3);
 
       // GPU wave height — matches CPU terrainHeight for ocean areas
       // (omits noise chop — sin/cos only, trivial on GPU)
@@ -292,11 +307,11 @@ window.TERRAIN_THEMES = (function() {
       });
 
       const mat = new THREE.MeshStandardMaterial({
-        vertexColors: true,
+        vertexColors: false,
         flatShading: false,
-        roughness: 0.15,
-        metalness: 0.5,
-        emissiveIntensity: 0.08,
+        roughness: 0.08,
+        metalness: 0.7,
+        emissiveIntensity: 0.03,
         emissive: new THREE.Color(0xffffff),
       });
 
@@ -325,6 +340,57 @@ window.TERRAIN_THEMES = (function() {
         const islandFactor = smoothstep(float(7.0), float(12.0), origY);
         return tslNormalize(mix(waveNrm, normalLocal, islandFactor));
       })();
+
+      // Color node: procedural ocean color + Fresnel + specular + SSS + noise
+      mat.colorNode = Fn(() => {
+        // Procedural ocean color (matches colorVertex depth-based blue-green)
+        const wH = positionWorld.y;
+        const depth = tslClamp(float(1.5).sub(wH).div(6.0), 0, 1);
+        const cr = float(0.04).add(float(1).sub(depth).mul(0.08));
+        const cg = float(0.18).add(float(1).sub(depth).mul(0.22)).sub(depth.mul(0.06));
+        const cb = float(0.35).add(float(1).sub(depth).mul(0.15)).add(depth.mul(0.10));
+        const baseColor = vec3(cr, cg, cb);
+
+        // 1. Fresnel — transparent looking down, reflective at glancing angles
+        const viewDir = tslNormalize(tslCameraPosition.sub(positionWorld));
+        const NdotV = tslMax(float(0), tslDot(normalWorld, viewDir));
+        const fresnel = tslPow(float(1).sub(NdotV), float(5));
+        const skyColor = vec3(0.4, 0.55, 0.7);
+        const fresnelColor = mix(baseColor, skyColor, fresnel.mul(uFresnelStrength));
+
+        // Sun visibility factor — fades specular/SSS to zero when sun is below horizon
+        const sunVis = smoothstep(float(-0.02), float(0.15), sunDirUniform.y);
+
+        // 2. Sun specular (Blinn-Phong) — bright sun path across the water
+        const halfVec = tslNormalize(viewDir.add(sunDirUniform));
+        const spec = tslPow(tslMax(float(0), tslDot(normalWorld, halfVec)), uSpecPower).mul(sunVis);
+
+        // 3. Subsurface scattering — wave crests glow when backlit by sun
+        const sss = tslPow(tslMax(float(0), tslDot(viewDir, negate(sunDirUniform))), float(4)).mul(sunVis);
+        const sssColor = vec3(0.1, 0.4, 0.35);
+
+        // 4. Scrolling noise micro-detail — animated surface texture variation
+        const noiseInput = vec2(
+          positionWorld.x.mul(0.5).add(timeUniform.mul(0.1)),
+          positionWorld.z.mul(0.5).add(timeUniform.mul(0.07))
+        );
+        const noise = mx_noise_float(noiseInput);
+
+        // Combine all effects
+        return fresnelColor
+          .add(vec3(spec, spec, spec).mul(uSpecIntensity))
+          .add(sssColor.mul(sss).mul(uSssStrength))
+          .add(vec3(noise, noise, noise).mul(0.03));
+      })();
+
+      // Expose uniforms for per-frame / tuner updates from track-scenes.js
+      mat._sunDirUniform = sunDirUniform;
+      mat._waterUniforms = {
+        fresnelStrength: uFresnelStrength,
+        specIntensity:   uSpecIntensity,
+        specPower:       uSpecPower,
+        sssStrength:     uSssStrength,
+      };
 
       return mat;
     },

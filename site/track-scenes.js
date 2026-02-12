@@ -4443,6 +4443,13 @@ window.TrackScenes = (function() {
     let baseMieCoefficient = activeTheme.baseMieCoefficient;
     let baseMieDirectionalG = activeTheme.baseMieDirectionalG;
     let baseExposure = activeTheme.baseExposure;
+    let sunElevationRange = activeTheme.sunElevationRange || 10;
+    let baseSunIntensity = activeTheme.baseSunIntensity || 0.1;
+    let sunIntensityRange = activeTheme.sunIntensityRange || 1.6;
+    let baseHemiIntensity = activeTheme.baseHemiIntensity || 0.04;
+    let hemiIntensityRange = activeTheme.hemiIntensityRange || 0.46;
+    let fogDissipation = activeTheme.fogDissipation || 0.85;
+    let fogColorLight = activeTheme.fogColorLight || 0x8c7a5e;
 
     const sunPos = new THREE.Vector3();
     const phi = (90 - baseSunElevation) * Math.PI / 180;
@@ -4469,6 +4476,16 @@ window.TrackScenes = (function() {
 
     // Fog starts thin, dissipates as sun rises
     scene.fog = new THREE.FogExp2(activeTheme.fogColor, activeTheme.fogDensity);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // WORLD SEED — changes every 30 minutes for terrain variety
+    // ═══════════════════════════════════════════════════════════════════════
+    const halfHour = Math.floor(Date.now() / (30 * 60 * 1000));
+    const seedA = ((halfHour * 374761393) ^ (halfHour >>> 3)) & 0x7fffffff;
+    const seedB = ((halfHour * 668265263) ^ (halfHour >>> 5)) & 0x7fffffff;
+    const worldSeedX = (seedA % 10000) - 5000;
+    const worldSeedZ = (seedB % 10000) - 5000;
+    console.log('[Flight] World seed offset:', worldSeedX, worldSeedZ, '(changes every 30 min)');
 
     // ═══════════════════════════════════════════════════════════════════════
     // NOISE — hash-based 2D value noise + fBm
@@ -4508,7 +4525,7 @@ window.TrackScenes = (function() {
     const sceneryChunks = new Map();
 
     function terrainHeight(x, z) {
-      return activeTheme.terrainHeight(x, z, noise2D, fbm, currentTime);
+      return activeTheme.terrainHeight(x + worldSeedX, z + worldSeedZ, noise2D, fbm, currentTime);
     }
 
     let terrainMat = null;
@@ -4535,8 +4552,11 @@ window.TrackScenes = (function() {
       side: THREE.DoubleSide,
     });
 
-    function spawnTerrainChunk(cx, cz) {
-      const geom = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, CHUNK_SEGS, CHUNK_SEGS);
+    const FAR_SEGS = 6;  // reduced segments for distant LOD chunks
+
+    function spawnTerrainChunk(cx, cz, far) {
+      const segs = far ? FAR_SEGS : CHUNK_SEGS;
+      const geom = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, segs, segs);
       geom.rotateX(-Math.PI / 2);
       const pos = geom.attributes.position;
       const colors = new Float32Array(pos.count * 3);
@@ -4552,9 +4572,10 @@ window.TrackScenes = (function() {
         const hz = terrainHeight(wx, wz + 1);
         const slope = Math.sqrt((hx - h) * (hx - h) + (hz - h) * (hz - h));
 
-        // Two noise frequencies — coarse patches + fine grain
-        const n1 = fbm(wx * 0.02 + 200, wz * 0.02 + 200, 2);
-        const n2 = fbm(wx * 0.1 + 500, wz * 0.1 + 500, 2);
+        // Two noise frequencies — coarse patches + fine grain (seeded)
+        const sx = wx + worldSeedX, sz = wz + worldSeedZ;
+        const n1 = fbm(sx * 0.02 + 200, sz * 0.02 + 200, 2);
+        const n2 = fbm(sx * 0.1 + 500, sz * 0.1 + 500, 2);
         const nPatch = (n1 - 0.5) * 2;
         const nGrain = (n2 - 0.5) * 2;
 
@@ -4567,9 +4588,9 @@ window.TrackScenes = (function() {
       const mesh = new THREE.Mesh(geom, terrainMat);
       mesh.position.set(cx * CHUNK_SIZE, 0, cz * CHUNK_SIZE);
       mesh.receiveShadow = true;
-      mesh.castShadow = true;
+      mesh.castShadow = !far;  // skip shadow casting for distant chunks
       scene.add(mesh);
-      terrainChunks.set(`${cx},${cz}`, { mesh });
+      terrainChunks.set(`${cx},${cz}`, { mesh, far: !!far });
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -4594,7 +4615,7 @@ window.TrackScenes = (function() {
 
     function spawnSceneryChunk(cx, cz) {
       const objects = [];
-      const seed = Math.abs(cx * 374761 + cz * 668265) % 100000;
+      const seed = Math.abs((cx + worldSeedX) * 374761 + (cz + worldSeedZ) * 668265) % 100000;
       const density = activeTheme.sceneryDensity != null ? activeTheme.sceneryDensity : 8;
 
       for (let i = 0; i < density; i++) {
@@ -4617,27 +4638,49 @@ window.TrackScenes = (function() {
       sceneryChunks.set(`${cx},${cz}`, { objects });
     }
 
+    const CHUNK_AHEAD = 16;  // extra chunks forward (LOD) for deep horizon
+    let chunkDirX = 0, chunkDirZ = 1;  // forward direction in world (updated per frame)
+
     function updateChunks2D(posX, posZ) {
       const pcx = Math.round(posX / CHUNK_SIZE);
       const pcz = Math.round(posZ / CHUNK_SIZE);
       const needed = new Set();
-      const r2 = (CHUNK_RANGE + 0.5) * (CHUNK_RANGE + 0.5);
+      const baseR2 = (CHUNK_RANGE + 0.5) * (CHUNK_RANGE + 0.5);
+      const totalR = CHUNK_RANGE + CHUNK_AHEAD;
+      const totalR2 = (totalR + 0.5) * (totalR + 0.5);
 
-      for (let dx = -CHUNK_RANGE; dx <= CHUNK_RANGE; dx++) {
-        for (let dz = -CHUNK_RANGE; dz <= CHUNK_RANGE; dz++) {
-          if (dx * dx + dz * dz > r2) continue; // circular culling
+      for (let dx = -totalR; dx <= totalR; dx++) {
+        for (let dz = -totalR; dz <= totalR; dz++) {
+          const dist2 = dx * dx + dz * dz;
+          if (dist2 > totalR2) continue;
+          const isFar = dist2 > baseR2;
+          // Beyond base radius — only include if in forward cone
+          if (isFar) {
+            const dot = dx * chunkDirX + dz * chunkDirZ;
+            if (dot <= 0) continue;
+          }
           const cx = pcx + dx, cz = pcz + dz;
           const key = `${cx},${cz}`;
           needed.add(key);
-          if (!terrainChunks.has(key)) {
-            spawnTerrainChunk(cx, cz);
+
+          const existing = terrainChunks.get(key);
+          if (!existing) {
+            // New chunk — spawn at appropriate LOD
+            spawnTerrainChunk(cx, cz, isFar);
             spawnWaterChunk(cx, cz);
-            spawnSceneryChunk(cx, cz);
+            if (!isFar) spawnSceneryChunk(cx, cz);  // skip scenery for far chunks
+          } else if (existing.far && !isFar) {
+            // Was far LOD, now inside base radius — upgrade to full detail
+            existing.mesh.geometry.dispose();
+            scene.remove(existing.mesh);
+            terrainChunks.delete(key);
+            spawnTerrainChunk(cx, cz, false);
+            if (!sceneryChunks.has(key)) spawnSceneryChunk(cx, cz);
           }
         }
       }
 
-      // Remove chunks outside range
+      // Remove chunks outside needed set
       for (const [key, ch] of terrainChunks) {
         if (!needed.has(key)) { ch.mesh.geometry.dispose(); scene.remove(ch.mesh); terrainChunks.delete(key); }
       }
@@ -4646,6 +4689,15 @@ window.TrackScenes = (function() {
       }
       for (const [key, ch] of sceneryChunks) {
         if (!needed.has(key)) { for (const obj of ch.objects) scene.remove(obj); sceneryChunks.delete(key); }
+      }
+
+      // Report chunk counts to perf stats
+      if (window.SceneTuner?.reportChunks) {
+        let near = 0, far = 0;
+        for (const [, ch] of terrainChunks) { if (ch.far) far++; else near++; }
+        let sceneryCount = 0;
+        for (const [, ch] of sceneryChunks) sceneryCount += ch.objects.length;
+        window.SceneTuner.reportChunks(near, far, CHUNK_SEGS, FAR_SEGS, waterChunks.size, sceneryCount);
       }
     }
 
@@ -4784,20 +4836,54 @@ window.TrackScenes = (function() {
     // ═══════════════════════════════════════════════════════════════════════
     const tunerCallback = (section, param, value) => {
       if (section === 'sun') {
-        if (param === 'elevation') baseSunElevation = value;
-        else if (param === 'azimuth') sunAzimuth = value;
+        if (param === 'baseSunElevation') baseSunElevation = value;
+        else if (param === 'sunElevationRange') sunElevationRange = value;
+        else if (param === 'sunAzimuth') sunAzimuth = value;
       } else if (section === 'atmosphere') {
-        if (param === 'turbidity') baseTurbidity = value;
-        else if (param === 'rayleigh') baseRayleigh = value;
-        else if (param === 'mieCoefficient') baseMieCoefficient = value;
-        else if (param === 'mieDirectionalG') baseMieDirectionalG = value;
-        else if (param === 'exposure') baseExposure = value;
+        if (param === 'baseTurbidity') baseTurbidity = value;
+        else if (param === 'baseRayleigh') baseRayleigh = value;
+        else if (param === 'baseMieCoefficient') baseMieCoefficient = value;
+        else if (param === 'baseMieDirectionalG') baseMieDirectionalG = value;
+        else if (param === 'baseExposure') baseExposure = value;
       } else if (section === 'lighting') {
-        if (param === 'sunIntensity') sunLight.intensity = value;
-        else if (param === 'ambientIntensity') hemiLight.intensity = value;
+        if (param === 'baseSunIntensity') baseSunIntensity = value;
+        else if (param === 'sunIntensityRange') sunIntensityRange = value;
+        else if (param === 'baseHemiIntensity') baseHemiIntensity = value;
+        else if (param === 'hemiIntensityRange') hemiIntensityRange = value;
       } else if (section === 'fog') {
-        if (param === 'near' && scene.fog) scene.fog.near = value;
-        else if (param === 'far' && scene.fog) scene.fog.far = value;
+        if (param === 'fogDensity') activeTheme.fogDensity = value;
+        else if (param === 'fogColor') activeTheme.fogColor = value;
+        else if (param === 'fogColorLight') fogColorLight = value;
+        else if (param === 'fogDissipation') fogDissipation = value;
+      } else if (section === 'water') {
+        if (param === 'waterY') {
+          for (const [, ch] of waterChunks) ch.mesh.position.y = value;
+        } else if (param === 'waterColor') {
+          waterMat.color.setHex(value);
+        } else if (param === 'waterOpacity') {
+          waterMat.opacity = value;
+        } else if (param === 'waterRoughness') {
+          waterMat.roughness = value;
+        } else if (param === 'waterMetalness') {
+          waterMat.metalness = value;
+        }
+      } else if (section === 'terrain') {
+        if (param === 'flatShading') {
+          terrainMat.flatShading = value;
+          terrainMat.needsUpdate = true;
+        } else if (param === 'roughness') {
+          terrainMat.roughness = value;
+        } else if (param === 'metalness') {
+          terrainMat.metalness = value;
+        } else if (param === 'emissiveIntensity') {
+          terrainMat.emissiveIntensity = value;
+        } else if (param === 'sceneryDensity') {
+          activeTheme.sceneryDensity = value;
+        } else if (terrainMat._waterUniforms && param in terrainMat._waterUniforms) {
+          terrainMat._waterUniforms[param].value = value;
+        }
+      } else if (section === 'flight') {
+        if (param in FLY) FLY[param] = value;
       } else if (section === 'stars') {
         if (param in starCfg) {
           starCfg[param] = value;
@@ -4812,7 +4898,10 @@ window.TrackScenes = (function() {
         }
       }
     };
-    if (window.SceneTuner) window.SceneTuner.onUpdate(tunerCallback);
+    if (window.SceneTuner) {
+      window.SceneTuner.onUpdate(tunerCallback);
+      window.SceneTuner.syncFromTheme(activeTheme, FLY, starCfg);
+    }
 
     return {
       group,
@@ -4934,6 +5023,17 @@ window.TrackScenes = (function() {
         const posZ = bird ? bird.position.z : 0;
         updateChunks2D(posX, posZ);
 
+        // Update new lighting/fog range variables from theme (with fallbacks)
+        sunElevationRange = activeTheme.sunElevationRange || 10;
+        baseSunIntensity = activeTheme.baseSunIntensity || 0.1;
+        sunIntensityRange = activeTheme.sunIntensityRange || 1.6;
+        baseHemiIntensity = activeTheme.baseHemiIntensity || 0.04;
+        hemiIntensityRange = activeTheme.hemiIntensityRange || 0.46;
+        fogDissipation = activeTheme.fogDissipation || 0.85;
+        fogColorLight = activeTheme.fogColorLight || 0x8c7a5e;
+
+        if (window.SceneTuner) window.SceneTuner.syncFromTheme(activeTheme, FLY, starCfg);
+
         console.log('[Flight] Theme swap complete:', newThemeName);
       },
 
@@ -4946,8 +5046,9 @@ window.TrackScenes = (function() {
         // Keep effects hidden
         for (const fx of hiddenEffects) fx.visible = false;
 
-        // Sun rises with song progress: -5° at start → +5° at end
-        const SUN_START = -5, SUN_END = 5;
+        // Sun rises with song progress over baseSunElevation → baseSunElevation + sunElevationRange
+        const SUN_START = baseSunElevation;
+        const SUN_END = baseSunElevation + sunElevationRange;
         let songProgress = 0;
         const sp = window.currentStemPlayer;
         if (sp && sp.getDuration && sp.getDuration() > 0) {
@@ -4962,6 +5063,7 @@ window.TrackScenes = (function() {
         const dynTheta = sunAzimuth * Math.PI / 180;
         sunPos.setFromSphericalCoords(1, dynPhi, dynTheta);
         skyUniforms.sunPosition.value.copy(sunPos);
+        if (terrainMat && terrainMat._sunDirUniform) terrainMat._sunDirUniform.value.copy(sunPos);
 
         // Natural sun-linked lighting: derive everything from sun elevation
         // smoothstep maps elevation smoothly: 0 at -5° (below horizon) → 1 at +5° (above)
@@ -4977,8 +5079,8 @@ window.TrackScenes = (function() {
         skyUniforms.exposure.value = baseExposure + sunFactor * 0.5;
 
         // Light intensities driven by sun elevation
-        sunLight.intensity = 0.1 + sunFactor * 1.6;     // 0.1 (below horizon) → 1.7 (above)
-        hemiLight.intensity = 0.04 + sunFactor * 0.46;   // 0.04 (dark) → 0.5 (bright)
+        sunLight.intensity = baseSunIntensity + sunFactor * sunIntensityRange;
+        hemiLight.intensity = baseHemiIntensity + sunFactor * hemiIntensityRange;
 
         // Sun color shifts: warm orange near horizon → warm golden when higher
         const warmth = 1 - sunFactor * 0.15;  // 1.0 (warm) → 0.85 (stays warm)
@@ -4996,12 +5098,19 @@ window.TrackScenes = (function() {
 
         // Fog dissipates as sun rises — thick at dawn, nearly gone in daylight
         if (scene.fog) {
-          scene.fog.density = activeTheme.fogDensity * (1 - sunFactor * 0.85);
-          // Fog color warms with sunrise: dark blue-grey → warm haze
-          const fogR = 0.04 + sunFactor * 0.55;
-          const fogG = 0.04 + sunFactor * 0.45;
-          const fogB = 0.08 + sunFactor * 0.35;
-          scene.fog.color.setRGB(fogR, fogG, fogB);
+          scene.fog.density = activeTheme.fogDensity * (1 - sunFactor * fogDissipation);
+          // Fog color lerps from fogColor (night) → fogColorLight (day)
+          const darkR = (activeTheme.fogColor >> 16 & 0xff) / 255;
+          const darkG = (activeTheme.fogColor >> 8 & 0xff) / 255;
+          const darkB = (activeTheme.fogColor & 0xff) / 255;
+          const litR = (fogColorLight >> 16 & 0xff) / 255;
+          const litG = (fogColorLight >> 8 & 0xff) / 255;
+          const litB = (fogColorLight & 0xff) / 255;
+          scene.fog.color.setRGB(
+            darkR + sunFactor * (litR - darkR),
+            darkG + sunFactor * (litG - darkG),
+            darkB + sunFactor * (litB - darkB),
+          );
         }
 
         // ── Star dome fade + moon + shooting stars ──
@@ -5077,6 +5186,12 @@ window.TrackScenes = (function() {
         sunLight.position.z += posZ;
         sunLight.target.position.set(posX, 0, posZ);
         sunLight.target.updateMatrixWorld();
+
+        // Update forward direction for directional chunk loading
+        if (bird) {
+          chunkDirX = Math.sin(bird.rotation.y);
+          chunkDirZ = Math.cos(bird.rotation.y);
+        }
 
         // Spawn/cleanup terrain + water + scenery in 2D grid around bird
         updateChunks2D(posX, posZ);

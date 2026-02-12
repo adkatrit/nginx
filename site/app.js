@@ -5451,8 +5451,8 @@
       // Toggle audio reactivity panel
       toggleStemDebugPanel();
     } else if (key === "t") {
-      // Toggle sun settings panel
-      toggleSunSettingsPanel();
+      if (window.SceneTuner) window.SceneTuner.toggle();
+      else toggleSunSettingsPanel();
     }
   });
 
