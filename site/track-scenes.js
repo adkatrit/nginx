@@ -4829,8 +4829,8 @@ window.TrackScenes = (function() {
       camZ: -10,
       lookAtZ: 15,
       // Whole-body pitch for dive/climb
-      divePitchMax: 0.55,     // ~32° nose-down — steep hawk dive
-      divePitchStep: 0.018,   // fast tilt into dive
+      divePitchMax: 0.30,     // ~17° nose-down — gentle descent
+      divePitchStep: 0.010,   // same rate as climb
       climbPitchMax: 0.22,    // ~13° nose-up — gentler climb
       climbPitchStep: 0.010,  // slower tilt into climb
       pitchReturn: 0.025,     // how fast pitch returns to level
