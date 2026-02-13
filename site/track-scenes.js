@@ -4014,8 +4014,6 @@ window.TrackScenes = (function() {
       exposure: uniform(0.5),
     };
 
-    // Time uniform for GPU-animated terrain (e.g. ocean waves in Data Tide)
-    const oceanTimeUniform = uniform(0);
 
     const preethamColorNode = Fn(() => {
       const worldPos = positionWorld;
@@ -5103,7 +5101,6 @@ window.TrackScenes = (function() {
 
       update(time, freq, amplitude, shipPos, shipSpeed, stemData) {
         currentTime = time;
-        oceanTimeUniform.value = time;
         const shipX = shipPos ? shipPos.x : 0;
         const shipZ = shipPos ? shipPos.z : 0;
 
