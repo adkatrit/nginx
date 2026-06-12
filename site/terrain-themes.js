@@ -283,7 +283,8 @@ window.TERRAIN_THEMES = (function() {
     // Use Three.js WaterMesh (TSL/WebGPU reflective ocean) instead of chunked terrain
     useWaterMesh: true,
     waterMeshConfig: {
-      size: 10000,           // single large plane
+      size: 2800,            // sized to camera far (1200) — was 10000, which
+                             // starved depth precision (shoreline z-fighting)
       textureSize: 1.0,      // normal map scale
       waterColor: 0x001e0f,
       sunColor: 0xffffff,

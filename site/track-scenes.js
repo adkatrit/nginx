@@ -4675,8 +4675,12 @@ window.TrackScenes = (function() {
         const waterNormals = await loader.loadAsync('textures/waternormals.jpg');
         waterNormals.wrapS = waterNormals.wrapT = THREE.RepeatWrapping;
 
-        const planeSize = cfg.size || 10000;
-        const geom = new THREE.PlaneGeometry(planeSize, planeSize);
+        // Sized to the camera's draw distance (far=1200), not 10000 — huge
+        // coordinates + two giant triangles starved the depth buffer and
+        // made shorelines z-fight. Tessellation keeps depth interpolation
+        // local so the terrain intersection stays stable.
+        const planeSize = cfg.size || 2800;
+        const geom = new THREE.PlaneGeometry(planeSize, planeSize, 32, 32);
         geom.rotateX(-Math.PI / 2);
 
         waterDistortBase = cfg.distortionScale ?? 3.7;

@@ -617,8 +617,12 @@
       this.flowGateGroup.name = 'flow-gates';
       this.scene.add(this.flowGateGroup);
 
-      // Set camera far plane for long draw distance
+      // Set camera planes for long draw distance. Near raised from 0.1:
+      // depth precision is dominated by the near plane, and 0.1 wasted it —
+      // water/terrain intersections z-fight (shoreline shimmer) at distance.
+      // Nothing renders closer than ~2 units to the chase camera.
       if (this.camera) {
+        this.camera.near = 0.5;
         this.camera.far = CONFIG.cameraFar;
         this.camera.updateProjectionMatrix();
       }
