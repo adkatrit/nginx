@@ -4382,6 +4382,90 @@ window.TrackScenes = (function() {
     console.log('[Flight] Star dome texture (%dx%d) + moon sprite ready', STAR_MAP_W, STAR_MAP_H);
 
     // ═══════════════════════════════════════════════════════════════════════
+    // VOLUMETRIC CLOUDS — raymarched slab on an upper sky shell.
+    // Density from three's MaterialX fractal noise (mx_fractal_noise_float),
+    // 8 march steps unrolled at graph-build time, lit from above with a
+    // forward-scattering silver lining toward the sun. Tinting follows the
+    // day cycle (warm dark at dawn → white at noon). Built defensively:
+    // any failure leaves the scene cloudless but intact.
+    // ═══════════════════════════════════════════════════════════════════════
+    let cloudMesh = null;
+    let cloudUniforms = null;
+    try {
+      const mxFractal = TSL.mx_fractal_noise_float;
+      if (typeof mxFractal !== 'function') throw new Error('mx noise unavailable');
+
+      cloudUniforms = {
+        time: uniform(0),
+        coverage: uniform(activeTheme.cloudCoverage ?? 0.42),
+        lightCol: uniform(new THREE.Color(1, 1, 1)),
+        ambientCol: uniform(new THREE.Color(0.25, 0.28, 0.34)),
+      };
+
+      const CLOUD_BASE = 150, CLOUD_TOP = 240, CLOUD_STEPS = 8;
+      const cloudColorNode = Fn(() => {
+        const dir = tslNormalize(positionWorld.sub(tslCameraPosition));
+        const dy = tslMax(dir.y, float(0.02));
+        const t0 = float(CLOUD_BASE).sub(tslCameraPosition.y).div(dy);
+        const t1 = float(CLOUD_TOP).sub(tslCameraPosition.y).div(dy);
+        const stepT = t1.sub(t0).div(CLOUD_STEPS);
+
+        const trans = float(1).toVar();
+        const lightAcc = float(0).toVar();
+        for (let s = 0; s < CLOUD_STEPS; s++) {
+          const tt = t0.add(stepT.mul(s + 0.5));
+          const p = tslCameraPosition.add(dir.mul(tt));
+          // Puffy height profile: zero at slab edges, full in the middle
+          const hf = tslClamp(p.y.sub(CLOUD_BASE).div(CLOUD_TOP - CLOUD_BASE), 0, 1);
+          const hProfile = smoothstep(float(0), float(0.25), hf)
+            .mul(float(1).sub(smoothstep(float(0.65), float(1), hf)));
+          const np = vec3(
+            p.x.mul(0.0032).add(cloudUniforms.time.mul(0.006)),
+            p.y.mul(0.0085),
+            p.z.mul(0.0032),
+          );
+          const nn = mxFractal(np, 3, 2.0, 0.55, 1.0).mul(0.32).add(0.5);
+          const edge0 = float(1).sub(cloudUniforms.coverage);
+          const dens = smoothstep(edge0, edge0.add(0.22), nn).mul(hProfile);
+          const a = dens.mul(0.42);
+          // Lit from above — tops bright, undersides shaded
+          const lit = float(0.35).add(hf.mul(0.65));
+          lightAcc.addAssign(trans.mul(a).mul(lit));
+          trans.mulAssign(float(1).sub(a));
+        }
+
+        const horizonFade = smoothstep(float(0.015), float(0.12), dir.y);
+        const alpha = float(1).sub(trans).mul(horizonFade);
+        // Forward scattering: silver lining when looking toward the sun
+        const sunDirN = tslNormalize(skyUniforms.sunPosition);
+        const cosSun = tslClamp(tslDot(dir, sunDirN), 0, 1);
+        const silver = tslPow(cosSun, float(8)).mul(0.55).add(1);
+        const cloudCol = mix(cloudUniforms.ambientCol, cloudUniforms.lightCol,
+          tslClamp(lightAcc, 0, 1)).mul(silver);
+        return vec4(cloudCol, alpha);
+      })();
+
+      const cloudMat = new TSL.MeshBasicNodeMaterial({
+        side: THREE.BackSide,
+        transparent: true,
+        depthWrite: false,
+        colorNode: cloudColorNode,
+      });
+      // Upper shell only (clouds never render below the horizon band)
+      const cloudGeom = new THREE.SphereGeometry(478, 48, 24, 0, Math.PI * 2, 0, Math.PI * 0.62);
+      cloudMesh = new THREE.Mesh(cloudGeom, cloudMat);
+      cloudMesh.renderOrder = 3; // over star dome + moon so clouds occlude them
+      cloudMesh.frustumCulled = false;
+      group.add(cloudMesh);
+      console.log('[Flight] Volumetric cloud layer ready');
+    } catch (err) {
+      console.warn('[Flight] Volumetric clouds unavailable:', err);
+      cloudMesh = null;
+      cloudUniforms = null;
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════════════
     // SHOOTING STARS — audio-reactive, triggered by drum hits
     // ═══════════════════════════════════════════════════════════════════════
     const SHOOTING_POOL = 6;  // sized for crash-cymbal volleys (3 at once) + ambient strays
@@ -5302,6 +5386,7 @@ window.TrackScenes = (function() {
         // Music-reactivity baselines follow the new theme
         terrainEmissiveBase = activeTheme.terrainMatProps?.emissiveIntensity || 0;
         waterRoughBase = activeTheme.waterRoughness;
+        if (cloudUniforms) cloudUniforms.coverage.value = activeTheme.cloudCoverage ?? 0.42;
 
         if (window.SceneTuner) window.SceneTuner.syncFromTheme(activeTheme, FLY, starCfg);
 
@@ -5359,6 +5444,20 @@ window.TrackScenes = (function() {
         const warmth = 1 - sunFactor * 0.15;  // 1.0 (warm) → 0.85 (stays warm)
         sunLight.color.setRGB(1, 0.53 + sunFactor * 0.17, 0.27 + sunFactor * 0.23);
         hemiLight.color.setRGB(1 * warmth, 0.8 * warmth, 0.67 * warmth);
+
+        // Volumetric clouds: wind drift + day-cycle tinting. Dawn lights the
+        // tops warm and dim; midday reads white with cool shaded undersides.
+        if (cloudUniforms) {
+          cloudUniforms.time.value = time;
+          const cb = 0.12 + sunFactor * 0.95;
+          cloudUniforms.lightCol.value.setRGB(
+            cb,
+            cb * (0.62 + sunFactor * 0.38),
+            cb * (0.5 + sunFactor * 0.5),
+          );
+          const ab = 0.05 + sunFactor * 0.3;
+          cloudUniforms.ambientCol.value.setRGB(ab * 0.85, ab * 0.9, ab * 1.1);
+        }
 
         // Renderer tone mapping exposure — darkens/brightens the ENTIRE scene (terrain, water, bird, everything)
         const envRenderer = window.EnvironmentMode?.instance?.renderer;
