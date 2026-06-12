@@ -21,7 +21,9 @@ const RhythmGates = (function () {
   'use strict';
 
   const CFG = {
-    leadTime: 3.0,            // seconds ahead a gate spawns
+    leadTime: 2.4,            // seconds ahead a gate spawns — short enough
+                              // that spawn-time arc prediction stays accurate
+                              // (rings NEVER move once placed)
     minSpawnGap: 0.45,        // min seconds between consecutive gates
     minLeadToSpawn: 1.0,      // never spawn a gate closer than this
     perfectWindow: 0.1,       // |hit - note| for PERFECT (flow x2)
@@ -35,13 +37,11 @@ const RhythmGates = (function () {
     // ~1s of heading swing — proven fair by the inertia-limited bot test.
     lateralReachPerSec: 2.5,
     verticalReachPerSec: 3,
-    // Turn-aware placement: gates are placed on the player's PREDICTED arc
-    // (current turn rate, easing off with this half-life), and distant gates
-    // drift with the live prediction until inside the freeze horizon — then
-    // they lock so close-range steering skill stays fair.
+    // Turn-aware placement: gates spawn on the player's PREDICTED arc
+    // (current turn rate, easing off with this half-life). Placement is
+    // final at spawn — moving rings after the player has seen them reads
+    // as the game cheating, so commitment is absolute.
     turnPredictHalfLife: 1.5,
-    gateFreezeLead: 1.2,
-    gateDriftRate: 4,
     minClearance: 5,          // gate center height above ground/water
     maxAltitude: 85,
     poolSize: 14,
@@ -310,7 +310,7 @@ const RhythmGates = (function () {
           this._shimmerArmed = true;
         }
       }
-      this._updateGates(now, isPlaying, dt);
+      this._updateGates(now, isPlaying);
       this._updateThread();
     }
 
@@ -473,7 +473,7 @@ const RhythmGates = (function () {
       return this._v2;
     }
 
-    _updateGates(now, isPlaying, dt) {
+    _updateGates(now, isPlaying) {
       const bird = this.sceneApi.getBirdState ? this.sceneApi.getBirdState() : null;
 
       for (const g of this.pool) {
@@ -500,21 +500,6 @@ const RhythmGates = (function () {
         g.mat.opacity = 0.12 + approach * 0.55 + beatFlash;
 
         if (!isPlaying || !bird) continue;
-
-        // Far gates glide with the live arc prediction — turning no longer
-        // strands them off your old heading. Inside the freeze horizon they
-        // lock, so close-range steering skill decides the hit.
-        if (lead > CFG.gateFreezeLead) {
-          const target = this._placeGate(g, bird, lead);
-          g.pos.lerp(target, Math.min(1, (dt || 0.016) * CFG.gateDriftRate));
-          g.normal.copy(this._fwd);
-          g.mesh.position.copy(g.pos);
-          this._v1.copy(g.pos).add(g.normal);
-          g.mesh.lookAt(this._v1);
-          this._v1.subVectors(bird.position, g.pos);
-          g.prevAlong = this._v1.dot(g.normal);
-          continue; // still repositioning ahead of the bird — can't be crossed
-        }
 
         // Plane crossing → hit if inside the ring, miss if we clipped past it
         this._v1.subVectors(bird.position, g.pos);
