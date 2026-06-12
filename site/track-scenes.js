@@ -4472,8 +4472,9 @@ window.TrackScenes = (function() {
     const hemiLight = new THREE.HemisphereLight(0xffccaa, 0x553311, 0.04);  // Starts dim
     scene.add(hemiLight);
 
-    // Fog starts thin, dissipates as sun rises
-    scene.fog = new THREE.FogExp2(activeTheme.fogColor, activeTheme.fogDensity);
+    // No fog — it hid the scenery. Depth comes from the sky gradient and
+    // distance LOD instead. (Per-frame code guards on scene.fog === null.)
+    scene.fog = null;
 
     // ═══════════════════════════════════════════════════════════════════════
     // WORLD SEED — changes every 30 minutes for terrain variety
@@ -5186,11 +5187,7 @@ window.TrackScenes = (function() {
         baseMieDirectionalG = activeTheme.baseMieDirectionalG;
         baseExposure = activeTheme.baseExposure;
 
-        // Update fog
-        if (scene.fog) {
-          scene.fog.color.setHex(activeTheme.fogColor);
-          scene.fog.density = activeTheme.fogDensity;
-        }
+        // Fog stays off (removed — it hid the scenery)
 
         // 7. Update chunk constants
         CHUNK_SIZE = activeTheme.chunkSize || 80;
@@ -5302,23 +5299,6 @@ window.TrackScenes = (function() {
             envRenderer.toneMapping = THREE.ACESFilmicToneMapping;
           }
           envRenderer.toneMappingExposure = 0.15 + sunFactor * 0.85;  // 0.15 (dark) → 1.0 (bright)
-        }
-
-        // Fog transitions with sunrise: lerp from night density → day density
-        if (scene.fog) {
-          scene.fog.density = activeTheme.fogDensity + sunFactor * (fogDensityDay - activeTheme.fogDensity);
-          // Fog color lerps from fogColor (night) → fogColorLight (day)
-          const darkR = (activeTheme.fogColor >> 16 & 0xff) / 255;
-          const darkG = (activeTheme.fogColor >> 8 & 0xff) / 255;
-          const darkB = (activeTheme.fogColor & 0xff) / 255;
-          const litR = (fogColorLight >> 16 & 0xff) / 255;
-          const litG = (fogColorLight >> 8 & 0xff) / 255;
-          const litB = (fogColorLight & 0xff) / 255;
-          scene.fog.color.setRGB(
-            darkR + sunFactor * (litR - darkR),
-            darkG + sunFactor * (litG - darkG),
-            darkB + sunFactor * (litB - darkB),
-          );
         }
 
         // ── Star dome fade + moon + shooting stars ──
@@ -5452,16 +5432,10 @@ window.TrackScenes = (function() {
           waterMat.roughness = Math.max(0.02, waterRoughBase * (1 - hatEff * 0.3 - bassSwellEff * 0.1));
         }
 
-        // Atmosphere: bass thickens the air, vocals lift and clear it
-        if (scene.fog) {
-          scene.fog.density = Math.max(0, scene.fog.density * (1 + bassSwellEff * 0.3 - vocalEff * 0.18));
-        }
-
-        // Chords tint sky light + fog toward the actual harmony
+        // Chords tint the sky light toward the actual harmony
         if (pulse.chordMix > 0.02) {
           _chordColor.setHSL(pulse.chordHue, 0.5, 0.55);
           hemiLight.color.lerp(_chordColor, pulse.chordMix * 0.35);
-          if (scene.fog) scene.fog.color.lerp(_chordColor, pulse.chordMix * 0.12);
         }
 
         // Night sky: hats twinkle the stars, vocals breathe through the moon
