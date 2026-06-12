@@ -26,14 +26,15 @@ const RhythmGates = (function () {
     minLeadToSpawn: 1.0,      // never spawn a gate closer than this
     perfectWindow: 0.1,       // |hit - note| for PERFECT (flow x2)
     missTimeout: 0.9,         // seconds past note time before an uncrossed gate misses
-    lateralJitter: 6,
+    lateralJitter: 5,
     verticalJitterLo: -2,
     verticalJitterHi: 4,
     // Reachability budget: how fast a player can realistically translate
-    // sideways/vertically while flying forward. Gate-to-gate offsets are
-    // clamped by these so every gate is makeable from the one before it.
-    lateralReachPerSec: 3.5,
-    verticalReachPerSec: 4,
+    // sideways/vertically while flying forward. Deliberately below the
+    // bird's straight-line capability because reversing direction costs
+    // ~1s of heading swing — proven fair by the inertia-limited bot test.
+    lateralReachPerSec: 2.5,
+    verticalReachPerSec: 3,
     minClearance: 5,          // gate center height above ground/water
     maxAltitude: 85,
     poolSize: 14,
@@ -165,6 +166,11 @@ const RhythmGates = (function () {
       this.useGrid = null;      // lazily decided: MIDI drums vs BPM grid
       this.laneLat = 0;         // smoothly wandering lane (gate-to-gate coherent)
       this.laneY = null;
+      // Measured flight speed (units per second of MUSIC time). The flight
+      // model is per-frame, so assumed speed breaks on non-60Hz displays —
+      // measuring keeps gate arrival locked to the note regardless of fps.
+      this.measuredSpeed = 0;
+      this._prevBirdPos = null;
 
       const THREE = this.THREE;
       this._v1 = new THREE.Vector3();
@@ -253,6 +259,22 @@ const RhythmGates = (function () {
       const dt = Math.max(0, Math.min(0.1, now - this.lastNow));
       if (now < this.lastNow - 0.25) this.reset();
       this.lastNow = now;
+
+      // Track real speed against the music clock (EMA, jump-guarded)
+      const birdNow = this.sceneApi.getBirdState ? this.sceneApi.getBirdState() : null;
+      if (birdNow && isPlaying && dt > 0.004) {
+        if (this._prevBirdPos) {
+          const inst = this._v1.subVectors(birdNow.position, this._prevBirdPos).length() / dt;
+          if (inst > 0.5 && inst < 150) {
+            this.measuredSpeed = this.measuredSpeed > 0
+              ? this.measuredSpeed * 0.92 + inst * 0.08
+              : inst;
+          }
+        } else {
+          this._prevBirdPos = new this.THREE.Vector3();
+        }
+        this._prevBirdPos.copy(birdNow.position);
+      }
 
       if (this.enabled && isPlaying) {
         this._plan(now);
@@ -355,10 +377,18 @@ const RhythmGates = (function () {
         // player can actually reach from the previous gate (and from the
         // bird's current line) in the time available — no impossible zigzags.
         this._fwd.set(0, 0, 1).applyQuaternion(bird.quaternion);
-        const dist = bird.speedPerSec * lead;
+        // Measured speed keeps arrival on the note at any display refresh
+        // rate; the scene's 60fps estimate seeds it before measurement
+        const spd = this.measuredSpeed > 1 ? this.measuredSpeed : bird.speedPerSec;
+        const dist = spd * lead;
         const gapPrev = Math.min(3, Math.max(0.1, time - this.lastPlannedTime));
 
-        const latTarget = (Math.random() * 2 - 1) * CFG.lateralJitter;
+        // Serpentine lane: a slow sine of note time has bounded slope AND
+        // bounded curvature, so direction reversals are always gentle enough
+        // for the bird's yaw inertia (a random walk is not — it can demand
+        // instant velocity flips). Small jitter adds variety on top.
+        const latTarget = Math.sin(time * 0.4) * CFG.lateralJitter
+          + (Math.random() * 2 - 1) * 0.8;
         const maxLatDelta = CFG.lateralReachPerSec * gapPrev;
         this.laneLat = Math.max(this.laneLat - maxLatDelta,
           Math.min(this.laneLat + maxLatDelta, latTarget));
@@ -369,8 +399,9 @@ const RhythmGates = (function () {
         this._side.crossVectors(this._up, this._fwd).normalize();
         gate.pos.addScaledVector(this._side, lat);
 
-        const vTarget = bird.position.y + CFG.verticalJitterLo
-          + Math.random() * (CFG.verticalJitterHi - CFG.verticalJitterLo);
+        const vTarget = bird.position.y + 0.5
+          + Math.sin(time * 0.27 + 2) * 2.5
+          + (Math.random() * 2 - 1) * 0.6;
         const maxVDelta = CFG.verticalReachPerSec * gapPrev;
         if (this.laneY === null) this.laneY = bird.position.y;
         this.laneY = Math.max(this.laneY - maxVDelta,

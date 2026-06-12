@@ -4835,10 +4835,10 @@ window.TrackScenes = (function() {
       forwardSpeed: 0.25,
       doubleSpeed: 0.6,
       // Turn rate tuned for rhythm-gate steering (originally 0.0015/0.000075,
-      // ~5°/s). Now ~21°/s, reaching full rate in ~10 frames so the turn
-      // arrives the moment the key does.
-      rotateYMax: 0.006,
-      rotateYAccel: 0.0006,
+      // ~5°/s). Now ~26°/s arriving in ~4 frames — effectively proportional
+      // control; the camera lerp provides the smoothing.
+      rotateYMax: 0.0075,
+      rotateYAccel: 0.0019,
       pitchAltScale: 2.0,   // multiplier for pitch-driven altitude change
       minY: 2,
       maxY: 90,
