@@ -4367,7 +4367,7 @@ window.TrackScenes = (function() {
     // ═══════════════════════════════════════════════════════════════════════
     // SHOOTING STARS — audio-reactive, triggered by drum hits
     // ═══════════════════════════════════════════════════════════════════════
-    const SHOOTING_POOL = 3;
+    const SHOOTING_POOL = 6;  // sized for crash-cymbal volleys (3 at once) + ambient strays
     const SHOOTING_TRAIL = 10;
     const shootingStars = [];
 
@@ -4553,6 +4553,7 @@ window.TrackScenes = (function() {
     // ═══════════════════════════════════════════════════════════════════════
     let waterMeshObj = null;      // WaterMesh instance (or null if not active)
     let waterMeshReady = false;   // true once async import + creation completes
+    let waterDistortBase = 3.7;   // resting distortion — music swells around this
 
     async function createWaterMeshForTheme(theme) {
       if (!theme.useWaterMesh) return;
@@ -4567,12 +4568,13 @@ window.TrackScenes = (function() {
         const geom = new THREE.PlaneGeometry(planeSize, planeSize);
         geom.rotateX(-Math.PI / 2);
 
+        waterDistortBase = cfg.distortionScale ?? 3.7;
         waterMeshObj = new WaterMesh(geom, {
           waterNormals,
           sunDirection: new THREE.Vector3(sunPos.x, sunPos.y, sunPos.z),
           sunColor: cfg.sunColor ?? 0xffffff,
           waterColor: cfg.waterColor ?? 0x001e0f,
-          distortionScale: cfg.distortionScale ?? 3.7,
+          distortionScale: waterDistortBase,
           size: cfg.textureSize ?? 1.0,
           alpha: cfg.alpha ?? 0.98,
         });
@@ -4884,6 +4886,137 @@ window.TrackScenes = (function() {
     document.addEventListener('mouseup', onMouseUp);
 
     // ═══════════════════════════════════════════════════════════════════════
+    // MUSIC REACTIVITY — the world listens back
+    //
+    // Two layers, following the AC/DC philosophy from the scene-director spec:
+    //  • MIDI pulses (frame-perfect, via MidiRouter → onMidi): kick punches
+    //    light + ground shockwaves, snare flashes the sky, crash launches
+    //    shooting-star volleys, bass pitch swells water/fog, chords tint
+    //    the atmosphere.
+    //  • FFT baselines (continuous, via update()'s stemData): keep mix-only
+    //    tracks alive and give MIDI hits a bed to land on.
+    // All values are transient multipliers/offsets applied AFTER the scene's
+    // own day-cycle math each frame, so the base look is never corrupted.
+    // ═══════════════════════════════════════════════════════════════════════
+    const pulse = {
+      kick: 0, snare: 0, hat: 0, crash: 0,
+      bassSwell: 0, vocal: 0, energy: 0,
+      chordHue: 0, chordMix: 0,
+    };
+    let terrainEmissiveBase = activeTheme.terrainMatProps?.emissiveIntensity || 0;
+    let waterRoughBase = activeTheme.waterRoughness;
+    let baseFov = 0;            // captured from the env camera on first frame
+    let shakeAmp = 0;           // snare/crash camera shake envelope
+    let shakeTime = 0;
+    let lastPulseTime = 0;
+    let musicSpeedLift = 1;     // flight speed rides the energy of the mix
+    let prevBassE = 0;          // onset detection for tracks without MIDI
+    let onsetCooldown = 0;
+    const _chordColor = new THREE.Color();
+
+    // ── Shockwave rings: expanding ground pulses on kick/tom hits ──
+    const RING_POOL = 6;
+    const shockRings = [];
+    const ringGeom = new THREE.RingGeometry(0.82, 1, 48);
+    ringGeom.rotateX(-Math.PI / 2);
+    for (let ri = 0; ri < RING_POOL; ri++) {
+      const mat = new THREE.MeshBasicMaterial({
+        color: 0xffddaa,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        toneMapped: false,
+      });
+      const mesh = new THREE.Mesh(ringGeom, mat);
+      mesh.visible = false;
+      mesh.frustumCulled = false;
+      mesh.renderOrder = 1;
+      scene.add(mesh);  // world-space (group follows the bird)
+      shockRings.push({ mesh, mat, active: false, age: 0, life: 1, intensity: 0 });
+    }
+
+    function spawnShockRing(intensity, colorHex) {
+      if (!bird) return;
+      const ring = shockRings.find(r => !r.active);
+      if (!ring) return;
+      const groundY = Math.max(terrainHeight(bird.position.x, bird.position.z), activeTheme.waterY);
+      ring.mesh.position.set(bird.position.x, groundY + 0.4, bird.position.z);
+      ring.mesh.scale.setScalar(2.5);
+      ring.mat.color.setHex(colorHex);
+      ring.mat.opacity = 0;
+      ring.mesh.visible = true;
+      ring.active = true;
+      ring.age = 0;
+      ring.life = 0.9 + intensity * 0.4;
+      ring.intensity = intensity;
+    }
+
+    function updateShockRings(udt) {
+      for (const ring of shockRings) {
+        if (!ring.active) continue;
+        ring.age += udt;
+        const t = ring.age / ring.life;
+        if (t >= 1) {
+          ring.active = false;
+          ring.mesh.visible = false;
+          continue;
+        }
+        const radius = 2.5 + t * (28 + ring.intensity * 30);
+        ring.mesh.scale.setScalar(radius);
+        ring.mat.opacity = (1 - t) * (1 - t) * 0.55 * ring.intensity;
+      }
+    }
+
+    // Frame-perfect MIDI events, enriched by MidiRouter (kind/velocity01/pitch01)
+    function onMidiEvent(ev) {
+      if (!ev || ev.type !== 'noteOn') return;
+      const v = ev.velocity01 != null ? ev.velocity01 : (ev.velocity || 100) / 127;
+      switch (ev.kind) {
+        case 'kick':
+          pulse.kick = Math.min(1, Math.max(pulse.kick, 0.55 + v * 0.45));
+          if (v > 0.35) spawnShockRing(v, 0xffddaa);
+          break;
+        case 'snare':
+          pulse.snare = Math.max(pulse.snare, 0.45 + v * 0.55);
+          shakeAmp = Math.min(1, Math.max(shakeAmp, 0.25 + v * 0.45));
+          break;
+        case 'hihat':
+          pulse.hat = Math.max(pulse.hat, 0.35 + v * 0.65);
+          break;
+        case 'ride':
+          pulse.hat = Math.max(pulse.hat, 0.25 + v * 0.4);
+          break;
+        case 'crash':
+          pulse.crash = Math.max(pulse.crash, 0.65 + v * 0.35);
+          shakeAmp = Math.min(1, Math.max(shakeAmp, 0.4 + v * 0.5));
+          for (let i = 0; i < 3; i++) launchShootingStar();
+          break;
+        case 'tom':
+          pulse.kick = Math.max(pulse.kick, 0.3 + v * 0.3);
+          if (v > 0.4) spawnShockRing(v * 0.7, 0x88ccff);
+          break;
+        case 'perc':
+          pulse.hat = Math.max(pulse.hat, 0.2 + v * 0.4);
+          break;
+        case 'bass': {
+          // Low notes bend the world more than high ones (pitch-weighted)
+          const lowness = 1 - (ev.pitch01 != null ? ev.pitch01 : 0.5);
+          pulse.bassSwell = Math.max(pulse.bassSwell, (0.35 + v * 0.65) * (0.45 + lowness * 0.55));
+          break;
+        }
+        case 'vocal':
+          pulse.vocal = Math.max(pulse.vocal, 0.3 + v * 0.7);
+          break;
+        case 'chord':
+          pulse.chordHue = ev.hue != null ? ev.hue : pulse.chordHue;
+          pulse.chordMix = Math.min(0.6, pulse.chordMix + 0.3 + v * 0.2);
+          break;
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
     // SCENE TUNER WIRING
     // ═══════════════════════════════════════════════════════════════════════
     const tunerCallback = (section, param, value) => {
@@ -4924,6 +5057,7 @@ window.TrackScenes = (function() {
           waterMat.opacity = value;
         } else if (param === 'waterRoughness') {
           waterMat.roughness = value;
+          waterRoughBase = value;
         } else if (param === 'waterMetalness') {
           waterMat.metalness = value;
         }
@@ -4937,6 +5071,7 @@ window.TrackScenes = (function() {
           terrainMat.metalness = value;
         } else if (param === 'emissiveIntensity') {
           terrainMat.emissiveIntensity = value;
+          terrainEmissiveBase = value;
         } else if (param === 'sceneryDensity') {
           activeTheme.sceneryDensity = value;
         } else if (terrainMat._waterUniforms && param in terrainMat._waterUniforms) {
@@ -4967,6 +5102,13 @@ window.TrackScenes = (function() {
       group,
       // Tell app.js not to force-enable EffectsManager effects (grid, aurora, etc.)
       disableEffects: { grid: true, aurora: true, lightning: true, lights: true },
+
+      // Frame-perfect MIDI events (enriched by MidiRouter in app.js)
+      onMidi: onMidiEvent,
+
+      // Live music pulse state — app.js drives post-processing from this
+      getMusicPulse() { return pulse; },
+
       setTheme(newThemeName) {
         const newTheme = THEMES[newThemeName];
         if (!newTheme) {
@@ -5093,6 +5235,10 @@ window.TrackScenes = (function() {
         hemiIntensityRange = activeTheme.hemiIntensityRange || 0.46;
         fogDensityDay = activeTheme.fogDensityDay ?? 0.0002;
         fogColorLight = activeTheme.fogColorLight || 0x8c7a5e;
+
+        // Music-reactivity baselines follow the new theme
+        terrainEmissiveBase = activeTheme.terrainMatProps?.emissiveIntensity || 0;
+        waterRoughBase = activeTheme.waterRoughness;
 
         if (window.SceneTuner) window.SceneTuner.syncFromTheme(activeTheme, FLY, starCfg);
 
@@ -5238,6 +5384,96 @@ window.TrackScenes = (function() {
         }
         lastStarTime = time;
 
+        // ── MUSIC REACTIVITY: decay pulses, blend FFT baselines, modulate ──
+        // Runs after the day-cycle assignments above so everything here is a
+        // transient offset on top of the scene's true state (AC over DC).
+        const udt = Math.min(0.05, Math.max(0.001, lastPulseTime > 0 ? time - lastPulseTime : 0.016));
+        lastPulseTime = time;
+
+        pulse.kick *= Math.exp(-udt * 9);
+        pulse.snare *= Math.exp(-udt * 11);
+        pulse.hat *= Math.exp(-udt * 13);
+        pulse.crash *= Math.exp(-udt * 3.2);
+        pulse.bassSwell *= Math.exp(-udt * 4.5);
+        pulse.vocal *= Math.exp(-udt * 3.5);
+        pulse.chordMix *= Math.exp(-udt * 1.1);
+
+        // Continuous FFT layer — carries mix-only tracks, beds the MIDI hits
+        let drumsE = 0, bassE = 0, vocalE = 0, melodicE = 0;
+        if (stemData) {
+          if (stemData.mix && !stemData.drums) {
+            const m = stemData.mix;
+            drumsE = (m.bass || 0) * 0.8;
+            bassE = m.bass || 0;
+            vocalE = (m.mid || 0) * 0.7;
+            melodicE = (m.treble || 0) * 0.8;
+          } else {
+            drumsE = stemData.drums ? stemData.drums.energy || 0 : 0;
+            bassE = stemData.bass ? stemData.bass.energy || 0 : 0;
+            vocalE = (stemData.vocals ? stemData.vocals.energy || 0 : 0)
+              + (stemData['backing-vocals'] ? stemData['backing-vocals'].energy || 0 : 0) * 0.5;
+            melodicE = (stemData.synth ? stemData.synth.energy || 0 : 0) * 0.6
+              + (stemData.keyboard ? stemData.keyboard.energy || 0 : 0) * 0.4
+              + (stemData.guitar ? stemData.guitar.energy || 0 : 0) * 0.4;
+          }
+        }
+        const energyTarget = Math.min(1, drumsE * 0.5 + bassE * 0.3 + vocalE * 0.2 + melodicE * 0.2);
+        pulse.energy += (energyTarget - pulse.energy) * Math.min(1, udt * 4);
+
+        // Onset fallback for tracks without MIDI: a sharp rise in low-end
+        // energy reads as a kick so mix-only tracks still punch
+        if (onsetCooldown > 0) onsetCooldown -= udt;
+        if (bassE - prevBassE > 0.12 && bassE > 0.3 && onsetCooldown <= 0 && pulse.kick < 0.3) {
+          pulse.kick = Math.max(pulse.kick, 0.5 + Math.min(0.4, (bassE - prevBassE)));
+          if (bassE > 0.45) spawnShockRing(Math.min(1, bassE), 0xffddaa);
+          onsetCooldown = 0.18;
+        }
+        prevBassE = bassE;
+
+        const bassSwellEff = Math.min(1, Math.max(pulse.bassSwell, bassE * 0.75));
+        const vocalEff = Math.min(1, Math.max(pulse.vocal, vocalE * 0.8));
+        const hatEff = Math.min(1, Math.max(pulse.hat, melodicE * 0.3));
+
+        // Light: kick punches the sun, snare flashes the sky dome
+        sunLight.intensity *= 1 + pulse.kick * 0.5 + pulse.crash * 0.25;
+        hemiLight.intensity *= 1 + pulse.snare * 0.9 + vocalEff * 0.2;
+        skyUniforms.exposure.value += pulse.snare * 0.08 + pulse.crash * 0.14 + vocalEff * 0.04;
+
+        // Terrain glows with the beat
+        if (terrainMat) {
+          terrainMat.emissiveIntensity = terrainEmissiveBase + pulse.kick * 0.07 + pulse.crash * 0.05;
+        }
+
+        // Water: bass swells the ocean, hats glint off the surface
+        if (waterMeshObj && waterMeshObj.distortionScale && typeof waterMeshObj.distortionScale.value === 'number') {
+          waterMeshObj.distortionScale.value = waterDistortBase * (1 + bassSwellEff * 0.9 + pulse.kick * 0.25);
+        }
+        if (typeof waterRoughBase === 'number') {
+          waterMat.roughness = Math.max(0.02, waterRoughBase * (1 - hatEff * 0.3 - bassSwellEff * 0.1));
+        }
+
+        // Atmosphere: bass thickens the air, vocals lift and clear it
+        if (scene.fog) {
+          scene.fog.density = Math.max(0, scene.fog.density * (1 + bassSwellEff * 0.3 - vocalEff * 0.18));
+        }
+
+        // Chords tint sky light + fog toward the actual harmony
+        if (pulse.chordMix > 0.02) {
+          _chordColor.setHSL(pulse.chordHue, 0.5, 0.55);
+          hemiLight.color.lerp(_chordColor, pulse.chordMix * 0.35);
+          if (scene.fog) scene.fog.color.lerp(_chordColor, pulse.chordMix * 0.12);
+        }
+
+        // Night sky: hats twinkle the stars, vocals breathe through the moon
+        if (starDome.visible) {
+          starDomeMat.opacity *= 1 + hatEff * 0.45;
+          moonMat.opacity *= 1 + vocalEff * 0.25;
+        }
+
+        // Shockwave rings + musical flight speed
+        updateShockRings(udt);
+        musicSpeedLift = 1 + pulse.energy * 0.4 + pulse.kick * 0.12;
+
         // Use bird's actual position for terrain/sun (bird uses translateZ, so position tracks real flight path)
         const posX = bird ? bird.position.x : shipX;
         const posZ = bird ? bird.position.z : shipZ;
@@ -5279,8 +5515,8 @@ window.TrackScenes = (function() {
           const downDown  = birdKeys['ArrowDown']  || birdKeys['KeyS'];
           const flapping  = birdKeys['ShiftLeft']  || birdKeys['ShiftRight'];
 
-          // Always move forward in facing direction
-          const fwdSpeed = isDoubleSpeed ? FLY.doubleSpeed : FLY.forwardSpeed;
+          // Always move forward in facing direction; the music lifts the pace
+          const fwdSpeed = (isDoubleSpeed ? FLY.doubleSpeed : FLY.forwardSpeed) * musicSpeedLift;
           bird.translateZ(fwdSpeed);
 
           // ── Flapping: gentle lift ──
@@ -5419,6 +5655,28 @@ window.TrackScenes = (function() {
             }
             cam.position.copy(camSmooth);
             cam.lookAt(camSmoothTarget);
+
+            // ── Cinematic camera: beat-locked FOV punch + decaying shake ──
+            if (baseFov === 0 && cam.isPerspectiveCamera) baseFov = cam.fov;
+            if (baseFov > 0) {
+              const targetFov = baseFov * (1 + pulse.kick * 0.05 + pulse.energy * 0.035 + pulse.crash * 0.03);
+              if (Math.abs(targetFov - cam.fov) > 0.001) {
+                cam.fov += (targetFov - cam.fov) * Math.min(1, udt * 14);
+                cam.updateProjectionMatrix();
+              }
+            }
+            // Snare/crash shake: layered sines (smooth, deterministic) with
+            // an exponential envelope — no per-frame random jitter
+            if (shakeAmp > 0.003) {
+              shakeTime += udt;
+              const s = shakeAmp * shakeAmp * 0.012;
+              cam.rotation.x += (Math.sin(shakeTime * 127) + Math.sin(shakeTime * 211) * 0.5) * s;
+              cam.rotation.y += (Math.sin(shakeTime * 149 + 1.7) + Math.sin(shakeTime * 233) * 0.5) * s * 0.8;
+              cam.rotation.z += Math.sin(shakeTime * 97 + 0.6) * s * 0.5;
+              shakeAmp *= Math.exp(-udt * 6.5);
+            } else {
+              shakeAmp = 0;
+            }
           }
         }
 
@@ -5435,6 +5693,18 @@ window.TrackScenes = (function() {
         document.removeEventListener('mousedown', onMouseDown);
         document.removeEventListener('mousemove', onMouseMove);
         document.removeEventListener('mouseup', onMouseUp);
+
+        // Music reactivity: shockwave rings + camera FOV restore
+        for (const ring of shockRings) {
+          scene.remove(ring.mesh);
+          ring.mat.dispose();
+        }
+        ringGeom.dispose();
+        const envCam = window.EnvironmentMode?.instance?.camera;
+        if (envCam && baseFov > 0) {
+          envCam.fov = baseFov;
+          envCam.updateProjectionMatrix();
+        }
 
         // Restore renderer tone mapping
         const envRenderer = window.EnvironmentMode?.instance?.renderer;

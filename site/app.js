@@ -546,6 +546,7 @@
   let spectralFlux = 0;
   let globalBeatPulse = 0;
   let lastBassForSpeed = 0;
+  let midiRouter = null; // Frame-perfect MIDI → visual event scheduler (midi-router.js)
 
   // Adaptive onset detection (Bello 2005) — rolling history for median-based threshold
   const ONSET_HISTORY_SIZE = 43; // ~0.7 sec at 60fps — captures ~2 beats at 170 BPM
@@ -1651,6 +1652,7 @@
 
   function setPlaybackCurrentTime(time) {
     if (usingStemPlayer && stemPlayer) {
+      if (midiRouter) midiRouter.reset(); // queued events belong to the old position
       stemPlayer.seek(time);
     } else {
       audio.currentTime = time;
@@ -3108,6 +3110,20 @@
     // Store for waveform visualization
     lastAudioData = { frequencyData: freqData, energy };
 
+    // Dispatch frame-perfect MIDI events queued by the look-ahead scheduler.
+    // Each event fires on the exact frame its timestamp lands, enriched with
+    // kind (kick/snare/crash/bass/chord/...), velocity01 and pitch01.
+    if (midiRouter && usingStemPlayer && stemPlayer) {
+      midiRouter.update(stemPlayer.getCurrentTime(), (ev) => {
+        if (currentTrackScene && currentTrackScene.onMidi) {
+          currentTrackScene.onMidi(ev);
+        }
+        if (ev.type === 'noteOn' && (ev.kind === 'kick' || ev.kind === 'snare')) {
+          globalBeatPulse = Math.min(globalBeatPulse + 0.4, 1.0);
+        }
+      });
+    }
+
     // Update stem mixer levels
     if (stemAnalysisData) {
       updateStemMixerLevels(stemAnalysisData);
@@ -3172,6 +3188,8 @@
     } else {
       // No reactivity - gradually return to base speed
       audioSpeedMultiplier += (1.0 - audioSpeedMultiplier) * 0.05;
+      // MIDI events still feed globalBeatPulse (flight scene) — keep it decaying
+      globalBeatPulse *= 0.93;
     }
 
     // Update live audio state for debug panel
@@ -3316,11 +3334,21 @@
     // --- Post-processing uniforms ---
     if (ppBloomStrength) {
       if (currentTrackScene && currentTrackScene.setTheme) {
-        // Flight scene: static post-processing (no audio reactivity)
-        ppBloomStrength.value = 0.6;
-        ppBloomThreshold.value = 0.65;
-        ppVignetteIntensity.value = 0.35;
-        ppChromaticStrength.value = 0.001;
+        // Flight scene: musical grade driven by the scene's pulse state —
+        // kick punches bloom + a chromatic flick, bass breathes the vignette,
+        // crashes shimmer. Restrained ranges; the frame never falls apart.
+        const mp = currentTrackScene.getMusicPulse ? currentTrackScene.getMusicPulse() : null;
+        if (mp) {
+          ppBloomStrength.value = 0.5 + mp.energy * 0.25 + mp.kick * 0.35 + mp.crash * 0.3;
+          ppBloomThreshold.value = 0.65 - mp.energy * 0.12 - mp.crash * 0.08;
+          ppVignetteIntensity.value = 0.32 + mp.bassSwell * 0.12 + mp.kick * 0.05;
+          ppChromaticStrength.value = 0.0008 + mp.kick * 0.0028 + mp.crash * 0.002;
+        } else {
+          ppBloomStrength.value = 0.6;
+          ppBloomThreshold.value = 0.65;
+          ppVignetteIntensity.value = 0.35;
+          ppChromaticStrength.value = 0.001;
+        }
       } else {
         // Other scenes: audio-reactive post-processing
         ppBloomStrength.value = 0.5 + energy * 0.8 + globalBeatPulse * 0.5;
@@ -4141,6 +4169,7 @@
       usingStemPlayer = false;
       stemAnalysisData = null;
     }
+    if (midiRouter) midiRouter.reset();
 
     // Clear lyrics from previous track
     clearLyricsDisplay();
@@ -4196,15 +4225,19 @@
 
         updateLoadingProgress(95, 100, "Initializing...");
 
-        // Set up MIDI event listener for visualization triggers
+        // Set up MIDI event listener for visualization triggers.
+        // Events arrive up to 100ms early (scheduling look-ahead); MidiRouter
+        // queues them and drawVizThree dispatches each one on the exact frame
+        // its timestamp lands — frame-perfect note → visual sync.
+        if (!midiRouter && window.MidiRouter) {
+          midiRouter = window.MidiRouter.create();
+        }
         stemPlayer.on('midiNote', (event) => {
-          // Forward MIDI events to custom track scene
-          if (currentTrackScene && currentTrackScene.onMidi) {
+          if (midiRouter) {
+            midiRouter.ingest(event);
+          } else if (currentTrackScene && currentTrackScene.onMidi) {
+            // Fallback: forward raw events if the router failed to load
             currentTrackScene.onMidi(event);
-          }
-          // Legacy: trigger global beat pulse on drum hits
-          if (event.type === 'noteOn' && event.stemId === 'drums') {
-            globalBeatPulse = Math.min(globalBeatPulse + 0.4, 1.0);
           }
         });
 

@@ -2,6 +2,80 @@
 
 ---
 
+## MIDI-Driven Visual Events + Living Flight Scene — COMPLETE
+
+### Summary
+Implemented TODO Priority 1 (MIDI-driven visual events) and made the flight
+scene — used by every track — actually listen to the music. Previously the
+flight scene used zero audio data: no stem FFT, no MIDI, static
+post-processing. Now kick drums punch light and ground shockwaves, snares
+flash the sky and shake the camera, crashes launch shooting-star volleys,
+bass pitch swells the ocean and fog, vocals lift the atmosphere, and synth
+chords tint the sky toward the actual harmony — all frame-perfect.
+
+### New: `site/midi-router.js`
+- `MidiRouter` — sits between StemPlayer's 100ms look-ahead `midiNote`
+  events and the visuals. Queues early events, dispatches each on the exact
+  frame its timestamp lands (no FFT latency, no early hits)
+- Enriches events: GM drum classification (kick/snare/hihat/crash/ride/tom/
+  perc), stem classification (bass/vocal/synth/guitar), perceptual
+  `velocity01`, `pitch01`
+- Aggregates simultaneous synth notes (50ms window) into `chord` events with
+  root pitch class → hue, so scenes can tint to the actual harmony
+- Seek-back flush + stale-event guard (tab hidden, etc.)
+- Verified with Node simulation tests (once-only dispatch, ordering, chord
+  grouping, seek/stale behavior)
+
+### Fixed: `site/stem-player.js` duplicate MIDI fire
+`checkMidiEvents()` rescanned the whole schedule each frame against a
+trailing window, so every note fired ~6 times at 60fps. Replaced with a
+sorted-pointer walk (binary-search relocation on seek): each event now fires
+exactly once. `seek()`/`stop()`/`dispose()` keep the pointer consistent.
+
+### Flight scene reactivity (`site/track-scenes.js`)
+Two layers, following the scene-director spec's AC/DC philosophy — all
+music values are transient offsets applied AFTER the day-cycle math, so the
+base look is never corrupted:
+- **MIDI pulses** (`onMidi`): kick → sun-light punch + terrain emissive +
+  expanding ground shockwave rings (pooled ×6); snare → hemisphere flash +
+  sky exposure bump + camera shake; crash → shooting-star volley (pool 3→6)
+  + long shimmer; tom → cool-colored ring; bass → pitch-weighted water
+  distortion + fog swell (low notes bend the world more); vocals →
+  atmosphere lift + moon glow; chords → sky/fog tint toward chord hue
+- **FFT baselines** (continuous, from `stemData`): keeps mix-only tracks
+  (beast-mode, the-last-dragon, …) alive via a low-end onset detector that
+  synthesizes kick pulses, plus smoothed energy driving flight speed
+- **Cinematic camera**: beat-locked FOV punch (kick +5%, fast attack/exp
+  decay) and deterministic layered-sine shake with exponential envelope —
+  no per-frame random jitter
+- Night sky reacts: hi-hats twinkle the star dome, vocals breathe the moon
+- Baselines stay in sync with Scene Tuner edits and theme hot-swaps;
+  `dispose()` removes rings and restores camera FOV
+
+### app.js integration
+- MidiRouter created per stem load; dispatch loop in `drawVizThree` fires
+  enriched events into `currentTrackScene.onMidi` at exact timestamps
+- Flight scene post-processing unlocked from static values: bloom/vignette/
+  chromatic aberration now driven by the scene's pulse state (kick punches
+  bloom + a chromatic flick, bass breathes the vignette) — restrained ranges
+- Fixed `globalBeatPulse` never decaying while the flight scene is active
+- Router reset on seek and track change
+
+### Files Modified
+- `site/midi-router.js` — NEW
+- `site/stem-player.js` — once-only MIDI pointer + seek relocation
+- `site/track-scenes.js` — flight scene music reactivity + cinematic camera
+- `site/app.js` — router wiring, musical post-processing, beat-pulse decay fix
+- `site/index.html` — midi-router script tag, cache-version bumps (incl.
+  preload hints)
+
+### Next Steps (future work)
+- Scene Director Phase 1 (Conductor skeleton + hand-written Data Tide score)
+- 3D spatial lyrics along the flight path (TODO Priority 7)
+- Per-section camera choreography once analysis.json exists
+
+---
+
 ## Stem-Colored Seek Bar Waveform — COMPLETE
 
 ### Summary

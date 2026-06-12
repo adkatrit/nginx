@@ -145,6 +145,7 @@ class StemPlayer {
     // MIDI data
     this.midiData = new Map(); // stemId -> parsed MIDI events
     this.midiSchedule = []; // Upcoming MIDI events sorted by time
+    this.midiScheduleIdx = 0; // Next unfired event in midiSchedule
     this.lastMidiCheck = 0;
 
     // Track duration
@@ -585,6 +586,21 @@ class StemPlayer {
     }
 
     this.midiSchedule.sort((a, b) => a.time - b.time);
+    // -1ms epsilon so notes at exactly the current position still fire
+    this.midiScheduleIdx = this._findMidiIndex(this.getCurrentTime() - 0.001);
+  }
+
+  /**
+   * Binary search: index of the first scheduled event with time > t
+   */
+  _findMidiIndex(t) {
+    let lo = 0, hi = this.midiSchedule.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (this.midiSchedule[mid].time <= t) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
   }
 
   /**
@@ -630,6 +646,7 @@ class StemPlayer {
     this.isPlaying = false;
     this.pauseOffset = 0;
     this.lastMidiCheck = 0;
+    this.midiScheduleIdx = 0;
   }
 
   /**
@@ -645,6 +662,7 @@ class StemPlayer {
     // Set new position
     this.pauseOffset = Math.max(0, Math.min(time, this.duration));
     this.lastMidiCheck = this.pauseOffset;
+    this.midiScheduleIdx = this._findMidiIndex(this.pauseOffset - 0.001);
 
     // Resume if was playing
     if (wasPlaying) {
@@ -833,15 +851,27 @@ class StemPlayer {
   }
 
   /**
-   * Check and emit MIDI events
+   * Check and emit MIDI events.
+   * Each event fires exactly once, up to 100ms ahead of its timestamp so a
+   * scheduler (MidiRouter) can dispatch it frame-perfectly. A sorted pointer
+   * replaces the old full rescan, which re-fired every event on each frame
+   * of the look-ahead window (~6 duplicates per note at 60fps).
    */
   checkMidiEvents(currentTime) {
     const lookAhead = 0.1; // 100ms look-ahead for scheduling
 
-    for (const event of this.midiSchedule) {
-      if (event.time > this.lastMidiCheck && event.time <= currentTime + lookAhead) {
-        this.emit('midiNote', event);
-      }
+    // Clock jumped backwards (seek without going through seek()) — relocate
+    if (currentTime + lookAhead < this.lastMidiCheck) {
+      this.midiScheduleIdx = this._findMidiIndex(currentTime - 0.001);
+    }
+
+    const horizon = currentTime + lookAhead;
+    while (
+      this.midiScheduleIdx < this.midiSchedule.length &&
+      this.midiSchedule[this.midiScheduleIdx].time <= horizon
+    ) {
+      this.emit('midiNote', this.midiSchedule[this.midiScheduleIdx]);
+      this.midiScheduleIdx++;
     }
 
     this.lastMidiCheck = currentTime;
@@ -948,6 +978,7 @@ class StemPlayer {
     this.stems.clear();
     this.midiData.clear();
     this.midiSchedule = [];
+    this.midiScheduleIdx = 0;
     this.isLoaded = false;
     this.isPartiallyLoaded = false;
     this.loadedStems.clear();
