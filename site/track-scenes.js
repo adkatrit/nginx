@@ -4571,10 +4571,19 @@ window.TrackScenes = (function() {
     // ═══════════════════════════════════════════════════════════════════════
     let waterMeshObj = null;      // WaterMesh instance (or null if not active)
     let waterMeshReady = false;   // true once async import + creation completes
+    let waterMeshPending = false; // creation in flight — chunk water stands down
     let waterDistortBase = 3.7;   // resting distortion — music swells around this
 
+    // Any theme with water gets the real reflective ocean. The old flat
+    // MeshStandardMaterial chunk planes had nothing to reflect and rendered
+    // black at low sun; they remain only as a fallback if the import fails.
+    function themeWantsWater(theme) {
+      return !!theme.useWaterMesh || (typeof theme.waterY === 'number' && theme.waterY > -500);
+    }
+
     async function createWaterMeshForTheme(theme) {
-      if (!theme.useWaterMesh) return;
+      if (!themeWantsWater(theme)) return;
+      waterMeshPending = true;
       try {
         const { WaterMesh } = await import('three/addons/objects/WaterMesh.js');
         const cfg = theme.waterMeshConfig || {};
@@ -4591,19 +4600,22 @@ window.TrackScenes = (function() {
           waterNormals,
           sunDirection: new THREE.Vector3(sunPos.x, sunPos.y, sunPos.z),
           sunColor: cfg.sunColor ?? 0xffffff,
-          waterColor: cfg.waterColor ?? 0x001e0f,
+          waterColor: cfg.waterColor ?? theme.waterColor ?? 0x001e0f,
           distortionScale: waterDistortBase,
           size: cfg.textureSize ?? 1.0,
-          alpha: cfg.alpha ?? 0.98,
+          alpha: cfg.alpha ?? 0.96,
         });
-        waterMeshObj.position.y = -2;  // match terrainHeight base level
+        // useWaterMesh themes are pure ocean at base level; terrain themes
+        // flood their valleys at the theme's water line
+        waterMeshObj.position.y = theme.useWaterMesh ? -2 : theme.waterY;
         scene.add(waterMeshObj);
         waterMeshReady = true;
-        console.log('[Flight] WaterMesh created for', theme.name);
+        console.log('[Flight] WaterMesh created for', theme.name || 'theme');
       } catch (err) {
         console.error('[Flight] Failed to create WaterMesh:', err);
         waterMeshObj = null;
         waterMeshReady = false;
+        waterMeshPending = false; // chunk-plane fallback may take over
       }
     }
 
@@ -4613,14 +4625,13 @@ window.TrackScenes = (function() {
         waterMeshObj.geometry.dispose();
         waterMeshObj.material.dispose();
         waterMeshObj = null;
-        waterMeshReady = false;
       }
+      waterMeshReady = false;
+      waterMeshPending = false;
     }
 
-    // Kick off WaterMesh creation if initial theme uses it
-    if (activeTheme.useWaterMesh) {
-      createWaterMeshForTheme(activeTheme);
-    }
+    // Kick off WaterMesh creation for any theme with water
+    createWaterMeshForTheme(activeTheme);
 
     const FAR_SEGS = 6;  // reduced segments for distant LOD chunks
 
@@ -4668,6 +4679,7 @@ window.TrackScenes = (function() {
     // ═══════════════════════════════════════════════════════════════════════
     function spawnWaterChunk(cx, cz) {
       if (activeTheme.waterY <= -500) return;  // water disabled for this theme
+      if (waterMeshPending || waterMeshReady) return;  // real ocean handles it
       const geom = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, 1, 1);
       geom.rotateX(-Math.PI / 2);
       const mesh = new THREE.Mesh(geom, waterMat);
@@ -5083,6 +5095,7 @@ window.TrackScenes = (function() {
       } else if (section === 'water') {
         if (param === 'waterY') {
           for (const [, ch] of waterChunks) ch.mesh.position.y = value;
+          if (waterMeshObj && !activeTheme.useWaterMesh) waterMeshObj.position.y = value;
         } else if (param === 'waterColor') {
           waterMat.color.setHex(value);
         } else if (param === 'waterOpacity') {
@@ -5203,11 +5216,10 @@ window.TrackScenes = (function() {
         // 3. Swap theme reference
         activeTheme = newTheme;
 
-        // 4. Recreate materials from new theme (or WaterMesh)
+        // 4. Recreate materials from new theme (real ocean for any water)
         terrainMat = null;
-        if (activeTheme.useWaterMesh) {
-          createWaterMeshForTheme(activeTheme);
-        } else {
+        createWaterMeshForTheme(activeTheme);
+        if (!activeTheme.useWaterMesh) {
           terrainMat = new THREE.MeshStandardMaterial({
             vertexColors: true,
             flatShading: activeTheme.terrainMatProps.flatShading,
@@ -5334,11 +5346,13 @@ window.TrackScenes = (function() {
         skyUniforms.rayleigh.value = baseRayleigh + sunFactor * 1.5;
         skyUniforms.mieCoefficient.value = baseMieCoefficient + horizonProximity * 0.02;
         skyUniforms.mieDirectionalG.value = baseMieDirectionalG + horizonProximity * 0.12;
-        skyUniforms.exposure.value = baseExposure + sunFactor * 0.5;
+        // Floors keep the pre-dawn start readable (themes were authored
+        // when fog supplied most of the early-track luminance)
+        skyUniforms.exposure.value = Math.max(baseExposure, 0.18) + sunFactor * 0.5;
 
         // Light intensities driven by sun elevation
         sunLight.intensity = baseSunIntensity + sunFactor * sunIntensityRange;
-        hemiLight.intensity = baseHemiIntensity + sunFactor * hemiIntensityRange;
+        hemiLight.intensity = Math.max(baseHemiIntensity, 0.1) + sunFactor * hemiIntensityRange;
 
         // Sun color shifts: warm orange near horizon → warm golden when higher
         const warmth = 1 - sunFactor * 0.15;  // 1.0 (warm) → 0.85 (stays warm)
@@ -5351,9 +5365,9 @@ window.TrackScenes = (function() {
           if (envRenderer.toneMapping === THREE.NoToneMapping) {
             envRenderer.toneMapping = THREE.ACESFilmicToneMapping;
           }
-          // Floor raised from 0.15 since fog removal — pre-dawn needs to
-          // read on its own now that there is no luminous haze
-          envRenderer.toneMappingExposure = 0.28 + sunFactor * 0.72;  // 0.28 (pre-dawn) → 1.0 (bright)
+          // Floor raised (0.15 → 0.45 over time) — pre-dawn should feel like
+          // early morning, not night; the day cycle still brightens from here
+          envRenderer.toneMappingExposure = 0.45 + sunFactor * 0.55;  // 0.45 (dawn) → 1.0 (bright)
         }
 
         // ── Star dome fade + moon + shooting stars ──
@@ -5522,14 +5536,15 @@ window.TrackScenes = (function() {
           chunkDirZ = Math.cos(bird.rotation.y);
         }
 
-        // Spawn/cleanup terrain + water + scenery in 2D grid around bird
-        // (skip for WaterMesh themes — they use a single repositioned plane)
-        if (activeTheme.useWaterMesh) {
-          if (waterMeshObj) {
-            waterMeshObj.position.x = posX;
-            waterMeshObj.position.z = posZ;
-          }
-        } else {
+        // Real ocean follows the bird for every theme that has water
+        if (waterMeshObj) {
+          waterMeshObj.position.x = posX;
+          waterMeshObj.position.z = posZ;
+        }
+
+        // Spawn/cleanup terrain + scenery in 2D grid around bird
+        // (skip for pure-ocean themes — no terrain chunks there)
+        if (!activeTheme.useWaterMesh) {
           updateChunks2D(posX, posZ);
 
           // Animate terrain if theme requires it (e.g. ocean waves)
