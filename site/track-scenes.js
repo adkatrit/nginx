@@ -4834,10 +4834,11 @@ window.TrackScenes = (function() {
     const FLY = {
       forwardSpeed: 0.25,
       doubleSpeed: 0.6,
-      // Turn rate tuned for rhythm-gate steering (was 0.0015/0.000075 —
-      // ~5°/s, too slow to reach gates; now ~14°/s with a faster ramp)
-      rotateYMax: 0.0042,
-      rotateYAccel: 0.00028,
+      // Turn rate tuned for rhythm-gate steering (originally 0.0015/0.000075,
+      // ~5°/s). Now ~21°/s, reaching full rate in ~10 frames so the turn
+      // arrives the moment the key does.
+      rotateYMax: 0.006,
+      rotateYAccel: 0.0006,
       pitchAltScale: 2.0,   // multiplier for pitch-driven altitude change
       minY: 2,
       maxY: 90,
