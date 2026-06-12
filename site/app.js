@@ -547,6 +547,10 @@
   let globalBeatPulse = 0;
   let lastBassForSpeed = 0;
   let midiRouter = null; // Frame-perfect MIDI → visual event scheduler (midi-router.js)
+  let rhythmGates = null; // MIDI-locked flyable gates (rhythm-gates.js)
+  let rhythmGatesEnabled = (() => {
+    try { return localStorage.getItem('rhythmGates') !== 'off'; } catch (e) { return true; }
+  })();
 
   // Adaptive onset detection (Bello 2005) — rolling history for median-based threshold
   const ONSET_HISTORY_SIZE = 43; // ~0.7 sec at 60fps — captures ~2 beats at 170 BPM
@@ -1653,6 +1657,7 @@
   function setPlaybackCurrentTime(time) {
     if (usingStemPlayer && stemPlayer) {
       if (midiRouter) midiRouter.reset(); // queued events belong to the old position
+      if (rhythmGates) rhythmGates.reset(); // live gates too
       stemPlayer.seek(time);
     } else {
       audio.currentTime = time;
@@ -2605,6 +2610,23 @@
     if (gateStreakValue) gateStreakValue.textContent = String(Math.max(0, Number(gateStreak) || 0));
   }
 
+  // ── Cruise mode toggle: G hides/shows rhythm gates ──
+  document.addEventListener('keydown', (e) => {
+    if (e.code !== 'KeyG' || e.repeat) return;
+    const el = e.target;
+    if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+    rhythmGatesEnabled = !rhythmGatesEnabled;
+    try { localStorage.setItem('rhythmGates', rhythmGatesEnabled ? 'on' : 'off'); } catch (err) { /* private mode */ }
+    if (rhythmGates) rhythmGates.setEnabled(rhythmGatesEnabled);
+    if (hitFeedback) {
+      hitFeedback.textContent = rhythmGatesEnabled ? 'GATES ON' : 'CRUISE MODE';
+      hitFeedback.className = 'hit-feedback gate-hit';
+      void hitFeedback.offsetWidth;
+      hitFeedback.classList.add('show');
+      setTimeout(() => hitFeedback.classList.remove('show'), 900);
+    }
+  });
+
   // ── APM (Actions Per Minute) tracker ──
   // Counts movement key presses in a 5s rolling window, normalized to per-minute.
   // Computes rhythm sync: how close APM is to a BPM harmonic (0.25x–4x).
@@ -3304,6 +3326,37 @@
       currentTrackScene.update(t, freqData, amplitude, shipPos, shipSpeed, effectiveStems);
     }
 
+    // ── Rhythm gates: MIDI-locked flyable targets (rhythm flight game) ──
+    if (flightSceneActive && usingStemPlayer && stemPlayer && window.RhythmGates) {
+      // Scene was rebuilt (track change) — gates belong to the old world
+      if (rhythmGates && rhythmGates.sceneRef !== currentTrackScene) {
+        rhythmGates.dispose();
+        rhythmGates = null;
+      }
+      if (!rhythmGates && currentTrackScene.getBirdState) {
+        rhythmGates = window.RhythmGates.create({
+          THREE: three,
+          scene: threeScene,
+          sceneApi: currentTrackScene,
+          getUpcoming: (time, ahead) => stemPlayer.getUpcomingMidiEvents(time, ahead),
+          getMidiCount: () => stemPlayer.midiSchedule.length,
+          getBpm: () => stemPlayer.manifest?.bpm || 120,
+          enabled: rhythmGatesEnabled,
+          onScore: updateScoreHUD,
+          onGateHit: showGateHitFeedback,
+          onFlow: updateFlowHUD,
+        });
+        rhythmGates.sceneRef = currentTrackScene;
+      }
+      if (rhythmGates) {
+        rhythmGates.update(stemPlayer.getCurrentTime(), stemPlayer.isPlaying);
+        if (currentTrackScene.setFlow) currentTrackScene.setFlow(rhythmGates.getFlow());
+      }
+    } else if (rhythmGates && !flightSceneActive) {
+      rhythmGates.dispose();
+      rhythmGates = null;
+    }
+
     // Update OrbitControls for smooth damping
     if (orbitControls && orbitControls.enabled) {
       orbitControls.update();
@@ -3339,7 +3392,8 @@
         // crashes shimmer. Restrained ranges; the frame never falls apart.
         const mp = currentTrackScene.getMusicPulse ? currentTrackScene.getMusicPulse() : null;
         if (mp) {
-          ppBloomStrength.value = 0.5 + mp.energy * 0.25 + mp.kick * 0.35 + mp.crash * 0.3;
+          const flowGlow = rhythmGates ? rhythmGates.getFlow() * 0.12 : 0;
+          ppBloomStrength.value = 0.5 + flowGlow + mp.energy * 0.25 + mp.kick * 0.35 + mp.crash * 0.3;
           ppBloomThreshold.value = 0.65 - mp.energy * 0.12 - mp.crash * 0.08;
           ppVignetteIntensity.value = 0.32 + mp.bassSwell * 0.12 + mp.kick * 0.05;
           ppChromaticStrength.value = 0.0008 + mp.kick * 0.0028 + mp.crash * 0.002;

@@ -2,6 +2,56 @@
 
 ---
 
+## Rhythm Flight Game, Phase 1: MIDI-Locked Gates — COMPLETE
+
+### Direction decision
+The product is a **rhythm flight game** scored by the album (chosen over the
+cinematic-only path). Phase 1 lands the core loop; the dormant score HUD
+(SCORE/COMBO/FLOW/GATES, previously fed by EnvironmentMode's "Chill Ride"
+which stopped running when the flight scene took over) is live again.
+
+### New: `site/rhythm-gates.js`
+- Gates spawn ~3s ahead on the bird's heading, placed so the bird arrives
+  **exactly when the underlying drum note lands** (MIDI lookahead via
+  `getUpcomingMidiEvents`); kick/snare/tom notes gate, weighted by velocity
+- Mix-only tracks fall back to a BPM grid from manifest.bpm — every track
+  is playable
+- Hit = crossing the ring's plane inside its radius; miss = clipping the
+  edge or flying around it (timeout). Three tiers (large 25 / medium 50 /
+  small gold 100) matching the HUD's `points = tier × combo` convention;
+  combo = 1 + streak/4, capped at 8
+- PERFECT timing window (±100ms) doubles FLOW gain; flow drifts toward a
+  baseline so the bar reflects recent play, misses drain it
+- **Flow is earned spectacle**: scene speed lift (+18%), terrain glow, and
+  bloom all scale with it; perfect hits fire a gold shockwave ring
+- Approach telegraphing: rings brighten as their note nears with a beat
+  flash in the last 400ms; hits flash white and expand, misses sag dim red
+- Pooled meshes (14), zero per-frame allocation, seek-safe (gates re-plan
+  for the new position, score survives), pool/dispose lifecycle per track
+- **G key toggles CRUISE MODE** (gates off, just fly) — persisted in
+  localStorage
+- Verified by Node simulation with real three.js math: centerline run
+  21/21 hits all PERFECT, veering run produces misses + streak reset, BPM
+  fallback spawns hittable gates, seek-back re-plans correctly
+
+### Integration
+- `track-scenes.js` flight scene API: `getBirdState()`, `getGroundHeight()`,
+  `onGateHit(strength, perfect)`, `setFlow(f)`
+- `app.js`: per-frame update wired to the existing HUD functions
+  (`updateScoreHUD`, `showGateHitFeedback`, `updateFlowHUD`), flow feeds
+  post-processing bloom, gates reset on seek, dispose/recreate on track
+  change via scene identity check
+
+### Next (rhythm game roadmap, agreed)
+1. Scene Director Phase 1 — section-aware choreography (verse/chorus/drop)
+2. The Approach — diegetic intro: perched start, 3D title, control unlock
+   on the first downbeat; end-of-track stats card + "next world"
+3. Vocal-melody ribbon to ride during verses (TODO Priority 7)
+4. Wind/whoosh sound layer (synthesized), gamepad + haptics
+5. Settings: motion intensity slider, photosensitivity mode, quality tiers
+
+---
+
 ## MIDI-Driven Visual Events + Living Flight Scene — COMPLETE
 
 ### Summary

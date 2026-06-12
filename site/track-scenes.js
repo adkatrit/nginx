@@ -4930,7 +4930,10 @@ window.TrackScenes = (function() {
     let musicSpeedLift = 1;     // flight speed rides the energy of the mix
     let prevBassE = 0;          // onset detection for tracks without MIDI
     let onsetCooldown = 0;
+    let lastFwdSpeed = FLY.forwardSpeed; // sampled per frame for gate placement
+    let flowLevel = 0;          // rhythm-gate FLOW (0..1) — earned spectacle
     const _chordColor = new THREE.Color();
+    const _birdState = { position: null, quaternion: null, speedPerSec: 0 };
 
     // ── Shockwave rings: expanding ground pulses on kick/tom hits ──
     const RING_POOL = 6;
@@ -5127,6 +5130,28 @@ window.TrackScenes = (function() {
 
       // Live music pulse state — app.js drives post-processing from this
       getMusicPulse() { return pulse; },
+
+      // ── Rhythm-gate API (rhythm-gates.js) ──
+      getBirdState() {
+        if (!bird) return null;
+        _birdState.position = bird.position;
+        _birdState.quaternion = bird.quaternion;
+        _birdState.speedPerSec = lastFwdSpeed * 60;
+        return _birdState;
+      },
+      getGroundHeight(x, z) {
+        return Math.max(terrainHeight(x, z), activeTheme.waterY);
+      },
+      onGateHit(strength, perfect) {
+        pulse.kick = Math.min(1, Math.max(pulse.kick, 0.45 + strength * 0.4));
+        if (perfect) {
+          pulse.crash = Math.max(pulse.crash, 0.4);
+          spawnShockRing(0.9, 0xffd700);
+        }
+      },
+      setFlow(f) {
+        flowLevel = Math.max(0, Math.min(1, f || 0));
+      },
 
       setTheme(newThemeName) {
         const newTheme = THEMES[newThemeName];
@@ -5464,9 +5489,11 @@ window.TrackScenes = (function() {
           moonMat.opacity *= 1 + vocalEff * 0.25;
         }
 
-        // Shockwave rings + musical flight speed
+        // Shockwave rings + musical flight speed. High FLOW (rhythm gates)
+        // earns extra pace and a brighter world — spectacle as reward.
         updateShockRings(udt);
-        musicSpeedLift = 1 + pulse.energy * 0.4 + pulse.kick * 0.12;
+        musicSpeedLift = 1 + pulse.energy * 0.4 + pulse.kick * 0.12 + flowLevel * 0.18;
+        if (terrainMat) terrainMat.emissiveIntensity += flowLevel * 0.02;
 
         // Use bird's actual position for terrain/sun (bird uses translateZ, so position tracks real flight path)
         const posX = bird ? bird.position.x : shipX;
@@ -5511,6 +5538,7 @@ window.TrackScenes = (function() {
 
           // Always move forward in facing direction; the music lifts the pace
           const fwdSpeed = (isDoubleSpeed ? FLY.doubleSpeed : FLY.forwardSpeed) * musicSpeedLift;
+          lastFwdSpeed = fwdSpeed;
           bird.translateZ(fwdSpeed);
 
           // ── Flapping: gentle lift ──
