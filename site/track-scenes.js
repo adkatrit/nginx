@@ -4859,7 +4859,8 @@ window.TrackScenes = (function() {
       // arriving in ~5 frames, reversal in ~0.3s.
       strafeMax: 0.17,
       strafeResp: 0.18,
-      strafeBank: 0.35,     // visual roll into the slip (radians)
+      strafeBank: 0.5,      // visual roll into the slip (radians)
+      strafeYawLean: 0.45,  // visual nose-yaw into the slip — carve, not crab
       neckYStep: 0.018, neckYMax: 0.7,
       bodyYStep: 0.01,  bodyYMax: 0.4,
       neckXStep: 0.008, neckXMax: 0.6,
@@ -5646,9 +5647,13 @@ window.TrackScenes = (function() {
           strafeVel += (strafeInput * FLY.strafeMax - strafeVel) * FLY.strafeResp;
           if (Math.abs(strafeVel) > 0.0001) bird.translateX(strafeVel);
           if (birdModel) {
-            // Bank into the slip (roll is otherwise unused; pitch lives on x)
-            const bankTarget = (strafeVel / FLY.strafeMax) * FLY.strafeBank;
-            birdModel.rotation.z += (bankTarget - birdModel.rotation.z) * 0.12;
+            // Carve, don't crab: nose yaws and wings bank INTO the slip so the
+            // body agrees with the velocity vector. Visual only — flight path
+            // stays snappy. Slip + is toward +X (screen-left); banking left =
+            // left wing down = NEGATIVE z-roll viewed from the chase camera.
+            const slip = strafeVel / FLY.strafeMax;
+            birdModel.rotation.z += (-slip * FLY.strafeBank - birdModel.rotation.z) * 0.12;
+            birdModel.rotation.y += (slip * FLY.strafeYawLean - birdModel.rotation.y) * 0.1;
           }
 
           // ── Ground collision: never clip through terrain, water, or scenery ──
