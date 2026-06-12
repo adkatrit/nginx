@@ -4998,7 +4998,8 @@ window.TrackScenes = (function() {
           break;
         case 'snare':
           pulse.snare = Math.max(pulse.snare, 0.45 + v * 0.55);
-          shakeAmp = Math.min(1, Math.max(shakeAmp, 0.25 + v * 0.45));
+          // Only hard snare hits nudge the camera — accents, not every backbeat
+          if (v > 0.6) shakeAmp = Math.min(1, Math.max(shakeAmp, 0.1 + v * 0.15));
           break;
         case 'hihat':
           pulse.hat = Math.max(pulse.hat, 0.35 + v * 0.65);
@@ -5008,7 +5009,7 @@ window.TrackScenes = (function() {
           break;
         case 'crash':
           pulse.crash = Math.max(pulse.crash, 0.65 + v * 0.35);
-          shakeAmp = Math.min(1, Math.max(shakeAmp, 0.4 + v * 0.5));
+          shakeAmp = Math.min(1, Math.max(shakeAmp, 0.2 + v * 0.2));
           for (let i = 0; i < 3; i++) launchShootingStar();
           break;
         case 'tom':
@@ -5662,11 +5663,11 @@ window.TrackScenes = (function() {
             // an exponential envelope — no per-frame random jitter
             if (shakeAmp > 0.003) {
               shakeTime += udt;
-              const s = shakeAmp * shakeAmp * 0.012;
+              const s = shakeAmp * shakeAmp * 0.006;
               cam.rotation.x += (Math.sin(shakeTime * 127) + Math.sin(shakeTime * 211) * 0.5) * s;
               cam.rotation.y += (Math.sin(shakeTime * 149 + 1.7) + Math.sin(shakeTime * 233) * 0.5) * s * 0.8;
               cam.rotation.z += Math.sin(shakeTime * 97 + 0.6) * s * 0.5;
-              shakeAmp *= Math.exp(-udt * 6.5);
+              shakeAmp *= Math.exp(-udt * 10);
             } else {
               shakeAmp = 0;
             }
