@@ -35,6 +35,13 @@ const RhythmGates = (function () {
     // ~1s of heading swing — proven fair by the inertia-limited bot test.
     lateralReachPerSec: 2.5,
     verticalReachPerSec: 3,
+    // Turn-aware placement: gates are placed on the player's PREDICTED arc
+    // (current turn rate, easing off with this half-life), and distant gates
+    // drift with the live prediction until inside the freeze horizon — then
+    // they lock so close-range steering skill stays fair.
+    turnPredictHalfLife: 1.5,
+    gateFreezeLead: 1.2,
+    gateDriftRate: 4,
     minClearance: 5,          // gate center height above ground/water
     maxAltitude: 85,
     poolSize: 14,
@@ -171,6 +178,8 @@ const RhythmGates = (function () {
       // measuring keeps gate arrival locked to the note regardless of fps.
       this.measuredSpeed = 0;
       this._prevBirdPos = null;
+      this.headingRate = 0;     // smoothed yaw rate (rad/s) for arc prediction
+      this._prevHeading = null;
 
       const THREE = this.THREE;
       this._v1 = new THREE.Vector3();
@@ -260,7 +269,7 @@ const RhythmGates = (function () {
       if (now < this.lastNow - 0.25) this.reset();
       this.lastNow = now;
 
-      // Track real speed against the music clock (EMA, jump-guarded)
+      // Track real speed + turn rate against the music clock (EMA, jump-guarded)
       const birdNow = this.sceneApi.getBirdState ? this.sceneApi.getBirdState() : null;
       if (birdNow && isPlaying && dt > 0.004) {
         if (this._prevBirdPos) {
@@ -274,6 +283,17 @@ const RhythmGates = (function () {
           this._prevBirdPos = new this.THREE.Vector3();
         }
         this._prevBirdPos.copy(birdNow.position);
+
+        this._fwd.set(0, 0, 1).applyQuaternion(birdNow.quaternion);
+        const heading = Math.atan2(this._fwd.x, this._fwd.z);
+        if (this._prevHeading !== null) {
+          let dh = heading - this._prevHeading;
+          if (dh > Math.PI) dh -= 2 * Math.PI;
+          else if (dh < -Math.PI) dh += 2 * Math.PI;
+          const wInst = Math.max(-1.5, Math.min(1.5, dh / dt));
+          this.headingRate = this.headingRate * 0.85 + wInst * 0.15;
+        }
+        this._prevHeading = heading;
       }
 
       if (this.enabled && isPlaying) {
@@ -290,7 +310,7 @@ const RhythmGates = (function () {
           this._shimmerArmed = true;
         }
       }
-      this._updateGates(now, isPlaying);
+      this._updateGates(now, isPlaying, dt);
       this._updateThread();
     }
 
@@ -372,15 +392,6 @@ const RhythmGates = (function () {
         const gate = this.pool.find(g => !g.inUse);
         if (!gate) return; // pool exhausted — skip until one frees up
 
-        // Place on the bird's current heading, arriving exactly on the note.
-        // Offsets form a coherent lane: each gate is clamped to what the
-        // player can actually reach from the previous gate (and from the
-        // bird's current line) in the time available — no impossible zigzags.
-        this._fwd.set(0, 0, 1).applyQuaternion(bird.quaternion);
-        // Measured speed keeps arrival on the note at any display refresh
-        // rate; the scene's 60fps estimate seeds it before measurement
-        const spd = this.measuredSpeed > 1 ? this.measuredSpeed : bird.speedPerSec;
-        const dist = spd * lead;
         const gapPrev = Math.min(3, Math.max(0.1, time - this.lastPlannedTime));
 
         // Serpentine lane: a slow sine of note time has bounded slope AND
@@ -393,11 +404,7 @@ const RhythmGates = (function () {
         this.laneLat = Math.max(this.laneLat - maxLatDelta,
           Math.min(this.laneLat + maxLatDelta, latTarget));
         const latReach = CFG.lateralReachPerSec * lead;
-        const lat = Math.max(-latReach, Math.min(latReach, this.laneLat));
-
-        gate.pos.copy(bird.position).addScaledVector(this._fwd, dist);
-        this._side.crossVectors(this._up, this._fwd).normalize();
-        gate.pos.addScaledVector(this._side, lat);
+        gate.latOffset = Math.max(-latReach, Math.min(latReach, this.laneLat));
 
         const vTarget = bird.position.y + 0.5
           + Math.sin(time * 0.27 + 2) * 2.5
@@ -407,26 +414,24 @@ const RhythmGates = (function () {
         this.laneY = Math.max(this.laneY - maxVDelta,
           Math.min(this.laneY + maxVDelta, vTarget));
         const vReach = CFG.verticalReachPerSec * lead;
-        gate.pos.y = Math.max(bird.position.y - vReach,
-          Math.min(bird.position.y + vReach, this.laneY));
-
-        const ground = this.sceneApi.getGroundHeight
-          ? this.sceneApi.getGroundHeight(gate.pos.x, gate.pos.z) : 0;
-        gate.pos.y = Math.max(ground + CFG.minClearance, Math.min(CFG.maxAltitude, gate.pos.y));
-        this.laneY = gate.pos.y; // keep the lane anchored to where gates really are
+        gate.yOff = Math.max(-vReach, Math.min(vReach, this.laneY - bird.position.y));
 
         const tier = pickTier(Math.random());
         gate.tier = tier;
         gate.radius = tier.radius;
-        gate.normal.copy(this._fwd);
         gate.time = time;
         gate.prevAlong = -1;
         gate.state = 'approach';
         gate.inUse = true;
 
+        // Position on the PREDICTED arc (turn-aware), then dress the mesh
+        gate.pos.copy(this._placeGate(gate, bird, lead));
+        gate.normal.copy(this._fwd);
+        this.laneY = gate.pos.y; // keep the lane anchored to where gates really are
+
         gate.mesh.position.copy(gate.pos);
         gate.mesh.scale.setScalar(tier.radius);
-        this._v1.copy(gate.pos).add(this._fwd);
+        this._v1.copy(gate.pos).add(gate.normal);
         gate.mesh.lookAt(this._v1);
         gate.mat.color.setHex(tier.color);
         gate.mat.opacity = 0;
@@ -437,7 +442,38 @@ const RhythmGates = (function () {
       }
     }
 
-    _updateGates(now, isPlaying) {
+    /**
+     * Position a gate `lead` seconds out along the bird's PREDICTED arc —
+     * heading integrated forward with the current turn rate, easing off with
+     * a half-life (players rarely hold a turn for the full approach).
+     * Leaves the arrival heading in this._fwd; returns a scratch vector.
+     */
+    _placeGate(gate, bird, lead) {
+      this._fwd.set(0, 0, 1).applyQuaternion(bird.quaternion);
+      let phi = Math.atan2(this._fwd.x, this._fwd.z);
+      const spd = this.measuredSpeed > 1 ? this.measuredSpeed : bird.speedPerSec;
+      let w = this.headingRate;
+      const steps = 6;
+      const stepT = lead / steps;
+      const decay = Math.pow(0.5, stepT / CFG.turnPredictHalfLife);
+      let px = bird.position.x, pz = bird.position.z;
+      for (let s = 0; s < steps; s++) {
+        phi += w * stepT;
+        px += Math.sin(phi) * spd * stepT;
+        pz += Math.cos(phi) * spd * stepT;
+        w *= decay;
+      }
+      this._fwd.set(Math.sin(phi), 0, Math.cos(phi));
+      this._side.crossVectors(this._up, this._fwd).normalize();
+      this._v2.set(px, 0, pz).addScaledVector(this._side, gate.latOffset);
+      let y = bird.position.y + gate.yOff;
+      const ground = this.sceneApi.getGroundHeight
+        ? this.sceneApi.getGroundHeight(this._v2.x, this._v2.z) : 0;
+      this._v2.y = Math.max(ground + CFG.minClearance, Math.min(CFG.maxAltitude, y));
+      return this._v2;
+    }
+
+    _updateGates(now, isPlaying, dt) {
       const bird = this.sceneApi.getBirdState ? this.sceneApi.getBirdState() : null;
 
       for (const g of this.pool) {
@@ -464,6 +500,21 @@ const RhythmGates = (function () {
         g.mat.opacity = 0.12 + approach * 0.55 + beatFlash;
 
         if (!isPlaying || !bird) continue;
+
+        // Far gates glide with the live arc prediction — turning no longer
+        // strands them off your old heading. Inside the freeze horizon they
+        // lock, so close-range steering skill decides the hit.
+        if (lead > CFG.gateFreezeLead) {
+          const target = this._placeGate(g, bird, lead);
+          g.pos.lerp(target, Math.min(1, (dt || 0.016) * CFG.gateDriftRate));
+          g.normal.copy(this._fwd);
+          g.mesh.position.copy(g.pos);
+          this._v1.copy(g.pos).add(g.normal);
+          g.mesh.lookAt(this._v1);
+          this._v1.subVectors(bird.position, g.pos);
+          g.prevAlong = this._v1.dot(g.normal);
+          continue; // still repositioning ahead of the bird — can't be crossed
+        }
 
         // Plane crossing → hit if inside the ring, miss if we clipped past it
         this._v1.subVectors(bird.position, g.pos);
