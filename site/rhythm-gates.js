@@ -29,6 +29,11 @@ const RhythmGates = (function () {
     lateralJitter: 6,
     verticalJitterLo: -2,
     verticalJitterHi: 4,
+    // Reachability budget: how fast a player can realistically translate
+    // sideways/vertically while flying forward. Gate-to-gate offsets are
+    // clamped by these so every gate is makeable from the one before it.
+    lateralReachPerSec: 3.5,
+    verticalReachPerSec: 4,
     minClearance: 5,          // gate center height above ground/water
     maxAltitude: 85,
     poolSize: 14,
@@ -84,6 +89,8 @@ const RhythmGates = (function () {
       this.lastPlannedTime = -999;
       this.lastNow = 0;
       this.useGrid = null;      // lazily decided: MIDI drums vs BPM grid
+      this.laneLat = 0;         // smoothly wandering lane (gate-to-gate coherent)
+      this.laneY = null;
 
       const THREE = this.THREE;
       this._v1 = new THREE.Vector3();
@@ -133,6 +140,8 @@ const RhythmGates = (function () {
       this._releaseAll();
       this.planned.clear();
       this.lastPlannedTime = -999;
+      this.laneLat = 0;
+      this.laneY = null;
     }
 
     _releaseAll() {
@@ -199,18 +208,39 @@ const RhythmGates = (function () {
         const gate = this.pool.find(g => !g.inUse);
         if (!gate) return; // pool exhausted — skip until one frees up
 
-        // Place on the bird's current heading, arriving exactly on the note
+        // Place on the bird's current heading, arriving exactly on the note.
+        // Offsets form a coherent lane: each gate is clamped to what the
+        // player can actually reach from the previous gate (and from the
+        // bird's current line) in the time available — no impossible zigzags.
         this._fwd.set(0, 0, 1).applyQuaternion(bird.quaternion);
         const dist = bird.speedPerSec * lead;
+        const gapPrev = Math.min(3, Math.max(0.1, time - this.lastPlannedTime));
+
+        const latTarget = (Math.random() * 2 - 1) * CFG.lateralJitter;
+        const maxLatDelta = CFG.lateralReachPerSec * gapPrev;
+        this.laneLat = Math.max(this.laneLat - maxLatDelta,
+          Math.min(this.laneLat + maxLatDelta, latTarget));
+        const latReach = CFG.lateralReachPerSec * lead;
+        const lat = Math.max(-latReach, Math.min(latReach, this.laneLat));
+
         gate.pos.copy(bird.position).addScaledVector(this._fwd, dist);
         this._side.crossVectors(this._up, this._fwd).normalize();
-        gate.pos.addScaledVector(this._side, (Math.random() * 2 - 1) * CFG.lateralJitter);
-        gate.pos.y = bird.position.y + CFG.verticalJitterLo
+        gate.pos.addScaledVector(this._side, lat);
+
+        const vTarget = bird.position.y + CFG.verticalJitterLo
           + Math.random() * (CFG.verticalJitterHi - CFG.verticalJitterLo);
+        const maxVDelta = CFG.verticalReachPerSec * gapPrev;
+        if (this.laneY === null) this.laneY = bird.position.y;
+        this.laneY = Math.max(this.laneY - maxVDelta,
+          Math.min(this.laneY + maxVDelta, vTarget));
+        const vReach = CFG.verticalReachPerSec * lead;
+        gate.pos.y = Math.max(bird.position.y - vReach,
+          Math.min(bird.position.y + vReach, this.laneY));
 
         const ground = this.sceneApi.getGroundHeight
           ? this.sceneApi.getGroundHeight(gate.pos.x, gate.pos.z) : 0;
         gate.pos.y = Math.max(ground + CFG.minClearance, Math.min(CFG.maxAltitude, gate.pos.y));
+        this.laneY = gate.pos.y; // keep the lane anchored to where gates really are
 
         const tier = pickTier(Math.random());
         gate.tier = tier;
