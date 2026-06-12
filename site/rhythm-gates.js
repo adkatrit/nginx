@@ -24,7 +24,9 @@ const RhythmGates = (function () {
     leadTime: 2.4,            // seconds ahead a gate spawns — short enough
                               // that spawn-time arc prediction stays accurate
                               // (rings NEVER move once placed)
-    minSpawnGap: 0.45,        // min seconds between consecutive gates
+    minSpawnGap: 1.5,         // min seconds between consecutive gates —
+                              // chill pacing: ~one ring per few beats, the
+                              // lane breathes instead of demanding every bar
     minLeadToSpawn: 1.0,      // never spawn a gate closer than this
     perfectWindow: 0.1,       // |hit - note| for PERFECT (flow x2)
     missTimeout: 0.9,         // seconds past note time before an uncrossed gate misses
@@ -57,7 +59,7 @@ const RhythmGates = (function () {
       { name: 'medium', radius: 6.5, score: 50,  flowBoost: 0.08, chance: 0.4, color: 0xffcc66 },
       { name: 'small',  radius: 4.5, score: 100, flowBoost: 0.12, chance: 0.2, color: 0xffd700 },
     ],
-    gridBeatsPerGate: 2,      // BPM-grid fallback: one gate every N beats
+    gridBeatsPerGate: 4,      // BPM-grid fallback: one gate per measure
   };
 
   // Gate-worthy MIDI kinds (kick carries the pulse; snare/tom add variety)
