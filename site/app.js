@@ -3338,6 +3338,7 @@
           THREE: three,
           scene: threeScene,
           sceneApi: currentTrackScene,
+          audioContext: audioCtx,
           getUpcoming: (time, ahead) => stemPlayer.getUpcomingMidiEvents(time, ahead),
           getMidiCount: () => stemPlayer.midiSchedule.length,
           getBpm: () => stemPlayer.manifest?.bpm || 120,
@@ -5379,8 +5380,13 @@
   function handleTrackEnded() {
     // In environment mode: stop, show score screen, let user choose next
     if (EnvironmentMode && bgVizMode === "environment" && currentTrackTitle) {
+      // Rhythm gates own the run when the flight scene is active —
+      // EnvironmentMode's chill-ride stats don't accumulate there
+      const gateRun = rhythmGates && rhythmGates.getStats ? rhythmGates.getStats() : null;
       try {
-        const summary = EnvironmentMode.getRunSummary && EnvironmentMode.getRunSummary();
+        const summary = gateRun && (gateRun.gatesHit + gateRun.gatesMissed) > 0
+          ? gateRun
+          : (EnvironmentMode.getRunSummary && EnvironmentMode.getRunSummary());
         if (summary) showRunSummary(summary);
       } catch { /* ignore */ }
 
@@ -5391,8 +5397,17 @@
       }
       updatePlayPauseBtn();
 
-      const finalScore = EnvironmentMode.getScore ? EnvironmentMode.getScore() : 0;
+      const finalScore = gateRun && gateRun.score > 0
+        ? gateRun.score
+        : (EnvironmentMode.getScore ? EnvironmentMode.getScore() : 0);
       showHighScoreModal(finalScore, currentTrackTitle);
+
+      // Arm a fresh run for the replay case (same track, same scene)
+      if (rhythmGates && gateRun) {
+        rhythmGates.resetRun();
+        updateScoreHUD(0, 1);
+        updateFlowHUD(rhythmGates.getFlow(), 0);
+      }
       return; // Don't auto-advance — user clicks NEXT TRACK
     }
 

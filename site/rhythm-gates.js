@@ -55,6 +55,71 @@ const RhythmGates = (function () {
   // Gate-worthy MIDI kinds (kick carries the pulse; snare/tom add variety)
   const GATE_KINDS = { kick: 1, snare: 0.6, tom: 0.3 };
 
+  /**
+   * Synthesized gate SFX — no asset files. Hit chimes climb in pitch with
+   * the combo, PERFECT adds a high sparkle, misses give a dull descending
+   * thud, and crossing 80% FLOW plays a small rising shimmer.
+   */
+  class Sfx {
+    constructor(ctx) {
+      this.ctx = ctx;
+      this.master = ctx.createGain();
+      this.master.gain.value = 0.35;
+      this.master.connect(ctx.destination);
+    }
+
+    _tone(freq, at, dur, type, vol) {
+      const o = this.ctx.createOscillator();
+      o.type = type;
+      o.frequency.value = freq;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.exponentialRampToValueAtTime(vol, at + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+      o.connect(g);
+      g.connect(this.master);
+      o.start(at);
+      o.stop(at + dur + 0.02);
+    }
+
+    hit(combo, perfect) {
+      try {
+        const t = this.ctx.currentTime;
+        // +2 semitones per combo level — the run audibly climbs
+        const f = 660 * Math.pow(2, Math.min(12, (combo - 1) * 2) / 12);
+        this._tone(f, t, 0.18, 'sine', 0.5);
+        this._tone(f * 2, t, 0.12, 'triangle', 0.16);
+        if (perfect) this._tone(f * 3, t + 0.03, 0.3, 'sine', 0.12);
+      } catch (e) { /* audio context not ready — stay silent */ }
+    }
+
+    miss() {
+      try {
+        const t = this.ctx.currentTime;
+        const o = this.ctx.createOscillator();
+        o.type = 'sine';
+        o.frequency.setValueAtTime(150, t);
+        o.frequency.exponentialRampToValueAtTime(65, t + 0.18);
+        const g = this.ctx.createGain();
+        g.gain.setValueAtTime(0.3, t);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+        o.connect(g);
+        g.connect(this.master);
+        o.start(t);
+        o.stop(t + 0.22);
+      } catch (e) { /* ignore */ }
+    }
+
+    shimmer() {
+      try {
+        const t = this.ctx.currentTime;
+        this._tone(523, t, 0.15, 'sine', 0.14);
+        this._tone(659, t + 0.07, 0.15, 'sine', 0.14);
+        this._tone(784, t + 0.14, 0.25, 'sine', 0.16);
+      } catch (e) { /* ignore */ }
+    }
+  }
+
   function pickTier(rng) {
     let r = rng, acc = 0;
     for (const tier of CFG.tiers) {
@@ -83,7 +148,16 @@ const RhythmGates = (function () {
       this.maxStreak = 0;
       this.gatesHit = 0;
       this.gatesMissed = 0;
+      this.perfectCount = 0;
       this.flow = CFG.flowStart;
+      this.flowSum = 0;   // time-weighted, for end-of-run average
+      this.flowTime = 0;
+      this._shimmerArmed = true;
+
+      this.sfx = null;
+      if (opts.audioContext) {
+        try { this.sfx = new Sfx(opts.audioContext); } catch (e) { this.sfx = null; }
+      }
 
       this.planned = new Set(); // note-time keys already given a gate
       this.lastPlannedTime = -999;
@@ -126,6 +200,30 @@ const RhythmGates = (function () {
           prevAlong: -1, state: 'approach', stateStart: 0,
         });
       }
+
+      // Lane thread: a faint line from the bird through the next few gates,
+      // so players fly the path instead of reacting ring by ring. Vertex
+      // brightness fades with order (reads as alpha under additive blending).
+      this.threadMax = 5; // bird + up to 4 gates
+      this.threadPos = new Float32Array(this.threadMax * 3);
+      this.threadCol = new Float32Array(this.threadMax * 3);
+      this.threadGeom = new THREE.BufferGeometry();
+      this.threadGeom.setAttribute('position', new THREE.BufferAttribute(this.threadPos, 3));
+      this.threadGeom.setAttribute('color', new THREE.BufferAttribute(this.threadCol, 3));
+      this.threadMat = new THREE.LineBasicMaterial({
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.55,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        toneMapped: false,
+      });
+      this.threadLine = new THREE.Line(this.threadGeom, this.threadMat);
+      this.threadLine.visible = false;
+      this.threadLine.frustumCulled = false;
+      this.threadLine.renderOrder = 1;
+      this.scene.add(this.threadLine);
+      this._threadSort = [];
     }
 
     getFlow() { return this.flow; }
@@ -160,8 +258,52 @@ const RhythmGates = (function () {
         this._plan(now);
         // Flow drifts toward baseline so the bar reflects recent play
         this.flow += (CFG.flowBaseline - this.flow) * Math.min(1, CFG.flowDriftPerSec * dt);
+        this.flowSum += this.flow * dt;
+        this.flowTime += dt;
+        // Shimmer once each time flow climbs through 80%
+        if (this.flow >= 0.8 && this._shimmerArmed) {
+          this._shimmerArmed = false;
+          if (this.sfx) this.sfx.shimmer();
+        } else if (this.flow < 0.7) {
+          this._shimmerArmed = true;
+        }
       }
       this._updateGates(now, isPlaying);
+      this._updateThread();
+    }
+
+    _updateThread() {
+      const bird = this.sceneApi.getBirdState ? this.sceneApi.getBirdState() : null;
+      const list = this._threadSort;
+      list.length = 0;
+      if (this.enabled && bird) {
+        for (const g of this.pool) {
+          if (g.inUse && g.state === 'approach') list.push(g);
+        }
+        list.sort((a, b) => a.time - b.time);
+      }
+      const n = Math.min(this.threadMax - 1, list.length);
+      if (n === 0) { this.threadLine.visible = false; return; }
+
+      this.threadPos[0] = bird.position.x;
+      this.threadPos[1] = bird.position.y - 0.8; // just under the bird, out of the camera line
+      this.threadPos[2] = bird.position.z;
+      this.threadCol[0] = 0.22; this.threadCol[1] = 0.19; this.threadCol[2] = 0.12;
+      for (let i = 0; i < n; i++) {
+        const g = list[i];
+        const o = (i + 1) * 3;
+        this.threadPos[o] = g.pos.x;
+        this.threadPos[o + 1] = g.pos.y;
+        this.threadPos[o + 2] = g.pos.z;
+        const b = 0.8 * (1 - i / 4); // nearest segment brightest
+        this.threadCol[o] = b;
+        this.threadCol[o + 1] = b * 0.85;
+        this.threadCol[o + 2] = b * 0.55;
+      }
+      this.threadGeom.setDrawRange(0, n + 1);
+      this.threadGeom.attributes.position.needsUpdate = true;
+      this.threadGeom.attributes.color.needsUpdate = true;
+      this.threadLine.visible = true;
     }
 
     /** Decide gate beats: drum MIDI when available, BPM grid otherwise. */
@@ -316,11 +458,13 @@ const RhythmGates = (function () {
         this.streak++;
         this.maxStreak = Math.max(this.maxStreak, this.streak);
         this.gatesHit++;
+        if (perfect) this.perfectCount++;
         this.combo = Math.min(CFG.comboCap, 1 + Math.floor(this.streak / 4));
         this.score += g.tier.score * this.combo;
         this.flow = Math.min(1, this.flow + g.tier.flowBoost * (perfect ? 2 : 1));
 
         g.mat.color.copy(this._white);
+        if (this.sfx) this.sfx.hit(this.combo, perfect);
         if (this.sceneApi.onGateHit) {
           this.sceneApi.onGateHit(g.tier.name === 'small' ? 1 : 0.7, perfect);
         }
@@ -331,9 +475,47 @@ const RhythmGates = (function () {
         this.combo = 1;
         this.gatesMissed++;
         this.flow = Math.max(0, this.flow - CFG.flowMissPenalty);
+        if (this.sfx) this.sfx.miss();
         if (this.onScore) this.onScore(this.score, this.combo);
       }
       if (this.onFlow) this.onFlow(this.flow, this.streak);
+    }
+
+    /** End-of-run summary, shaped for app.js's showRunSummary(). */
+    getStats() {
+      const total = this.gatesHit + this.gatesMissed;
+      const gateAccuracy = total > 0 ? this.gatesHit / total : 0;
+      const flowAvg = this.flowTime > 0 ? this.flowSum / this.flowTime : 0;
+      let rank = 'C';
+      if (gateAccuracy >= 0.95 && flowAvg >= 0.7) rank = 'S';
+      else if (gateAccuracy >= 0.85 && flowAvg >= 0.55) rank = 'A';
+      else if (gateAccuracy >= 0.65) rank = 'B';
+      return {
+        score: this.score,
+        rank,
+        flowAvg,
+        gateAccuracy,
+        gateStreakMax: this.maxStreak,
+        gatesHit: this.gatesHit,
+        gatesMissed: this.gatesMissed,
+        perfectCount: this.perfectCount,
+      };
+    }
+
+    /** Fresh run on the same track (replay after the end screen). */
+    resetRun() {
+      this.reset();
+      this.score = 0;
+      this.combo = 1;
+      this.streak = 0;
+      this.maxStreak = 0;
+      this.gatesHit = 0;
+      this.gatesMissed = 0;
+      this.perfectCount = 0;
+      this.flow = CFG.flowStart;
+      this.flowSum = 0;
+      this.flowTime = 0;
+      this._shimmerArmed = true;
     }
 
     dispose() {
@@ -343,6 +525,9 @@ const RhythmGates = (function () {
       }
       this.pool.length = 0;
       this.ringGeom.dispose();
+      this.scene.remove(this.threadLine);
+      this.threadGeom.dispose();
+      this.threadMat.dispose();
     }
   }
 
