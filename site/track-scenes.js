@@ -4093,16 +4093,33 @@ window.TrackScenes = (function() {
       const sunDirUp = tslDot(sunDirection, upDir);
       const nightFade = float(1).sub(smoothstep(float(-0.15), float(0.0), sunDirUp));
       const skyAlt = tslClamp(tslDot(direction, upDir), float(0), float(1));
-      // Deep blue zenith → warm-grey horizon
-      const nightZenith = vec3(0.012, 0.012, 0.04);
-      const nightHoriz = vec3(0.03, 0.024, 0.022);
+      // Deep blue zenith → warm-grey horizon. Boosted since fog removal —
+      // the fog veil used to provide most of the night sky's luminance.
+      const nightZenith = vec3(0.05, 0.055, 0.16);
+      const nightHoriz = vec3(0.12, 0.10, 0.09);
       const nightGrad = mix(nightHoriz, nightZenith, tslPow(skyAlt, float(0.5)));
       // Airglow band ~10° above horizon (real atmospheric phenomenon — faint green/amber)
       // Use x*x instead of pow(x,2) — WGSL pow() is undefined for negative bases
       const agDist = skyAlt.sub(float(0.17)).div(float(0.06));
       const agStrength = tslExp(agDist.mul(agDist).negate());
-      const airglowCol = vec3(0.008, 0.013, 0.004).mul(agStrength);
+      const airglowCol = vec3(0.016, 0.026, 0.008).mul(agStrength);
       retColor.addAssign(nightGrad.add(airglowCol).mul(nightFade));
+
+      // Twilight — warm horizon glow around the sun's azimuth before sunrise
+      // and through low-sun "perpetual dusk" themes. The fog color lerp used
+      // to fake this; with fog gone it is modeled explicitly. Display-space
+      // addition, same as the night gradient above.
+      const flatDir = tslNormalize(vec3(direction.x, float(0.001), direction.z));
+      const flatSun = tslNormalize(vec3(sunDirection.x, float(0.001), sunDirection.z));
+      const azAlign = tslClamp(tslDot(flatDir, flatSun), float(0), float(1));
+      const horizonBand = tslExp(skyAlt.mul(skyAlt).mul(float(-22)));
+      const twilightRamp = smoothstep(float(-0.28), float(-0.02), sunDirUp)
+        .mul(float(1).sub(smoothstep(float(0.02), float(0.18), sunDirUp)));
+      const twilightCol = vec3(0.55, 0.26, 0.10)
+        .mul(tslPow(azAlign, float(5)))
+        .mul(horizonBand)
+        .mul(twilightRamp);
+      retColor.addAssign(twilightCol);
 
       return vec4(retColor, 1);
     })();
@@ -5298,7 +5315,9 @@ window.TrackScenes = (function() {
           if (envRenderer.toneMapping === THREE.NoToneMapping) {
             envRenderer.toneMapping = THREE.ACESFilmicToneMapping;
           }
-          envRenderer.toneMappingExposure = 0.15 + sunFactor * 0.85;  // 0.15 (dark) → 1.0 (bright)
+          // Floor raised from 0.15 since fog removal — pre-dawn needs to
+          // read on its own now that there is no luminous haze
+          envRenderer.toneMappingExposure = 0.28 + sunFactor * 0.72;  // 0.28 (pre-dawn) → 1.0 (bright)
         }
 
         // ── Star dome fade + moon + shooting stars ──
