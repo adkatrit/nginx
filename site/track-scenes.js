@@ -4842,6 +4842,12 @@ window.TrackScenes = (function() {
       pitchAltScale: 2.0,   // multiplier for pitch-driven altitude change
       minY: 2,
       maxY: 90,
+      // Precision strafe: immediate lateral velocity on left/right, layered
+      // over yaw. Yaw steers the course; strafe wins the gate. ~10 u/s
+      // arriving in ~5 frames, reversal in ~0.3s.
+      strafeMax: 0.17,
+      strafeResp: 0.18,
+      strafeBank: 0.35,     // visual roll into the slip (radians)
       neckYStep: 0.018, neckYMax: 0.7,
       bodyYStep: 0.01,  bodyYMax: 0.4,
       neckXStep: 0.008, neckXMax: 0.6,
@@ -4853,13 +4859,14 @@ window.TrackScenes = (function() {
       lookAtZ: 15,
       // Whole-body pitch for dive/climb
       divePitchMax: 0.30,     // ~17° nose-down — gentle descent
-      divePitchStep: 0.010,   // same rate as climb
+      divePitchStep: 0.015,   // quicker tilt — vertical gate response
       climbPitchMax: 0.22,    // ~13° nose-up — gentler climb
-      climbPitchStep: 0.010,  // slower tilt into climb
+      climbPitchStep: 0.015,
       pitchReturn: 0.025,     // how fast pitch returns to level
     };
     let isDoubleSpeed = false;
     let lookAtPosZ = FLY.lookAtZ;
+    let strafeVel = 0; // current sideslip velocity (units/frame)
     // Smooth camera state (we own these — env camera must not interfere)
     let camSmooth = null;
     let camSmoothTarget = null;
@@ -5616,6 +5623,17 @@ window.TrackScenes = (function() {
               if (charNeck) charNeck.rotation.y -= FLY.neckYStep;
               if (charBody) charBody.rotation.y += FLY.bodyYStep;
             }
+          }
+
+          // ── Precision strafe: left/right sideslip with immediate response.
+          // Yaw above still carries the course; this wins the gate. ──
+          const strafeInput = (leftDown ? 1 : 0) - (rightDown ? 1 : 0);
+          strafeVel += (strafeInput * FLY.strafeMax - strafeVel) * FLY.strafeResp;
+          if (Math.abs(strafeVel) > 0.0001) bird.translateX(strafeVel);
+          if (birdModel) {
+            // Bank into the slip (roll is otherwise unused; pitch lives on x)
+            const bankTarget = (strafeVel / FLY.strafeMax) * FLY.strafeBank;
+            birdModel.rotation.z += (bankTarget - birdModel.rotation.z) * 0.12;
           }
 
           // ── Ground collision: never clip through terrain, water, or scenery ──
