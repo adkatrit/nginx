@@ -2,6 +2,54 @@
 
 ---
 
+## Creative Direction: "The Living Album" + Spatial Lyrics — IN PROGRESS
+
+### The vision (researched: Mizuguchi/Rez/Tetris Effect synesthesia, Thumper arc)
+Not "AudioSurf with your MP3s" (commodity: bring-any-song novelty). This is a
+specific artist's album with written lyrics, [Section] structure, and a stated
+theme — "what stays human when everything becomes signal." That's the moat.
+Three pillars, all from assets that already exist:
+
+1. **Spatial Lyrics ("The Word Field")** — DONE (phase 1). The signature.
+2. **The Album as One Journey** — section markers ([Verse]/[Chorus]/[Bridge])
+   exist in every lyrics.json → song structure for free, no audio analysis.
+   Choruses bloom, verses breathe; sun already rises across the 9-track run.
+3. **Humanity vs. Signal scoring** — FLOW (grace/feel) keeps the world warm
+   and saturated; robotic point-chasing cools it toward cold digital. The
+   synesthesia principle wedded to the album's actual meaning. (Planned.)
+
+Key data finding: lyrics are LINE-level (not word-level as TODO claimed), but
+present on every track with [Section] markers — better for structure.
+
+### New: `site/lyric-field.js` (Spatial Lyrics)
+- Each sung line's words materialize ahead of the flight path as glowing 3D
+  sprites, spread across the line's time window in reading order, placed on the
+  bird's current heading a short lead before arrival (turn-safe, like gates),
+  then flown through and dissolved into the slipstream.
+- Words arrive flickering like raw signal and RESOLVE into clear text as they
+  near the camera — "cyaan tell di code from di dream" made literal.
+- Flying through a word feeds a FLOW sip → ties the signature feature to the
+  scoring/world-warmth loop (synesthesia reward, not obligation).
+- Canvas-texture sprites (cached/reused per word), bounded pool, seek-safe,
+  guarded so any GPU failure leaves the scene intact. L key toggles it.
+- Long lines drop filler words (a/the/of) before truncating so kept words read.
+- Verified by Node sim against real Data Tide lyrics: 48 words spawned, peak 12
+  in flight, flythrough flow-sips fire, pool bounded, seek-back clears.
+
+### Integration
+- `app.js`: feedLyricField() tracks its own line index (independent of the 2D
+  karaoke overlay, seek-safe), drives the field in the render loop next to
+  rhythm gates, disposes/recreates on track change via scene identity.
+- `rhythm-gates.js`: added addFlow() so the lyric flythrough can sip FLOW.
+
+### Next
+- Pillar 2 (section-aware intensity from the [Section] markers — the Director,
+  now trivial with structure already annotated)
+- Pillar 3 (humanity-vs-signal world grade tied to FLOW)
+- Chorus lines as bigger spatial moments; emotional word styling
+
+---
+
 ## Rhythm Flight Game, Phase 1: MIDI-Locked Gates — COMPLETE
 
 ### Direction decision

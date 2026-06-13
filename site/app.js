@@ -551,6 +551,11 @@
   let rhythmGatesEnabled = (() => {
     try { return localStorage.getItem('rhythmGates') !== 'off'; } catch (e) { return true; }
   })();
+  let lyricField = null;  // Spatial lyrics you fly through (lyric-field.js)
+  let lyricFieldLineIdx = -1;
+  let lyricFieldEnabled = (() => {
+    try { return localStorage.getItem('lyricField') !== 'off'; } catch (e) { return true; }
+  })();
 
   // Adaptive onset detection (Bello 2005) — rolling history for median-based threshold
   const ONSET_HISTORY_SIZE = 43; // ~0.7 sec at 60fps — captures ~2 beats at 170 BPM
@@ -1658,6 +1663,8 @@
     if (usingStemPlayer && stemPlayer) {
       if (midiRouter) midiRouter.reset(); // queued events belong to the old position
       if (rhythmGates) rhythmGates.reset(); // live gates too
+      if (lyricField) lyricField.reset(); // and in-flight words
+      lyricFieldLineIdx = -1;
       stemPlayer.seek(time);
     } else {
       audio.currentTime = time;
@@ -2610,16 +2617,53 @@
     if (gateStreakValue) gateStreakValue.textContent = String(Math.max(0, Number(gateStreak) || 0));
   }
 
-  // ── Cruise mode toggle: G hides/shows rhythm gates ──
+  // Drive the spatial lyric field: when playback enters a new sung line,
+  // schedule its words. Section markers ([Chorus]) set emphasis but don't
+  // spawn words themselves. Tracks its own index so it's independent of the
+  // 2D karaoke overlay's cadence and survives seeks.
+  let _lyricSection = '';
+  function feedLyricField(now) {
+    if (!lyricField || !lyricsData) return;
+    // Find the active line for `now`
+    let idx = -1;
+    for (let i = 0; i < lyricsData.length; i++) {
+      if ((lyricsData[i].time || 0) <= now) idx = i; else break;
+    }
+    if (idx === lyricFieldLineIdx) return;
+    lyricFieldLineIdx = idx;
+    if (idx < 0) return;
+    const line = lyricsData[idx];
+    if (!line) return;
+    if (line.type === 'section') {
+      _lyricSection = line.text || '';
+      return;
+    }
+    // Duration until the next entry (line or section marker)
+    const next = lyricsData[idx + 1];
+    const duration = next ? Math.max(0.6, (next.time || 0) - (line.time || 0)) : 3;
+    const emphasis = /chorus|drop|hook/i.test(_lyricSection);
+    lyricField.setLine(line.text, line.time || now, duration, { emphasis });
+  }
+
+  // ── Toggles: G = cruise (gates), L = spatial lyrics ──
   document.addEventListener('keydown', (e) => {
-    if (e.code !== 'KeyG' || e.repeat) return;
+    if (e.repeat) return;
     const el = e.target;
     if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
-    rhythmGatesEnabled = !rhythmGatesEnabled;
-    try { localStorage.setItem('rhythmGates', rhythmGatesEnabled ? 'on' : 'off'); } catch (err) { /* private mode */ }
-    if (rhythmGates) rhythmGates.setEnabled(rhythmGatesEnabled);
-    if (hitFeedback) {
-      hitFeedback.textContent = rhythmGatesEnabled ? 'GATES ON' : 'CRUISE MODE';
+    let label = null;
+    if (e.code === 'KeyG') {
+      rhythmGatesEnabled = !rhythmGatesEnabled;
+      try { localStorage.setItem('rhythmGates', rhythmGatesEnabled ? 'on' : 'off'); } catch (err) { /* private mode */ }
+      if (rhythmGates) rhythmGates.setEnabled(rhythmGatesEnabled);
+      label = rhythmGatesEnabled ? 'GATES ON' : 'CRUISE MODE';
+    } else if (e.code === 'KeyL') {
+      lyricFieldEnabled = !lyricFieldEnabled;
+      try { localStorage.setItem('lyricField', lyricFieldEnabled ? 'on' : 'off'); } catch (err) { /* private mode */ }
+      if (lyricField) lyricField.setEnabled(lyricFieldEnabled);
+      label = lyricFieldEnabled ? 'LYRICS ON' : 'LYRICS OFF';
+    }
+    if (label && hitFeedback) {
+      hitFeedback.textContent = label;
       hitFeedback.className = 'hit-feedback gate-hit';
       void hitFeedback.offsetWidth;
       hitFeedback.classList.add('show');
@@ -3356,6 +3400,34 @@
     } else if (rhythmGates && !flightSceneActive) {
       rhythmGates.dispose();
       rhythmGates = null;
+    }
+
+    // ── Spatial lyrics: fly through the words of the song (lyric-field.js) ──
+    if (flightSceneActive && usingStemPlayer && stemPlayer && window.LyricField &&
+        lyricsData && lyricsData.length > 0) {
+      if (lyricField && lyricField.sceneRef !== currentTrackScene) {
+        lyricField.dispose();
+        lyricField = null;
+      }
+      if (!lyricField && currentTrackScene.getBirdState) {
+        lyricField = window.LyricField.create({
+          THREE: three,
+          scene: threeScene,
+          sceneApi: currentTrackScene,
+          enabled: lyricFieldEnabled,
+          // Flying through a word feeds FLOW → the world warms (synesthesia)
+          onFlowSip: (a) => { if (rhythmGates) rhythmGates.addFlow(a); },
+        });
+        lyricField.sceneRef = currentTrackScene;
+        lyricFieldLineIdx = -1;
+      }
+      if (lyricField) {
+        feedLyricField(stemPlayer.getCurrentTime());
+        lyricField.update(stemPlayer.getCurrentTime(), stemPlayer.isPlaying);
+      }
+    } else if (lyricField && !flightSceneActive) {
+      lyricField.dispose();
+      lyricField = null;
     }
 
     // Update OrbitControls for smooth damping
@@ -4225,6 +4297,8 @@
       stemAnalysisData = null;
     }
     if (midiRouter) midiRouter.reset();
+    if (lyricField) { lyricField.dispose(); lyricField = null; }
+    lyricFieldLineIdx = -1;
 
     // Clear lyrics from previous track
     clearLyricsDisplay();

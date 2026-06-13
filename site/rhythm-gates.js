@@ -245,6 +245,11 @@ const RhythmGates = (function () {
 
     getFlow() { return this.flow; }
 
+    /** External FLOW sip (e.g. flying through a lyric word). Clamped. */
+    addFlow(amount) {
+      this.flow = Math.max(0, Math.min(1, this.flow + (amount || 0)));
+    }
+
     setEnabled(on) {
       this.enabled = !!on;
       if (!on) this._releaseAll();
