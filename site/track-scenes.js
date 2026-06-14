@@ -4564,12 +4564,29 @@ window.TrackScenes = (function() {
     sunLight.shadow.mapSize.width = 2048;
     sunLight.shadow.mapSize.height = 2048;
     sunLight.shadow.camera.near = 1;
-    sunLight.shadow.camera.far = 300;
-    sunLight.shadow.camera.left = -100;
-    sunLight.shadow.camera.right = 100;
-    sunLight.shadow.camera.top = 100;
-    sunLight.shadow.camera.bottom = -100;
+    sunLight.shadow.camera.far = 320;
+    // Tighter frustum than the visible terrain — concentrates shadow texels
+    // where the bird actually is, for crisp contact shadows near the camera
+    sunLight.shadow.camera.left = -70;
+    sunLight.shadow.camera.right = 70;
+    sunLight.shadow.camera.top = 70;
+    sunLight.shadow.camera.bottom = -70;
+    // normalBias offsets samples along the surface normal — the single most
+    // effective cure for shadow acne on sloped procedural terrain. bias trims
+    // the rest. Tuned conservative to avoid peter-panning.
+    sunLight.shadow.normalBias = 0.8;
+    sunLight.shadow.bias = -0.0002;
     scene.add(sunLight);
+
+    // Shadows were configured on every mesh but never switched on at the
+    // renderer — enable soft shadow mapping now (biggest single realism win).
+    try {
+      const envRenderer = window.EnvironmentMode?.instance?.renderer;
+      if (envRenderer && envRenderer.shadowMap) {
+        envRenderer.shadowMap.enabled = true;
+        envRenderer.shadowMap.type = THREE.PCFSoftShadowMap ?? envRenderer.shadowMap.type;
+      }
+    } catch (e) { console.warn('[Flight] Shadow enable failed:', e); }
     const hemiLight = new THREE.HemisphereLight(0xffccaa, 0x553311, 0.04);  // Starts dim
     scene.add(hemiLight);
 
@@ -4800,6 +4817,10 @@ window.TrackScenes = (function() {
         if (!activeTheme.spawnSceneryObject) continue;
         const obj = activeTheme.spawnSceneryObject(x, z, h, activeTheme.waterY, s, s3, THREE, sceneryMats, sceneryGeoms);
         if (!obj) continue;
+
+        // Themes already flag castShadow; also receive so objects ground each
+        // other (a tree's shadow falls across the rock beside it)
+        obj.traverse(c => { if (c.isMesh) c.receiveShadow = true; });
 
         scene.add(obj);
         objects.push(obj);
@@ -5035,8 +5056,6 @@ window.TrackScenes = (function() {
     let terrainEmissiveBase = activeTheme.terrainMatProps?.emissiveIntensity || 0;
     let waterRoughBase = activeTheme.waterRoughness;
     let baseFov = 0;            // captured from the env camera on first frame
-    let shakeAmp = 0;           // snare/crash camera shake envelope
-    let shakeTime = 0;
     let lastPulseTime = 0;
     let musicSpeedLift = 1;     // flight speed rides the energy of the mix
     let prevBassE = 0;          // onset detection for tracks without MIDI
@@ -5112,8 +5131,6 @@ window.TrackScenes = (function() {
           break;
         case 'snare':
           pulse.snare = Math.max(pulse.snare, 0.45 + v * 0.55);
-          // Only hard snare hits nudge the camera — accents, not every backbeat
-          if (v > 0.6) shakeAmp = Math.min(1, Math.max(shakeAmp, 0.1 + v * 0.15));
           break;
         case 'hihat':
           pulse.hat = Math.max(pulse.hat, 0.35 + v * 0.65);
@@ -5123,7 +5140,6 @@ window.TrackScenes = (function() {
           break;
         case 'crash':
           pulse.crash = Math.max(pulse.crash, 0.65 + v * 0.35);
-          shakeAmp = Math.min(1, Math.max(shakeAmp, 0.2 + v * 0.2));
           for (let i = 0; i < 3; i++) launchShootingStar();
           break;
         case 'tom':
@@ -5822,7 +5838,7 @@ window.TrackScenes = (function() {
             cam.position.copy(camSmooth);
             cam.lookAt(camSmoothTarget);
 
-            // ── Cinematic camera: beat-locked FOV punch + decaying shake ──
+            // ── Cinematic camera: gentle beat-locked FOV breathing (no shake) ──
             if (baseFov === 0 && cam.isPerspectiveCamera) baseFov = cam.fov;
             if (baseFov > 0) {
               const targetFov = baseFov * (1 + pulse.kick * 0.05 + pulse.energy * 0.035 + pulse.crash * 0.03);
@@ -5830,18 +5846,6 @@ window.TrackScenes = (function() {
                 cam.fov += (targetFov - cam.fov) * Math.min(1, udt * 14);
                 cam.updateProjectionMatrix();
               }
-            }
-            // Snare/crash shake: layered sines (smooth, deterministic) with
-            // an exponential envelope — no per-frame random jitter
-            if (shakeAmp > 0.003) {
-              shakeTime += udt;
-              const s = shakeAmp * shakeAmp * 0.006;
-              cam.rotation.x += (Math.sin(shakeTime * 127) + Math.sin(shakeTime * 211) * 0.5) * s;
-              cam.rotation.y += (Math.sin(shakeTime * 149 + 1.7) + Math.sin(shakeTime * 233) * 0.5) * s * 0.8;
-              cam.rotation.z += Math.sin(shakeTime * 97 + 0.6) * s * 0.5;
-              shakeAmp *= Math.exp(-udt * 10);
-            } else {
-              shakeAmp = 0;
             }
           }
         }
