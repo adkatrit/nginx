@@ -2638,11 +2638,20 @@
       _lyricSection = line.text || '';
       return;
     }
-    // Duration until the next entry (line or section marker)
+    // Sing-duration: prefer the line's own end (accurate, gap-aware), else
+    // fall back to the gap until the next entry.
     const next = lyricsData[idx + 1];
-    const duration = next ? Math.max(0.6, (next.time || 0) - (line.time || 0)) : 3;
+    let duration;
+    if (line.end != null && line.end > line.time) {
+      duration = line.end - line.time;
+    } else if (next) {
+      duration = Math.max(0.6, (next.time || 0) - (line.time || 0));
+    } else {
+      duration = 3;
+    }
+    duration = Math.max(0.6, Math.min(duration, 8)); // sane bounds
     const emphasis = /chorus|drop|hook/i.test(_lyricSection);
-    lyricField.setLine(line.text, line.time || now, duration, { emphasis });
+    lyricField.setLine(line.text, line.time, duration, { emphasis });
   }
 
   // ── Toggles: G = cruise (gates), L = spatial lyrics ──
@@ -4344,7 +4353,15 @@
             const lyricsResp = await fetch(lyricsUrl);
             if (lyricsResp.ok) {
               const lyricsJson = await lyricsResp.json();
-              lyricsData = lyricsJson.lines || lyricsJson.lyrics || [];
+              const rawLyrics = lyricsJson.lines || lyricsJson.lyrics || [];
+              // Two formats exist in the repo: { time, ... } and
+              // { start, end, ... }. Normalize to a canonical { time, end }
+              // so every consumer (2D overlay, spatial field) agrees.
+              lyricsData = rawLyrics.map((l) => ({
+                ...l,
+                time: Number(l.time ?? l.start ?? 0),
+                end: l.end != null ? Number(l.end) : undefined,
+              }));
               console.log("Lyrics loaded:", lyricsData.length, "lines");
             }
           } catch (lyricsErr) {

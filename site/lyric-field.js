@@ -25,8 +25,9 @@ const LyricField = (function () {
 
   const CFG = {
     leadTime: 2.6,          // seconds a word spawns before its arrival
-    height: 4.5,            // meters above the bird's eyeline (fly under-ish)
-    lateralSpread: 5,       // gentle left/right weave so lines don't stack
+    height: 2.2,            // meters above the bird's eyeline — on the flight
+                            // line so you fly THROUGH words, not under them
+    lateralSpread: 4,       // gentle left/right weave so lines don't stack
     passBehind: 14,         // despawn this far behind the camera
     fadeInDist: 70,         // start visible at this range
     resolveDist: 38,        // signal→meaning fully resolved by here
