@@ -4747,10 +4747,10 @@ window.TrackScenes = (function() {
 
         // Wave set: long swell → short chop. Directions spread for a natural sea.
         const defs = [
-          { dir: [1.0, 0.18], len: 120, amp: 1.6, steep: 0.5 },
-          { dir: [0.7, 0.75], len: 64,  amp: 0.95, steep: 0.5 },
-          { dir: [-0.35, 1.0], len: 38, amp: 0.55, steep: 0.45 },
-          { dir: [0.9, -0.45], len: 27, amp: 0.32, steep: 0.4 },
+          { dir: [1.0, 0.18], len: 120, amp: 1.5, steep: 0.3 },
+          { dir: [0.7, 0.75], len: 64,  amp: 0.9, steep: 0.3 },
+          { dir: [-0.35, 1.0], len: 38, amp: 0.5, steep: 0.28 },
+          { dir: [0.9, -0.45], len: 27, amp: 0.3, steep: 0.25 },
         ];
         const N = defs.length;
         const waves = defs.map(w => {
@@ -4805,7 +4805,9 @@ window.TrackScenes = (function() {
           // Foam only on the tallest crest tips — replaces colour (whitecap),
           // not added (which blew the crests out to a snowfield).
           const foam = T.smoothstep(T.float(2.0), T.float(2.9), f.dy.mul(a)).mul(0.8);
-          const col = T.mix(body, oceanUniforms.foamCol, foam).add(spec);
+          // Ambient floor so water can never read as pure black (diagnostic +
+          // safety against any dark corner of the fresnel/mix).
+          const col = T.mix(body, oceanUniforms.foamCol, foam).add(spec).add(T.vec3(0.025, 0.06, 0.1));
           return T.vec4(col, T.float(1));
         })();
 
