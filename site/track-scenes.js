@@ -5547,20 +5547,19 @@ window.TrackScenes = (function() {
         // Reflective water: glint off the sun by day, the moon after dark, and
         // lift its base toward a moonlit blue at night so it's never a black void.
         // The glint is driven HDR-bright (sunColor > 1) so it blooms into real
-        // sparkle through the post chain, with a fast twinkle + hi-hat shimmer.
+        // sparkle through the post chain. Brightness is held STEADY — the moving
+        // normal map sparkles the highlight on its own; modulating sunColor over
+        // time made the whole reflection pulse (read as ripples↔smooth).
         if (waterMeshObj) {
           if (waterMeshObj.sunDirection) {
             waterMeshObj.sunDirection.value.copy(sunFactor > 0.18 ? sunPos : _moonDir);
           }
           if (waterMeshObj.sunColor) {
-            // Two-octave shimmer: never-repeating, low amplitude
-            const twinkle = 1 + 0.18 * Math.sin(time * 5.0 + Math.sin(time * 1.7)) * Math.cos(time * 2.3);
-            const shimmer = pulse.hat * 0.6; // hats sparkle the surface
             if (sunFactor > 0.18) {
-              const g = (1.35 + shimmer) * twinkle;   // HDR warm sun glint → blooms
+              const g = 1.5;                            // HDR warm sun glint → blooms
               waterMeshObj.sunColor.value.setRGB(g, g * 0.95, g * 0.85);
             } else {
-              const g = (0.95 + shimmer) * twinkle;    // cool moonglade — twinkle peaks bloom
+              const g = 1.0;                            // cool moonglade reflection
               waterMeshObj.sunColor.value.setRGB(g * 0.68, g * 0.8, g);
             }
           }
