@@ -5942,16 +5942,7 @@ window.TrackScenes = (function() {
             }
             cam.position.copy(camSmooth);
             cam.lookAt(camSmoothTarget);
-
-            // ── Cinematic camera: gentle beat-locked FOV breathing (no shake) ──
-            if (baseFov === 0 && cam.isPerspectiveCamera) baseFov = cam.fov;
-            if (baseFov > 0) {
-              const targetFov = baseFov * (1 + pulse.kick * 0.05 + pulse.energy * 0.035 + pulse.crash * 0.03);
-              if (Math.abs(targetFov - cam.fov) > 0.001) {
-                cam.fov += (targetFov - cam.fov) * Math.min(1, udt * 14);
-                cam.updateProjectionMatrix();
-              }
-            }
+            // (No beat-driven FOV/shake — the camera holds a steady frame.)
           }
         }
 
