@@ -4464,6 +4464,40 @@ window.TrackScenes = (function() {
       cloudUniforms = null;
     }
 
+    // ── Cloud shadows: dappled moving shade on the ground, driven by the same
+    // fractal noise + wind drift as the clouds overhead. Routed through the
+    // terrain material's aoNode (additive — darkens patches but preserves the
+    // vertex-color terrain and its lighting), so a shader failure degrades to
+    // a shadowless-but-intact world rather than a black one. ──
+    function applyCloudShadow(mat) {
+      if (!mat || !cloudUniforms || !TSL) return;
+      try {
+        const mxFractal = TSL.mx_fractal_noise_float;
+        if (typeof mxFractal !== 'function') return;
+        mat.aoNode = Fn(() => {
+          const p = positionWorld;
+          const sd = tslNormalize(skyUniforms.sunPosition);
+          // Offset the ground sample toward the sun so shade falls where the
+          // cloud actually blocks the light, not straight below it
+          const dy = tslMax(sd.y, float(0.3));
+          const offX = sd.x.div(dy).mul(60);
+          const offZ = sd.z.div(dy).mul(60);
+          const np = vec3(
+            p.x.add(offX).mul(0.0034).add(cloudUniforms.time.mul(0.006)),
+            float(0),
+            p.z.add(offZ).mul(0.0034),
+          );
+          const n = mxFractal(np, 3, 2.0, 0.55, 1.0).mul(0.32).add(0.5);
+          const edge0 = float(1).sub(cloudUniforms.coverage);
+          const shadow = smoothstep(edge0, edge0.add(0.18), n);
+          // 1.0 = full sun, 0.45 = deep under-cloud shade
+          return float(1).sub(shadow.mul(0.55));
+        })();
+      } catch (e) {
+        console.warn('[Flight] Cloud shadow node failed:', e);
+      }
+    }
+
 
     // ═══════════════════════════════════════════════════════════════════════
     // SHOOTING STARS — audio-reactive, triggered by drum hits
@@ -4655,6 +4689,7 @@ window.TrackScenes = (function() {
         emissiveIntensity: activeTheme.terrainMatProps.emissiveIntensity,
         emissive: new THREE.Color(0xffffff),
       });
+      applyCloudShadow(terrainMat);
     }
 
     let waterMat = new THREE.MeshStandardMaterial({
@@ -4923,7 +4958,9 @@ window.TrackScenes = (function() {
         // Wrap model in a movement container — pitch goes on birdModel,
         // position/yaw go on bird. This keeps dive angle visual-only.
         bird = new THREE.Group();
-        bird.position.set(0, 25, 0);
+        // Start low and skimming — more cinematic, and you climb into the
+        // world as the track opens (was 25, felt detached up high)
+        bird.position.set(0, 10, 0);
         bird.add(birdModel);
         charNeck = birdModel.getObjectByName('Neck_Armature') || null;
         charBody = birdModel.getObjectByName('Armature_rootJoint') || null;
@@ -5333,6 +5370,7 @@ window.TrackScenes = (function() {
             emissiveIntensity: activeTheme.terrainMatProps.emissiveIntensity,
             emissive: new THREE.Color(0xffffff),
           });
+          applyCloudShadow(terrainMat);
         }
 
         waterMat = new THREE.MeshStandardMaterial({
