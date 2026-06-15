@@ -5094,6 +5094,7 @@ window.TrackScenes = (function() {
     let waterRoughBase = activeTheme.waterRoughness;
     let baseFov = 0;            // captured from the env camera on first frame
     let lastPulseTime = 0;
+    let shadowFrame = 0;        // throttles shadow-map re-renders (~every 3rd frame)
     let musicSpeedLift = 1;     // flight speed rides the energy of the mix
     let prevBassE = 0;          // onset detection for tracks without MIDI
     let onsetCooldown = 0;
@@ -5526,6 +5527,16 @@ window.TrackScenes = (function() {
           // Floor raised (0.15 → 0.45 over time) — pre-dawn should feel like
           // early morning, not night; the day cycle still brightens from here
           envRenderer.toneMappingExposure = 0.45 + sunFactor * 0.55;  // 0.45 (dawn) → 1.0 (bright)
+
+          // Throttle shadow-map re-renders: the sun and scene change slowly,
+          // so a full caster pass every frame is wasted GPU. Update every 3rd
+          // frame (~imperceptible lag on the bird's shadow) to bank back the
+          // cost of enabling shadows. Expert-recommended for near-static lights.
+          if (envRenderer.shadowMap) {
+            if (envRenderer.shadowMap.autoUpdate !== false) envRenderer.shadowMap.autoUpdate = false;
+            shadowFrame = (shadowFrame + 1) % 3;
+            envRenderer.shadowMap.needsUpdate = (shadowFrame === 0);
+          }
         }
 
         // ── Star dome fade + moon + shooting stars ──
@@ -5914,11 +5925,15 @@ window.TrackScenes = (function() {
           envCam.updateProjectionMatrix();
         }
 
-        // Restore renderer tone mapping
+        // Restore renderer tone mapping + shadow auto-update for other scenes
         const envRenderer = window.EnvironmentMode?.instance?.renderer;
         if (envRenderer) {
           envRenderer.toneMapping = THREE.NoToneMapping;
           envRenderer.toneMappingExposure = 1;
+          if (envRenderer.shadowMap) {
+            envRenderer.shadowMap.autoUpdate = true;
+            envRenderer.shadowMap.needsUpdate = true;
+          }
         }
 
         // Clear fog
