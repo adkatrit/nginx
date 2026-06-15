@@ -4846,16 +4846,9 @@ window.TrackScenes = (function() {
     async function createWaterMeshForTheme(theme) {
       if (!themeWantsWater(theme)) return;
       waterMeshPending = true;
-      // Open-ocean themes (Data Tide): try the geometric Gerstner ocean first.
-      if (theme.useWaterMesh) {
-        const size = (theme.waterMeshConfig && theme.waterMeshConfig.size) || 2800;
-        if (createGerstnerOcean(size)) {
-          oceanMesh.position.y = -2;
-          waterMeshReady = true;
-          waterMeshPending = false;
-          return;
-        }
-      }
+      // NOTE: a custom Gerstner-wave ocean was attempted here but couldn't be
+      // tuned to look right without a live preview — reverted to the clean
+      // reflective WaterMesh, which reads as real water (flat but no artifacts).
       try {
         const { WaterMesh } = await import('three/addons/objects/WaterMesh.js');
         const cfg = theme.waterMeshConfig || {};
