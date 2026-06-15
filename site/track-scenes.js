@@ -4719,6 +4719,118 @@ window.TrackScenes = (function() {
     let waterMeshPending = false; // creation in flight — chunk water stands down
     let waterDistortBase = 3.7;   // resting distortion — music swells around this
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // GERSTNER OCEAN — real geometric waves + crest foam (open-ocean themes).
+    // A tessellated plane displaced in a TSL positionNode by a sum of Gerstner
+    // waves (world-anchored so swells roll past as you fly), shaded with
+    // fresnel sky reflection + sun/moon specular, with white foam on the
+    // steep crests. Built guarded: if the shader can't be constructed we fall
+    // back to the flat reflective WaterMesh.
+    // ═══════════════════════════════════════════════════════════════════════
+    let oceanMesh = null, oceanUniforms = null;
+
+    function createGerstnerOcean(planeSize) {
+      if (!TSL || typeof TSL.MeshBasicNodeMaterial !== 'function') return false;
+      try {
+        const T = TSL;
+        oceanUniforms = {
+          time: T.uniform(0),
+          amp: T.uniform(1),
+          sunDir: T.uniform(new THREE.Vector3(0, 1, 0)),
+          sunCol: T.uniform(new THREE.Color(1.4, 1.3, 1.1)),
+          deepCol: T.uniform(new THREE.Color(0x0a2a3a)),
+          skyCol: T.uniform(new THREE.Color(0x9fc2e0)),
+          foamCol: T.uniform(new THREE.Color(0xeaf4fb)),
+          originX: T.uniform(0),
+          originZ: T.uniform(0),
+        };
+
+        // Wave set: long swell → short chop. Directions spread for a natural sea.
+        const defs = [
+          { dir: [1.0, 0.18], len: 120, amp: 2.3, steep: 0.55 },
+          { dir: [0.7, 0.75], len: 64,  amp: 1.3, steep: 0.55 },
+          { dir: [-0.35, 1.0], len: 38, amp: 0.7, steep: 0.50 },
+          { dir: [0.9, -0.45], len: 27, amp: 0.42, steep: 0.45 },
+        ];
+        const N = defs.length;
+        const waves = defs.map(w => {
+          const L = Math.hypot(w.dir[0], w.dir[1]);
+          const ndx = w.dir[0] / L, ndz = w.dir[1] / L;
+          const k = (2 * Math.PI) / w.len;
+          return { ndx, ndz, k, omega: Math.sqrt(9.8 * k), amp: w.amp, Q: w.steep / (k * w.amp * N) };
+        });
+
+        // Accumulate Gerstner displacement + height gradient at world (wx,wz).
+        // Returns { dx,dy,dz, gx,gz } as TSL nodes. Unrolled at graph build.
+        const fields = (wx, wz) => {
+          let dx = T.float(0), dy = T.float(0), dz = T.float(0), gx = T.float(0), gz = T.float(0);
+          for (const w of waves) {
+            const phase = wx.mul(w.k * w.ndx).add(wz.mul(w.k * w.ndz)).sub(oceanUniforms.time.mul(w.omega));
+            const c = T.cos(phase), s = T.sin(phase);
+            dx = dx.add(c.mul(w.Q * w.amp * w.ndx));
+            dz = dz.add(c.mul(w.Q * w.amp * w.ndz));
+            dy = dy.add(s.mul(w.amp));
+            gx = gx.add(c.mul(w.amp * w.k * w.ndx));
+            gz = gz.add(c.mul(w.amp * w.k * w.ndz));
+          }
+          return { dx, dy, dz, gx, gz };
+        };
+
+        const mat = new T.MeshBasicNodeMaterial({ transparent: false });
+
+        mat.positionNode = T.Fn(() => {
+          const p = T.positionLocal.toVar();
+          const wx = p.x.add(oceanUniforms.originX);
+          const wz = p.z.add(oceanUniforms.originZ);
+          const f = fields(wx, wz);
+          const a = oceanUniforms.amp;
+          p.x.addAssign(f.dx.mul(a));
+          p.y.addAssign(f.dy.mul(a));
+          p.z.addAssign(f.dz.mul(a));
+          return p;
+        })();
+
+        mat.colorNode = T.Fn(() => {
+          const f = fields(T.positionWorld.x, T.positionWorld.z);
+          const a = oceanUniforms.amp;
+          const n = T.normalize(T.vec3(f.gx.mul(a).mul(-1), T.float(1), f.gz.mul(a).mul(-1)));
+          const viewDir = T.normalize(T.cameraPosition.sub(T.positionWorld));
+          const sunDir = T.normalize(oceanUniforms.sunDir);
+          const fres = T.pow(T.float(1).sub(T.max(T.dot(n, viewDir), T.float(0))), T.float(5));
+          const base = T.mix(oceanUniforms.deepCol, oceanUniforms.skyCol, T.clamp(fres, T.float(0), T.float(1)));
+          const half = T.normalize(viewDir.add(sunDir));
+          const spec = T.pow(T.max(T.dot(n, half), T.float(0)), T.float(90)).mul(oceanUniforms.sunCol);
+          // Foam on crests: high displaced height = breaking wave top
+          const foam = T.smoothstep(T.float(1.3), T.float(2.4), f.dy.mul(a));
+          const col = base.add(spec).add(oceanUniforms.foamCol.mul(foam));
+          return T.vec4(col, T.float(1));
+        })();
+
+        const geo = new THREE.PlaneGeometry(planeSize, planeSize, 300, 300);
+        geo.rotateX(-Math.PI / 2);
+        oceanMesh = new THREE.Mesh(geo, mat);
+        oceanMesh.frustumCulled = false;
+        oceanMesh.receiveShadow = false;
+        scene.add(oceanMesh);
+        console.log('[Flight] Gerstner ocean created');
+        return true;
+      } catch (e) {
+        console.warn('[Flight] Gerstner ocean failed — falling back to WaterMesh:', e);
+        if (oceanMesh) { scene.remove(oceanMesh); }
+        oceanMesh = null; oceanUniforms = null;
+        return false;
+      }
+    }
+
+    function disposeGerstnerOcean() {
+      if (oceanMesh) {
+        scene.remove(oceanMesh);
+        oceanMesh.geometry.dispose();
+        oceanMesh.material.dispose();
+      }
+      oceanMesh = null; oceanUniforms = null;
+    }
+
     // Any theme with water gets the real reflective ocean. The old flat
     // MeshStandardMaterial chunk planes had nothing to reflect and rendered
     // black at low sun; they remain only as a fallback if the import fails.
@@ -4729,6 +4841,16 @@ window.TrackScenes = (function() {
     async function createWaterMeshForTheme(theme) {
       if (!themeWantsWater(theme)) return;
       waterMeshPending = true;
+      // Open-ocean themes (Data Tide): try the geometric Gerstner ocean first.
+      if (theme.useWaterMesh) {
+        const size = (theme.waterMeshConfig && theme.waterMeshConfig.size) || 2800;
+        if (createGerstnerOcean(size)) {
+          oceanMesh.position.y = -2;
+          waterMeshReady = true;
+          waterMeshPending = false;
+          return;
+        }
+      }
       try {
         const { WaterMesh } = await import('three/addons/objects/WaterMesh.js');
         const cfg = theme.waterMeshConfig || {};
@@ -4779,6 +4901,7 @@ window.TrackScenes = (function() {
         waterMeshObj.material.dispose();
         waterMeshObj = null;
       }
+      disposeGerstnerOcean();
       waterMeshReady = false;
       waterMeshPending = false;
     }
@@ -5567,6 +5690,25 @@ window.TrackScenes = (function() {
             waterMeshObj.waterColor.value.copy(waterMeshObj._baseWaterColor)
               .lerp(_nightWater, night * 0.6);
           }
+        }
+
+        // Gerstner ocean: animate waves, follow the bird (world-anchored), and
+        // grade colors/specular with the day cycle. Gentle bass lifts the swell.
+        if (oceanMesh && oceanUniforms) {
+          const obx = bird ? bird.position.x : shipX;
+          const obz = bird ? bird.position.z : shipZ;
+          oceanMesh.position.set(obx, oceanMesh.position.y, obz);
+          oceanUniforms.time.value = time;
+          oceanUniforms.originX.value = obx;
+          oceanUniforms.originZ.value = obz;
+          oceanUniforms.amp.value = 1 + pulse.bassSwell * 0.4;
+          oceanUniforms.sunDir.value.copy(sunFactor > 0.18 ? sunPos : _moonDir);
+          if (sunFactor > 0.18) oceanUniforms.sunCol.value.setRGB(1.7, 1.5, 1.2); // HDR warm glint
+          else oceanUniforms.sunCol.value.setRGB(0.55, 0.66, 0.85);              // cool moonglade
+          const skB = 0.12 + sunFactor * 0.85;
+          oceanUniforms.skyCol.value.setRGB(skB * 0.6, skB * 0.78, skB);
+          const dpB = 0.45 + sunFactor * 0.55;
+          oceanUniforms.deepCol.value.setRGB(0.02 * dpB, 0.13 * dpB, 0.21 * dpB);
         }
 
         // Volumetric clouds: wind drift + day-cycle tinting. Dawn lights the
