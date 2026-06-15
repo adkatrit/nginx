@@ -4776,7 +4776,7 @@ window.TrackScenes = (function() {
           return { dx, dy, dz, gx, gz };
         };
 
-        const mat = new T.MeshBasicNodeMaterial({ transparent: false });
+        const mat = new T.MeshBasicNodeMaterial({ transparent: false, side: THREE.DoubleSide });
 
         mat.positionNode = T.Fn(() => {
           const p = T.positionLocal.toVar();
