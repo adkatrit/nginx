@@ -5728,12 +5728,12 @@ window.TrackScenes = (function() {
           terrainMat.emissiveIntensity = terrainEmissiveBase + pulse.kick * 0.07 + pulse.crash * 0.05;
         }
 
-        // Water: pseudo-random swell SETS (three incommensurate sines never
-        // repeat — choppiness ebbs and flows like a real sea) plus bass/kick.
-        const swell = (Math.sin(time * 0.13) + Math.sin(time * 0.071 + 1.3) + Math.sin(time * 0.029 + 2.6)) / 3; // -1..1
-        const swell01 = swell * 0.5 + 0.5; // 0..1
+        // Water: keep a steady rippled surface (the normal map animates itself
+        // and varies spatially). Only a gentle bass breath on the distortion —
+        // pulsing the GLOBAL distortionScale made the whole sea go smooth↔choppy
+        // in unison, which read as the surface oscillating.
         if (waterMeshObj && waterMeshObj.distortionScale && typeof waterMeshObj.distortionScale.value === 'number') {
-          waterMeshObj.distortionScale.value = waterDistortBase * (0.7 + swell01 * 0.8 + bassSwellEff * 0.9 + pulse.kick * 0.25);
+          waterMeshObj.distortionScale.value = waterDistortBase * (1 + bassSwellEff * 0.25);
         }
         if (typeof waterRoughBase === 'number') {
           waterMat.roughness = Math.max(0.02, waterRoughBase * (1 - hatEff * 0.3 - bassSwellEff * 0.1));
