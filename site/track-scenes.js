@@ -4718,70 +4718,6 @@ window.TrackScenes = (function() {
     let waterMeshReady = false;   // true once async import + creation completes
     let waterMeshPending = false; // creation in flight — chunk water stands down
     let waterDistortBase = 3.7;   // resting distortion — music swells around this
-    let seaSparkle = null;        // additive whitecap/glitter overlay (pure-ocean themes)
-    let seaSparkleMat = null;
-    let seaSparkleTex = null;
-    const seaTileWorld = 70;      // world units per sparkle tile (for UV anchoring)
-
-    // Procedural sea-sparkle texture: scattered soft glints (sun/moon shimmer)
-    // plus a few wispy white crests (whitecap foam), tiled and additively
-    // blended over the water. Seeded so it's deterministic.
-    function makeSeaSparkleTexture() {
-      const S = 512;
-      const cv = document.createElement('canvas');
-      cv.width = S; cv.height = S;
-      const c = cv.getContext('2d');
-      c.clearRect(0, 0, S, S);
-      let seed = 1337;
-      const rnd = () => { seed = (seed * 1664525 + 1013904223) & 0x7fffffff; return seed / 0x7fffffff; };
-      const glint = (x, y, r, a) => {
-        const g = c.createRadialGradient(x, y, 0, x, y, r);
-        g.addColorStop(0, `rgba(255,255,255,${a})`);
-        g.addColorStop(0.4, `rgba(235,245,255,${a * 0.5})`);
-        g.addColorStop(1, 'rgba(220,240,255,0)');
-        c.fillStyle = g;
-        c.fillRect(x - r, y - r, r * 2, r * 2);
-      };
-      for (let i = 0; i < 260; i++) glint(rnd() * S, rnd() * S, 1.5 + rnd() * 3.5, 0.35 + rnd() * 0.5);
-      for (let i = 0; i < 22; i++) { // whitecap crests — short elongated wisps
-        const x = rnd() * S, y = rnd() * S, len = 14 + rnd() * 30, ang = rnd() * Math.PI;
-        c.save(); c.translate(x, y); c.rotate(ang);
-        const g = c.createLinearGradient(-len, 0, len, 0);
-        g.addColorStop(0, 'rgba(255,255,255,0)');
-        g.addColorStop(0.5, `rgba(255,255,255,${0.25 + rnd() * 0.3})`);
-        g.addColorStop(1, 'rgba(255,255,255,0)');
-        c.fillStyle = g;
-        c.fillRect(-len, -1.6, len * 2, 3.2);
-        c.restore();
-      }
-      const tex = new THREE.CanvasTexture(cv);
-      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-      tex.toneMapped = false;
-      return tex;
-    }
-
-    function createSeaSparkle(planeSize) {
-      seaSparkleTex = makeSeaSparkleTexture();
-      const repeat = Math.max(8, Math.round(planeSize / seaTileWorld));
-      seaSparkleTex.repeat.set(repeat, repeat);
-      seaSparkleMat = new THREE.MeshBasicMaterial({
-        map: seaSparkleTex, transparent: true, opacity: 0,
-        blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false,
-      });
-      const geo = new THREE.PlaneGeometry(planeSize, planeSize);
-      geo.rotateX(-Math.PI / 2);
-      seaSparkle = new THREE.Mesh(geo, seaSparkleMat);
-      seaSparkle.frustumCulled = false;
-      seaSparkle.renderOrder = 2;
-      scene.add(seaSparkle);
-    }
-
-    function disposeSeaSparkle() {
-      if (seaSparkle) { scene.remove(seaSparkle); seaSparkle.geometry.dispose(); }
-      if (seaSparkleMat) seaSparkleMat.dispose();
-      if (seaSparkleTex) seaSparkleTex.dispose();
-      seaSparkle = seaSparkleMat = seaSparkleTex = null;
-    }
 
     // Any theme with water gets the real reflective ocean. The old flat
     // MeshStandardMaterial chunk planes had nothing to reflect and rendered
@@ -4827,10 +4763,6 @@ window.TrackScenes = (function() {
         }
         scene.add(waterMeshObj);
         waterMeshReady = true;
-        // Whitecap/shimmer overlay only for the open-ocean themes (Data Tide)
-        if (theme.useWaterMesh && !seaSparkle) {
-          createSeaSparkle(cfg.size || 2800);
-        }
         console.log('[Flight] WaterMesh created for', theme.name || 'theme');
       } catch (err) {
         console.error('[Flight] Failed to create WaterMesh:', err);
@@ -4847,7 +4779,6 @@ window.TrackScenes = (function() {
         waterMeshObj.material.dispose();
         waterMeshObj = null;
       }
-      disposeSeaSparkle();
       waterMeshReady = false;
       waterMeshPending = false;
     }
@@ -5793,23 +5724,6 @@ window.TrackScenes = (function() {
         const swell01 = swell * 0.5 + 0.5; // 0..1
         if (waterMeshObj && waterMeshObj.distortionScale && typeof waterMeshObj.distortionScale.value === 'number') {
           waterMeshObj.distortionScale.value = waterDistortBase * (0.7 + swell01 * 0.8 + bassSwellEff * 0.9 + pulse.kick * 0.25);
-        }
-        // Whitecap + glitter overlay: world-anchored UV (foam stays put as the
-        // bird flies over it) with a slow drift; brightens on swell crests +
-        // hat shimmer, twinkles, and follows the sun/moon light level.
-        if (seaSparkle && seaSparkleMat) {
-          const mbx2 = bird ? bird.position.x : shipX;
-          const mbz2 = bird ? bird.position.z : shipZ;
-          seaSparkle.position.set(mbx2, (waterMeshObj ? waterMeshObj.position.y : -2) + 0.15, mbz2);
-          seaSparkleTex.offset.set(
-            (mbx2 / seaTileWorld) + time * 0.011,
-            (mbz2 / seaTileWorld) + time * 0.017,
-          );
-          const twinkle = 0.85 + 0.15 * Math.sin(time * 2.3);
-          const lightLevel = Math.max(moonStrength * 0.5, sunFactor); // visible day & moonlit night
-          const crest = Math.max(0, swell - 0.25) * 0.5; // foam mostly on the bigger sets
-          seaSparkleMat.opacity = Math.min(0.7,
-            (0.12 + crest + hatEff * 0.25 + bassSwellEff * 0.2) * twinkle * (0.35 + lightLevel * 0.65));
         }
         if (typeof waterRoughBase === 'number') {
           waterMat.roughness = Math.max(0.02, waterRoughBase * (1 - hatEff * 0.3 - bassSwellEff * 0.1));
