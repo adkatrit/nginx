@@ -5302,7 +5302,7 @@ window.TrackScenes = (function() {
     return {
       group,
       // Tell app.js not to force-enable EffectsManager effects (grid, aurora, etc.)
-      disableEffects: { grid: true, aurora: true, lightning: true, lights: true },
+      disableEffects: { grid: true, aurora: true, lightning: true, lights: true, particles: true },
 
       // Frame-perfect MIDI events (enriched by MidiRouter in app.js)
       onMidi: onMidiEvent,

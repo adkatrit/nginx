@@ -2987,6 +2987,7 @@
         if (d.aurora) effectsConfig.aurora.enabled = false;
         if (d.lightning) effectsConfig.lightning.enabled = false;
         if (d.lights) effectsConfig.lights.enabled = false;
+        if (d.particles) effectsConfig.particles.enabled = false;
         applyEffectsToEnvironment();
         console.log("Track scene disableEffects applied:", d);
       }
@@ -4456,12 +4457,17 @@
           effectsConfig.aurora.intensity = 0.4;
           effectsConfig.aurora.ribbons = 4;
         }
-        if (!effectsConfig.particles.enabled) {
+        if (!effectsConfig.particles.enabled && !sceneDisable.particles) {
           effectsConfig.particles.enabled = true;
           effectsConfig.particles.type = 'dust';
           effectsConfig.particles.count = 200;
           effectsConfig.particles.size = 0.4;
           effectsConfig.particles.speed = 0.5;
+        }
+        if (sceneDisable.particles) {
+          // Flight scene has its own atmosphere — kill the global dust points
+          // (they read as ugly static "fireflies" since flight doesn't tick them)
+          effectsConfig.particles.enabled = false;
         }
         if (!effectsConfig.grid.enabled && !sceneDisable.grid) {
           effectsConfig.grid.enabled = true;
