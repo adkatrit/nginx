@@ -4624,6 +4624,15 @@ window.TrackScenes = (function() {
     const hemiLight = new THREE.HemisphereLight(0xffccaa, 0x553311, 0.04);  // Starts dim
     scene.add(hemiLight);
 
+    // Moonlight — a cool, dim directional fill that rises as the sun sets, so
+    // night reads as moonlit (deep blue, soft shadows) instead of black. It
+    // also gives the reflective water something to glint off of after dark.
+    const moonLight = new THREE.DirectionalLight(0x9fb6e8, 0);
+    scene.add(moonLight);
+    scene.add(moonLight.target);
+    const _moonDir = new THREE.Vector3();
+    const _nightWater = new THREE.Color(0x0e1d33); // deep moonlit blue (never black)
+
     // No fog — it hid the scenery. Depth comes from the sky gradient and
     // distance LOD instead. (Per-frame code guards on scene.fog === null.)
     scene.fog = null;
@@ -4748,6 +4757,10 @@ window.TrackScenes = (function() {
         // useWaterMesh themes are pure ocean at base level; terrain themes
         // flood their valleys at the theme's water line
         waterMeshObj.position.y = theme.useWaterMesh ? -2 : theme.waterY;
+        // Remember the daylight base color so the night-water lerp has an anchor
+        if (waterMeshObj.waterColor && waterMeshObj.waterColor.value) {
+          waterMeshObj._baseWaterColor = waterMeshObj.waterColor.value.clone();
+        }
         scene.add(waterMeshObj);
         waterMeshReady = true;
         console.log('[Flight] WaterMesh created for', theme.name || 'theme');
@@ -5478,7 +5491,8 @@ window.TrackScenes = (function() {
         sunPos.setFromSphericalCoords(1, dynPhi, dynTheta);
         skyUniforms.sunPosition.value.copy(sunPos);
         if (terrainMat && terrainMat._sunDirUniform) terrainMat._sunDirUniform.value.copy(sunPos);
-        if (waterMeshObj) waterMeshObj.sunDirection.value.copy(sunPos);
+        // (water light direction handled in the moonlight block below — by day
+        // it glints off the sun, after dark off the moon)
 
         // Natural sun-linked lighting: derive everything from sun elevation
         // smoothstep maps elevation smoothly: 0 at -5° (below horizon) → 1 at +5° (above)
@@ -5495,14 +5509,56 @@ window.TrackScenes = (function() {
         // when fog supplied most of the early-track luminance)
         skyUniforms.exposure.value = Math.max(baseExposure, 0.18) + sunFactor * 0.5;
 
-        // Light intensities driven by sun elevation
+        // Light intensities driven by sun elevation (hemi set in moon block below)
         sunLight.intensity = baseSunIntensity + sunFactor * sunIntensityRange;
-        hemiLight.intensity = Math.max(baseHemiIntensity, 0.1) + sunFactor * hemiIntensityRange;
 
         // Sun color shifts: warm orange near horizon → warm golden when higher
         const warmth = 1 - sunFactor * 0.15;  // 1.0 (warm) → 0.85 (stays warm)
         sunLight.color.setRGB(1, 0.53 + sunFactor * 0.17, 0.27 + sunFactor * 0.23);
-        hemiLight.color.setRGB(1 * warmth, 0.8 * warmth, 0.67 * warmth);
+
+        // ── Moonlight: cool fill that rises as the sun sets, so night reads as
+        // moonlit (deep blue, soft) instead of black, and the reflective water
+        // has a luminary to glint off after dark. ──
+        const moonElevNow = -dynElevation + starCfg.moonElev;
+        const moonAzNow = (sunAzimuth + 180 + starCfg.moonAz) * Math.PI / 180;
+        const moonPhiNow = (90 - moonElevNow) * Math.PI / 180;
+        _moonDir.setFromSphericalCoords(1, moonPhiNow, moonAzNow);
+        const night = 1 - sunFactor;                                   // 0 day → 1 night
+        const moonUp = Math.max(0, Math.min(1, (moonElevNow + 5) / 18)); // above horizon
+        const moonStrength = night * moonUp;
+
+        const mbx = bird ? bird.position.x : shipX;
+        const mbz = bird ? bird.position.z : shipZ;
+        moonLight.intensity = moonStrength * 0.45;
+        moonLight.position.set(mbx + _moonDir.x * 120, _moonDir.y * 120, mbz + _moonDir.z * 120);
+        moonLight.target.position.set(mbx, 0, mbz);
+        moonLight.target.updateMatrixWorld();
+
+        // Hemisphere ambient: warm by day, cool by night, with a small moon
+        // lift so terrain/water never crush to pure black
+        hemiLight.intensity = Math.max(baseHemiIntensity, 0.1) + sunFactor * hemiIntensityRange + moonStrength * 0.12;
+        const nb = night * 0.5; // night blend toward cool blue
+        hemiLight.color.setRGB(
+          warmth * (1 - nb) + 0.50 * nb,
+          0.8 * warmth * (1 - nb) + 0.62 * nb,
+          0.67 * warmth * (1 - nb) + 0.85 * nb,
+        );
+
+        // Reflective water: glint off the sun by day, the moon after dark, and
+        // lift its base toward a moonlit blue at night so it's never a black void
+        if (waterMeshObj) {
+          if (waterMeshObj.sunDirection) {
+            waterMeshObj.sunDirection.value.copy(sunFactor > 0.18 ? sunPos : _moonDir);
+          }
+          if (waterMeshObj.sunColor) {
+            if (sunFactor > 0.18) waterMeshObj.sunColor.value.setRGB(1, 0.98, 0.92);
+            else waterMeshObj.sunColor.value.setRGB(0.5, 0.6, 0.8);
+          }
+          if (waterMeshObj.waterColor && waterMeshObj._baseWaterColor) {
+            waterMeshObj.waterColor.value.copy(waterMeshObj._baseWaterColor)
+              .lerp(_nightWater, night * 0.6);
+          }
+        }
 
         // Volumetric clouds: wind drift + day-cycle tinting. Dawn lights the
         // tops warm and dim; midday reads white with cool shaded undersides.
@@ -5994,6 +6050,8 @@ window.TrackScenes = (function() {
         // Lights & fog
         scene.remove(sunLight);
         scene.remove(hemiLight);
+        scene.remove(moonLight);
+        scene.remove(moonLight.target);
         scene.fog = null;
 
         // Star dome + moon textures (not auto-disposed by material.dispose)
