@@ -4747,10 +4747,10 @@ window.TrackScenes = (function() {
 
         // Wave set: long swell → short chop. Directions spread for a natural sea.
         const defs = [
-          { dir: [1.0, 0.18], len: 120, amp: 2.3, steep: 0.55 },
-          { dir: [0.7, 0.75], len: 64,  amp: 1.3, steep: 0.55 },
-          { dir: [-0.35, 1.0], len: 38, amp: 0.7, steep: 0.50 },
-          { dir: [0.9, -0.45], len: 27, amp: 0.42, steep: 0.45 },
+          { dir: [1.0, 0.18], len: 120, amp: 1.6, steep: 0.5 },
+          { dir: [0.7, 0.75], len: 64,  amp: 0.95, steep: 0.5 },
+          { dir: [-0.35, 1.0], len: 38, amp: 0.55, steep: 0.45 },
+          { dir: [0.9, -0.45], len: 27, amp: 0.32, steep: 0.4 },
         ];
         const N = defs.length;
         const waves = defs.map(w => {
@@ -4796,13 +4796,16 @@ window.TrackScenes = (function() {
           const n = T.normalize(T.vec3(f.gx.mul(a).mul(-1), T.float(1), f.gz.mul(a).mul(-1)));
           const viewDir = T.normalize(T.cameraPosition.sub(T.positionWorld));
           const sunDir = T.normalize(oceanUniforms.sunDir);
-          const fres = T.pow(T.float(1).sub(T.max(T.dot(n, viewDir), T.float(0))), T.float(5));
-          const base = T.mix(oceanUniforms.deepCol, oceanUniforms.skyCol, T.clamp(fres, T.float(0), T.float(1)));
+          const fres = T.clamp(T.pow(T.float(1).sub(T.max(T.dot(n, viewDir), T.float(0))), T.float(5)), T.float(0), T.float(1));
+          // Water body: deep blue, sky reflection by fresnel + 15% sky ambient
+          // so troughs read as deep water rather than black voids.
+          const body = T.mix(oceanUniforms.deepCol, oceanUniforms.skyCol, fres.mul(0.85).add(0.15));
           const half = T.normalize(viewDir.add(sunDir));
           const spec = T.pow(T.max(T.dot(n, half), T.float(0)), T.float(90)).mul(oceanUniforms.sunCol);
-          // Foam on crests: high displaced height = breaking wave top
-          const foam = T.smoothstep(T.float(1.3), T.float(2.4), f.dy.mul(a));
-          const col = base.add(spec).add(oceanUniforms.foamCol.mul(foam));
+          // Foam only on the tallest crest tips — replaces colour (whitecap),
+          // not added (which blew the crests out to a snowfield).
+          const foam = T.smoothstep(T.float(2.0), T.float(2.9), f.dy.mul(a)).mul(0.8);
+          const col = T.mix(body, oceanUniforms.foamCol, foam).add(spec);
           return T.vec4(col, T.float(1));
         })();
 
@@ -5705,10 +5708,10 @@ window.TrackScenes = (function() {
           oceanUniforms.sunDir.value.copy(sunFactor > 0.18 ? sunPos : _moonDir);
           if (sunFactor > 0.18) oceanUniforms.sunCol.value.setRGB(1.7, 1.5, 1.2); // HDR warm glint
           else oceanUniforms.sunCol.value.setRGB(0.55, 0.66, 0.85);              // cool moonglade
-          const skB = 0.12 + sunFactor * 0.85;
-          oceanUniforms.skyCol.value.setRGB(skB * 0.6, skB * 0.78, skB);
-          const dpB = 0.45 + sunFactor * 0.55;
-          oceanUniforms.deepCol.value.setRGB(0.02 * dpB, 0.13 * dpB, 0.21 * dpB);
+          const skB = 0.18 + sunFactor * 0.8;
+          oceanUniforms.skyCol.value.setRGB(skB * 0.62, skB * 0.8, skB);
+          const dpB = 0.7 + sunFactor * 0.3;
+          oceanUniforms.deepCol.value.setRGB(0.04 * dpB, 0.18 * dpB, 0.27 * dpB);
         }
 
         // Volumetric clouds: wind drift + day-cycle tinting. Dawn lights the
