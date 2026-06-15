@@ -2670,6 +2670,8 @@
       try { localStorage.setItem('lyricField', lyricFieldEnabled ? 'on' : 'off'); } catch (err) { /* private mode */ }
       if (lyricField) lyricField.setEnabled(lyricFieldEnabled);
       label = lyricFieldEnabled ? 'LYRICS ON' : 'LYRICS OFF';
+    } else if (e.code === 'Backquote') {
+      togglePerfHud();
     }
     if (label && hitFeedback) {
       hitFeedback.textContent = label;
@@ -3519,6 +3521,55 @@
         threeRenderer.render(threeScene, threeCamera);
       }
     }
+
+    updatePerfHud(nowMs);
+  }
+
+  // ── Performance overlay (toggle with the ` backtick key) ──
+  // Experts are unanimous: measure with renderer.info. Always-available FPS +
+  // draw-call readout so GPU-heavy features (clouds, shadows) can be judged by
+  // real numbers, not guesswork. Updates ~5x/sec to avoid layout thrash.
+  let perfHudEl = null, perfHudVisible = false;
+  let perfFrameTimes = [], perfLastT = 0, perfAccum = 0;
+  function updatePerfHud(nowMs) {
+    if (!perfHudVisible) return;
+    if (perfLastT > 0) {
+      const dtm = nowMs - perfLastT;
+      perfFrameTimes.push(dtm);
+      if (perfFrameTimes.length > 60) perfFrameTimes.shift();
+    }
+    perfLastT = nowMs;
+    perfAccum += 1;
+    if (perfAccum < 12 || perfFrameTimes.length === 0) return; // ~5 Hz
+    perfAccum = 0;
+
+    const avg = perfFrameTimes.reduce((a, b) => a + b, 0) / perfFrameTimes.length;
+    const fps = avg > 0 ? 1000 / avg : 0;
+    const renderer = window.EnvironmentMode?.instance?.renderer || threeRenderer;
+    const info = renderer?.info || {};
+    const draws = info.render?.calls ?? info.render?.drawCalls ?? 0;
+    const geoms = info.memory?.geometries ?? 0;
+    const texs = info.memory?.textures ?? 0;
+    let heap = '';
+    if (performance.memory) heap = ` · heap ${(performance.memory.usedJSHeapSize / 1048576).toFixed(0)}MB`;
+    const color = fps >= 55 ? '#7CFF9B' : fps >= 40 ? '#FFD86B' : '#FF6B6B';
+    if (!perfHudEl) {
+      perfHudEl = document.createElement('div');
+      perfHudEl.style.cssText = 'position:fixed;top:8px;left:8px;z-index:99999;' +
+        'font:11px/1.5 ui-monospace,Menlo,monospace;padding:6px 9px;border-radius:6px;' +
+        'background:rgba(4,8,16,0.78);color:#cfe;pointer-events:none;white-space:pre;' +
+        'backdrop-filter:blur(4px);border:1px solid rgba(120,160,255,0.18)';
+      document.body.appendChild(perfHudEl);
+    }
+    perfHudEl.innerHTML =
+      `<span style="color:${color};font-weight:700">${fps.toFixed(0)} FPS</span> · ` +
+      `${avg.toFixed(1)}ms\n` +
+      `${draws} draws · ${geoms} geo · ${texs} tex${heap}`;
+  }
+  function togglePerfHud() {
+    perfHudVisible = !perfHudVisible;
+    if (perfHudEl) perfHudEl.style.display = perfHudVisible ? '' : 'none';
+    perfFrameTimes = []; perfLastT = 0; perfAccum = 0;
   }
 
   async function ensureThreeViz() {
