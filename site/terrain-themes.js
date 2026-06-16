@@ -306,20 +306,34 @@ window.TERRAIN_THEMES = (function() {
   // ═══════════════════════════════════════════════════════════════════════════
   function _makeTree(x, z, h, rng, THREE, mats, geoms) {
     const treeGroup = new THREE.Group();
-    const trunkH = 2 + rng * 2;
+    const trunkH = 2 + rng * 2.2;
     const trunk = new THREE.Mesh(geoms.trunk, mats.treeTrunk);
-    trunk.scale.set(1, trunkH, 1);
+    trunk.scale.set(0.9 + rng * 0.3, trunkH, 0.9 + rng * 0.3);
     trunk.position.set(0, trunkH / 2, 0);
     trunk.castShadow = true;
     treeGroup.add(trunk);
 
-    const canopySize = 1.5 + rng * 1.5;
-    const leafMat = rng > 0.5 ? mats.treeLeaf : mats.treeLeafDark;
-    const canopy = new THREE.Mesh(geoms.canopy, leafMat);
-    canopy.scale.setScalar(canopySize);
-    canopy.position.set((rng - 0.5) * 0.5, trunkH + canopySize * 0.6, 0);
-    canopy.castShadow = true;
-    treeGroup.add(canopy);
+    // Multi-lobe canopy: a cluster of deformed spheres reads as a real tree
+    // crown instead of a single "lollipop" sphere. Two leaf tones add form.
+    const base = 1.3 + rng * 1.1;
+    const cy = trunkH + base * 0.5;
+    const lobes = [
+      { dx: 0.0,  dy: 0.05, dz: 0.0,  s: 1.0,  mat: mats.treeLeaf },
+      { dx: 0.5,  dy: -0.3, dz: 0.2,  s: 0.7,  mat: mats.treeLeafDark },
+      { dx: -0.45, dy: -0.2, dz: -0.35, s: 0.78, mat: mats.treeLeaf },
+      { dx: 0.1,  dy: 0.45, dz: -0.35, s: 0.6,  mat: mats.treeLeafDark },
+    ];
+    const lobeCount = rng < 0.4 ? 3 : 4;
+    for (let i = 0; i < lobeCount; i++) {
+      const lb = lobes[i];
+      const m = new THREE.Mesh(geoms.canopy, lb.mat);
+      const ls = base * lb.s * (0.9 + rng * 0.2);
+      m.scale.set(ls, ls * (0.82 + rng * 0.22), ls);
+      m.position.set(lb.dx * base * (0.8 + rng * 0.4), cy + lb.dy * base, lb.dz * base * (0.8 + rng * 0.4));
+      m.rotation.y = (rng + i) * 1.7;
+      m.castShadow = true;
+      treeGroup.add(m);
+    }
 
     treeGroup.position.set(x, h, z);
     treeGroup.rotation.y = rng * Math.PI * 2;
@@ -363,12 +377,22 @@ window.TERRAIN_THEMES = (function() {
   }
 
   function _makeBush(x, z, h, rng, THREE, mats, geoms) {
-    const size = 0.4 + rng * 0.8;
-    const bush = new THREE.Mesh(geoms.bush, mats.bush);
-    bush.scale.set(size * (0.8 + rng * 0.5), size * (0.6 + rng * 0.3), size * (0.8 + rng * 0.5));
-    bush.position.set(x, h + size * 0.15, z);
-    bush.castShadow = true;
-    return bush;
+    const group = new THREE.Group();
+    const size = 0.45 + rng * 0.8;
+    const blobs = 2 + Math.floor(rng * 2); // 2-3 clustered blobs read as foliage
+    for (let i = 0; i < blobs; i++) {
+      const b = new THREE.Mesh(geoms.bush, mats.bush);
+      const bs = size * (i === 0 ? 1 : 0.6 + rng * 0.3);
+      b.scale.set(bs * (0.9 + rng * 0.3), bs * (0.7 + rng * 0.3), bs * (0.9 + rng * 0.3));
+      const ang = (i / blobs) * Math.PI * 2 + rng * 3;
+      const r = i === 0 ? 0 : size * 0.45;
+      b.position.set(Math.cos(ang) * r, size * 0.18 + i * size * 0.12, Math.sin(ang) * r);
+      b.castShadow = true;
+      group.add(b);
+    }
+    group.position.set(x, h, z);
+    group.rotation.y = rng * Math.PI * 2;
+    return group;
   }
 
   function _makeMushroom(x, z, h, rng, THREE, mats, geoms) {
