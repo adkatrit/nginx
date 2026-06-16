@@ -192,26 +192,43 @@ const RhythmGates = (function () {
       this._white = new THREE.Color(0xffffff);
       this._missRed = new THREE.Color(0x883333);
 
-      // Pooled gate meshes — one shared torus, per-gate material for tint/fade
+      // Pooled gate meshes — a crisp core torus (the precise hit boundary)
+      // wrapped in a soft, wide halo torus. Under additive blending the pair
+      // reads as a glowing energy ring with real volume instead of a thin
+      // wireframe hoop. The halo mirrors the core's colour/opacity every frame
+      // via onBeforeRender, so every place that already drives the core (tint,
+      // approach fade, beat-flash, hit-burst, miss-sag) lights the halo for
+      // free — no extra bookkeeping in the update loop.
       this.ringGeom = new THREE.TorusGeometry(1, 0.07, 10, 48);
+      this.haloGeom = new THREE.TorusGeometry(1, 0.26, 8, 40);
       this.pool = [];
+      const mkMat = () => new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        toneMapped: false,
+        side: THREE.DoubleSide,
+      });
       for (let i = 0; i < CFG.poolSize; i++) {
-        const mat = new THREE.MeshBasicMaterial({
-          color: 0xffffff,
-          transparent: true,
-          opacity: 0,
-          blending: THREE.AdditiveBlending,
-          depthWrite: false,
-          toneMapped: false,
-          side: THREE.DoubleSide,
-        });
-        const mesh = new THREE.Mesh(this.ringGeom, mat);
+        const mat = mkMat();
+        const haloMat = mkMat();
+        const mesh = new THREE.Group();      // group is positioned / scaled / aimed
+        const core = new THREE.Mesh(this.ringGeom, mat);
+        const halo = new THREE.Mesh(this.haloGeom, haloMat);
+        core.frustumCulled = false; halo.frustumCulled = false;
+        core.renderOrder = 3; halo.renderOrder = 2; // both above water/terrain
+        halo.onBeforeRender = () => {            // stay locked to the core's look
+          haloMat.color.copy(mat.color);
+          haloMat.opacity = mat.opacity * 0.45;
+        };
+        mesh.add(halo);
+        mesh.add(core);
         mesh.visible = false;
-        mesh.frustumCulled = false;
-        mesh.renderOrder = 2; // above water/terrain transparency
         this.scene.add(mesh);
         this.pool.push({
-          inUse: false, mesh, mat,
+          inUse: false, mesh, mat, haloMat,
           time: 0, tier: null, radius: 1,
           pos: new THREE.Vector3(), normal: new THREE.Vector3(),
           prevAlong: -1, state: 'approach', stateStart: 0,
@@ -596,9 +613,11 @@ const RhythmGates = (function () {
       for (const g of this.pool) {
         this.scene.remove(g.mesh);
         g.mat.dispose();
+        if (g.haloMat) g.haloMat.dispose();
       }
       this.pool.length = 0;
       this.ringGeom.dispose();
+      this.haloGeom.dispose();
       this.scene.remove(this.threadLine);
       this.threadGeom.dispose();
       this.threadMat.dispose();
