@@ -2,6 +2,43 @@
 
 ---
 
+## Professional-quality visual pass (2026-06-16) — COMPLETE (this round)
+
+Goal: "make this a wholly better game, truly professional quality, highly
+esteemed by the public." Each change was verified with headless captures
+(`tools/inspect-canvas.mjs`) before commit.
+
+1. **Richer procedural scenery** (`terrain-themes.js` v7) — replaced the
+   single-sphere "lollipop" trees and one-blob bushes with fuller geometry:
+   `_makeTree` now builds a 3-4 lobe clustered canopy from deformed spheres
+   in two leaf tones; `_makeBush` is a 2-3 blob cluster. Verified across
+   Terms & Conditions (conifer forest on snow) and Trade You My Hands
+   (rounded canopies on green) — reads as a believable landscape.
+
+2. **Glowing energy gates** (`rhythm-gates.js` v8) — the hero gameplay
+   element was a single thin additive torus (wireframe hoop). Each gate is
+   now a Group: a crisp core ring (unchanged hit boundary) wrapped in a
+   wide, soft halo torus that mirrors the core's colour and 0.45x opacity
+   every frame via `onBeforeRender`. All existing core logic (approach
+   fade, beat-flash, hit-burst, miss-sag) lights the halo for free. Gates
+   now read as glowing portals.
+
+3. **Soft glowing particles** (`effects-manager.js` v11) — theme particles
+   (embers/snow/dust/sparks/stars) used a bare PointsMaterial, so each
+   point drew as a hard GL square; the Trade You ember field read as
+   scattered red "litter." Added a procedural soft radial sprite (canvas
+   gradient, no external asset) as the points `map` → round soft-edged
+   glowing dots. Lifts every particle type across all themes at once.
+
+Notes for resuming: server is `python3 serve.py` (port 8000); capture with
+`node tools/inspect-canvas.mjs --track <slug> --seek <s> --size 1280x720
+--out /tmp/x.png` (forces WebGL fallback; `--hide-ui` currently does not
+match the redesigned HUD selectors — cosmetic only). Remaining roadmap:
+gameplay VFX polish (boost trail, combo-escalation gate FX), mobile/touch
+QA captures, and a final AAA-scorecard re-score.
+
+---
+
 ## Visual feedback loop ("eyes") + ocean fixed — COMPLETE
 
 ### Headless capture pipeline (the unlock)
