@@ -4840,11 +4840,11 @@ window.TrackScenes = (function() {
           const viewDir = T.normalize(T.cameraPosition.sub(T.positionWorld));
           const sunDir = T.normalize(oceanUniforms.sunDir);
           const fres = T.clamp(T.pow(T.float(1).sub(T.max(T.dot(n, viewDir), T.float(0))), T.float(5)), T.float(0), T.float(1));
-          const body = T.mix(oceanUniforms.deepCol, oceanUniforms.skyCol, fres.mul(0.85).add(0.15));
+          const body = T.mix(oceanUniforms.deepCol, oceanUniforms.skyCol, fres.mul(0.9).add(0.07));
           const half = T.normalize(viewDir.add(sunDir));
           const spec = T.pow(T.max(T.dot(n, half), T.float(0)), oceanUniforms.specPow).mul(oceanUniforms.sunCol).mul(oceanUniforms.glint);
           const foam = T.smoothstep(oceanUniforms.foamLo, oceanUniforms.foamHi, h0).mul(oceanUniforms.foamAmt);
-          const col = T.mix(body, oceanUniforms.foamCol, foam).add(spec).add(T.vec3(0.012, 0.03, 0.08));
+          const col = T.mix(body, oceanUniforms.foamCol, foam).add(spec).add(T.vec3(0.006, 0.016, 0.045));
           return T.vec4(col, T.float(1));
         })();
 
@@ -5770,8 +5770,8 @@ window.TrackScenes = (function() {
           const skB = 0.18 + sunFactor * 0.8;
           oceanUniforms.skyCol.value.setRGB(skB * 0.5, skB * 0.66, skB);
           const dpB = 0.7 + sunFactor * 0.3;
-          // Darker, bluer deep water (less green, lower value)
-          oceanUniforms.deepCol.value.setRGB(0.012 * dpB, 0.06 * dpB, 0.17 * dpB);
+          // Deep, dark blue water
+          oceanUniforms.deepCol.value.setRGB(0.006 * dpB, 0.032 * dpB, 0.11 * dpB);
         }
 
         // Volumetric clouds: wind drift + day-cycle tinting. Dawn lights the
