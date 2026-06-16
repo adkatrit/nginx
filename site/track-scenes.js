@@ -5608,6 +5608,13 @@ window.TrackScenes = (function() {
 
         // 8. Re-hide any new environment objects (ground plane, sky, etc.)
         scene.traverse(child => {
+          // Env lights + particle/star Points (origin-anchored cyan dots),
+          // but NOT the flight scene's own sun/hemisphere/moon.
+          if ((child.isLight && child !== sunLight && child !== hemiLight && child !== moonLight)
+              || child.isPoints) {
+            child.visible = false;
+            if (!hiddenEffects.includes(child)) hiddenEffects.push(child);
+          }
           if (child.name === 'grid-effects' || child.name === 'lightning-effects' ||
               child.name === 'aurora-effects' || child.name === 'lights-effects' ||
               child.name === 'ride-path' || child.name === 'parallax-backdrop') {
