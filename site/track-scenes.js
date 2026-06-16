@@ -4653,6 +4653,15 @@ window.TrackScenes = (function() {
     const _moonDir = new THREE.Vector3();
     const _nightWater = new THREE.Color(0x0e1d33); // deep moonlit blue (never black)
 
+    // Rim/back light — completes the key(sun)/fill(hemi)/rim stack. A cool,
+    // shadowless backlight roughly opposite the sun grazes the far edges of the
+    // bird and scenery, separating them from the background for a cinematic
+    // read. Follows the bird; intensity rides daylight.
+    const rimLight = new THREE.DirectionalLight(0xbfd8ff, 0);
+    scene.add(rimLight);
+    scene.add(rimLight.target);
+    const _rimDir = new THREE.Vector3();
+
     // No fog — it hid the scenery. Depth comes from the sky gradient and
     // distance LOD instead. (Per-frame code guards on scene.fog === null.)
     scene.fog = null;
@@ -5731,6 +5740,16 @@ window.TrackScenes = (function() {
         moonLight.target.position.set(mbx, 0, mbz);
         moonLight.target.updateMatrixWorld();
 
+        // Rim/back light: opposite the sun in azimuth, kept low on the horizon
+        // so it grazes edges. Strongest in daylight; eases off at night where
+        // the moon takes over separation.
+        const rimAz = (sunAzimuth + 165) * Math.PI / 180;
+        _rimDir.setFromSphericalCoords(1, (90 - 12) * Math.PI / 180, rimAz);
+        rimLight.intensity = 0.18 + sunFactor * 0.5;
+        rimLight.position.set(mbx + _rimDir.x * 140, _rimDir.y * 140, mbz + _rimDir.z * 140);
+        rimLight.target.position.set(mbx, 0, mbz);
+        rimLight.target.updateMatrixWorld();
+
         // Hemisphere ambient: warm by day, cool by night, with a small moon
         // lift so terrain/water never crush to pure black
         hemiLight.intensity = Math.max(baseHemiIntensity, 0.1) + sunFactor * hemiIntensityRange + moonStrength * 0.12;
@@ -6282,6 +6301,8 @@ window.TrackScenes = (function() {
         scene.remove(hemiLight);
         scene.remove(moonLight);
         scene.remove(moonLight.target);
+        scene.remove(rimLight);
+        scene.remove(rimLight.target);
         scene.fog = null;
 
         // Star dome + moon textures (not auto-disposed by material.dispose)
