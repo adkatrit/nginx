@@ -4844,7 +4844,7 @@ window.TrackScenes = (function() {
           const half = T.normalize(viewDir.add(sunDir));
           const spec = T.pow(T.max(T.dot(n, half), T.float(0)), oceanUniforms.specPow).mul(oceanUniforms.sunCol).mul(oceanUniforms.glint);
           const foam = T.smoothstep(oceanUniforms.foamLo, oceanUniforms.foamHi, h0).mul(oceanUniforms.foamAmt);
-          const col = T.mix(body, oceanUniforms.foamCol, foam).add(spec).add(T.vec3(0.025, 0.06, 0.1));
+          const col = T.mix(body, oceanUniforms.foamCol, foam).add(spec).add(T.vec3(0.012, 0.03, 0.08));
           return T.vec4(col, T.float(1));
         })();
 
@@ -5768,9 +5768,10 @@ window.TrackScenes = (function() {
           if (sunFactor > 0.18) oceanUniforms.sunCol.value.setRGB(1.7, 1.5, 1.2); // HDR warm glint
           else oceanUniforms.sunCol.value.setRGB(0.55, 0.66, 0.85);              // cool moonglade
           const skB = 0.18 + sunFactor * 0.8;
-          oceanUniforms.skyCol.value.setRGB(skB * 0.62, skB * 0.8, skB);
+          oceanUniforms.skyCol.value.setRGB(skB * 0.5, skB * 0.66, skB);
           const dpB = 0.7 + sunFactor * 0.3;
-          oceanUniforms.deepCol.value.setRGB(0.04 * dpB, 0.18 * dpB, 0.27 * dpB);
+          // Darker, bluer deep water (less green, lower value)
+          oceanUniforms.deepCol.value.setRGB(0.012 * dpB, 0.06 * dpB, 0.17 * dpB);
         }
 
         // Volumetric clouds: wind drift + day-cycle tinting. Dawn lights the
