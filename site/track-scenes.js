@@ -4130,7 +4130,10 @@ window.TrackScenes = (function() {
       colorNode: preethamColorNode,
     });
 
-    const skyGeom = new THREE.SphereGeometry(500, 32, 32);
+    // Sky + star dome must be LARGER than the ocean plane (half-extent ~1400)
+    // so the opaque water always occludes them — otherwise the additive star
+    // dome paints stars over the distant sea. Sits just inside the camera far.
+    const skyGeom = new THREE.SphereGeometry(1190, 32, 32);
     const sky = new THREE.Mesh(skyGeom, skyMat);
     group.add(sky);  // child of group so it auto-follows shipZ
     console.log('[Flight] Sky sphere added to group, radius=500, material side=BackSide');
@@ -4288,7 +4291,9 @@ window.TrackScenes = (function() {
       toneMapped: false,
       opacity: 0,
     });
-    const starDomeGeom = new THREE.SphereGeometry(499, 48, 24);
+    // Radius 1180 (just inside the sky at 1190) so the opaque ocean, which
+    // extends to ~1400, always sits in front and occludes it — no star bleed.
+    const starDomeGeom = new THREE.SphereGeometry(1180, 48, 24);
     const starDome = new THREE.Mesh(starDomeGeom, starDomeMat);
     starDome.renderOrder = 1;
     starDome.frustumCulled = false;
@@ -4731,10 +4736,10 @@ window.TrackScenes = (function() {
     // Live-tunable ocean look (Scene Tuner → 'ocean' section). The per-frame
     // loop pushes these into the shader uniforms; amp also gets a bass lift.
     const oceanCfg = {
-      ampBase: 1.2, choppy: 1.0, waveScale: 1.0,
-      foamLo: 1.6, foamHi: 2.6, foamAmt: 0.8,
+      ampBase: 1.6, choppy: 1.0, waveScale: 1.0,
+      foamLo: 3.0, foamHi: 4.2, foamAmt: 0.5, // subtle whitecaps on the highest peaks only
       glint: 1.0, specPow: 90,
-      detail: 0.7, detailScale: 0.035,
+      detail: 0.9, detailScale: 0.04,
     };
 
     function createGerstnerOcean(planeSize) {
@@ -4810,16 +4815,11 @@ window.TrackScenes = (function() {
 
         const mat = new T.MeshBasicNodeMaterial({ transparent: false, side: THREE.DoubleSide });
 
+        // Flat surface — wave motion comes from the colorNode normals, not
+        // geometric displacement (which discarded triangles at grazing angles,
+        // showing the sky-dome through the sea). Same approach as WaterMesh.
         mat.positionNode = T.Fn(() => {
-          const p = T.positionLocal.toVar();
-          const wx = p.x.add(oceanUniforms.originX);
-          const wz = p.z.add(oceanUniforms.originZ);
-          const f = fields(wx, wz);
-          const a = oceanUniforms.amp;
-          p.x.addAssign(f.dx.mul(a).mul(oceanUniforms.choppy));
-          p.y.addAssign(f.dy.mul(a).add(noiseAt(wx, wz).mul(oceanUniforms.detail)));
-          p.z.addAssign(f.dz.mul(a).mul(oceanUniforms.choppy));
-          return p;
+          return T.positionLocal;
         })();
 
         mat.colorNode = T.Fn(() => {

@@ -2,6 +2,41 @@
 
 ---
 
+## Visual feedback loop ("eyes") + ocean fixed — COMPLETE
+
+### Headless capture pipeline (the unlock)
+Added `tools/inspect-canvas.mjs` — Playwright headless-Chromium screenshotter
+that loads the running app, autoplays a track, optionally seeks/hides UI, and
+writes a PNG of the live canvas. WebGPU doesn't composite into headless
+screenshots, so it forces the app's WebGL fallback (same TSL shaders, visually
+representative). This ends blind shader iteration — we can capture → diagnose →
+fix → re-capture without manual screenshots.
+Run: `python3 serve.py` then
+`node tools/inspect-canvas.mjs --track data-tide --seek 90 --hide-ui --out /tmp/o.png`
+
+### Three.js game skill suite committed
+Vendored the `threejs-game-skills` suite under `.claude/skills/` (aaa-graphics,
+debug-profiler, qa-release, gameplay-systems, ui-designer, generators) so they
+persist in every web session. The QA/debug skills' canvas-inspection script is
+what the capture tool is based on.
+
+### Data Tide ocean — root-caused and fixed with eyes
+The persistent "black blobs" were diagnosed by binary-search captures:
+- Plain flat plane = solid (no holes) → not geometry/coverage.
+- Identity-position node material = solid → not the color shader.
+- Any vertical displacement = holes → geometric wave displacement was
+  discarding triangles at grazing angles, showing the sky-dome through the sea
+  (the dome, additive + radius 499, also bled stars over the far ocean).
+Fix: the ocean is now a **flat reflective surface** (like the WaterMesh) with
+wave motion driven entirely by colorNode normals — Gerstner gradient + fractal
+noise (non-repeating) — plus fresnel sky reflection, sun/moon glint, and subtle
+crest foam. Sky + star dome enlarged (1190/1180) to contain the ocean.
+Verified clean at dawn and midday via captures. Live-tunable via Scene Tuner
+(T → OCEAN). Trade-off: flat horizon (no geometric swell silhouette), but no
+artifacts and reads as real water.
+
+---
+
 ## Creative Direction: "The Living Album" + Spatial Lyrics — IN PROGRESS
 
 ### The vision (researched: Mizuguchi/Rez/Tetris Effect synesthesia, Thumper arc)
