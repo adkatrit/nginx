@@ -4760,10 +4760,10 @@ window.TrackScenes = (function() {
     // Live-tunable ocean look (Scene Tuner → 'ocean' section). The per-frame
     // loop pushes these into the shader uniforms; amp also gets a bass lift.
     const oceanCfg = {
-      ampBase: 1.1, choppy: 1.0, waveScale: 0.95,
+      ampBase: 1.15, choppy: 1.0, waveScale: 1.15,
       foamLo: 0.35, foamHi: 1.05, foamAmt: 0.0, // foam off (tuned)
-      glint: 1.0, specPow: 128,
-      detail: 2.15, detailScale: 0.05,
+      glint: 1.1, specPow: 156,
+      detail: 0.4, detailScale: 0.08,
     };
 
     function createGerstnerOcean(planeSize) {

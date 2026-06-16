@@ -251,10 +251,10 @@ window.TERRAIN_THEMES = (function() {
       return { r, g, b };
     },
 
-    waterY: -6,
+    waterY: -4,
     waterColor: 0x1a5c6e,
     waterOpacity: 0.85,
-    waterRoughness: 0.3,
+    waterRoughness: 0.45,
     waterMetalness: 0.6,
 
     terrainMatProps: {
@@ -271,14 +271,14 @@ window.TERRAIN_THEMES = (function() {
     fogDensity: 0.003,
     fogDensityDay: 0,
 
-    baseSunElevation: -5,
-    sunElevationRange: 10,
-    sunAzimuth: 0,
-    baseTurbidity: 6,
-    baseRayleigh: 3.0,
-    baseMieCoefficient: 0.012,
-    baseMieDirectionalG: 0.87,
-    baseExposure: 0.15,
+    baseSunElevation: -2,
+    sunElevationRange: 7,
+    sunAzimuth: 8,
+    baseTurbidity: 15,
+    baseRayleigh: 1.5,
+    baseMieCoefficient: 0,
+    baseMieDirectionalG: 0,
+    baseExposure: 0,
     baseSunIntensity: 0.1,
     sunIntensityRange: 1.6,
     baseHemiIntensity: 0.04,
