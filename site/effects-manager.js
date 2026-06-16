@@ -491,6 +491,30 @@ const EffectsManager = (function() {
   // ============================================================================
   // PARTICLES EFFECT
   // ============================================================================
+
+  // Soft radial sprite for particle points. Default GL points render as hard
+  // squares, which read as scattered "litter" (the exact look we want to kill
+  // for embers, snow, dust, stars). A white→transparent radial gradient turns
+  // each point into a round, soft-edged glowing dot. Built once, lazily, on a
+  // canvas so there's no external asset to ship.
+  let _softDotTex = null;
+  function getSoftDotTexture() {
+    if (_softDotTex || !THREE) return _softDotTex;
+    const s = 64;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = s;
+    const ctx = cv.getContext('2d');
+    const g = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
+    g.addColorStop(0.0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.35, 'rgba(255,255,255,0.6)');
+    g.addColorStop(1.0, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, s, s);
+    _softDotTex = new THREE.CanvasTexture(cv);
+    if (THREE.SRGBColorSpace) _softDotTex.colorSpace = THREE.SRGBColorSpace;
+    return _softDotTex;
+  }
+
   function rebuildParticles() {
     if (!config || !scene) return;
 
@@ -544,6 +568,7 @@ const EffectsManager = (function() {
 
     const material = new THREE.PointsMaterial({
       size: config.particles.size,
+      map: getSoftDotTexture(),
       vertexColors: true,
       transparent: true,
       opacity: 0.8,
