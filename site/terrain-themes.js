@@ -251,11 +251,11 @@ window.TERRAIN_THEMES = (function() {
       return { r, g, b };
     },
 
-    waterY: -999,  // disabled — terrain IS the ocean
+    waterY: -6,
     waterColor: 0x1a5c6e,
-    waterOpacity: 0.6,
-    waterRoughness: 0.05,
-    waterMetalness: 0.4,
+    waterOpacity: 0.85,
+    waterRoughness: 0.3,
+    waterMetalness: 0.6,
 
     terrainMatProps: {
       flatShading: false,   // smooth waves
@@ -267,16 +267,22 @@ window.TERRAIN_THEMES = (function() {
     sceneryDensity: 0,
 
     fogColor: 0x0d1520,
+    fogColorLight: 0x8c7a5e,
     fogDensity: 0.003,
     fogDensityDay: 0,
 
     baseSunElevation: -5,
+    sunElevationRange: 10,
     sunAzimuth: 0,
     baseTurbidity: 6,
     baseRayleigh: 3.0,
     baseMieCoefficient: 0.012,
     baseMieDirectionalG: 0.87,
     baseExposure: 0.15,
+    baseSunIntensity: 0.1,
+    sunIntensityRange: 1.6,
+    baseHemiIntensity: 0.04,
+    hemiIntensityRange: 0.46,
 
     animated: false,
 

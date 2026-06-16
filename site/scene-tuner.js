@@ -452,6 +452,16 @@ window.SceneTuner = (function() {
     lines.push(`  },`);
     lines.push(`  sceneryDensity: ${c.terrain.sceneryDensity},`);
 
+    // Ocean (Gerstner wave params) — only present once the ocean section
+    // has been touched; emit so wave tuning can be copied too.
+    if (c.ocean) {
+      lines.push(`  ocean: {`);
+      for (const k of ['waveHeight', 'choppiness', 'waveScale', 'foamStart', 'foamEnd', 'foamAmount', 'glint', 'glintTight', 'detail', 'detailScale']) {
+        if (c.ocean[k] !== undefined) lines.push(`    ${k}: ${c.ocean[k]},`);
+      }
+      lines.push(`  },`);
+    }
+
     lines.push('}');
     return lines.join('\n');
   }
