@@ -3947,6 +3947,14 @@ window.TrackScenes = (function() {
     // Hide environment visuals — sky sphere, ground plane, scenery (rocks/cacti), effects
     const hiddenEffects = [];
     scene.traverse(child => {
+      // Disable EnvironmentMode's lights — the flight scene supplies its own
+      // sun/hemisphere/moon below, and leaving the env's ambient/spot/extra
+      // directionals on over-lit the bird and wasted forward-lighting cost.
+      // (Flight lights are created after this traversal, so they're untouched.)
+      if (child.isLight) {
+        child.visible = false;
+        hiddenEffects.push(child);
+      }
       if (child.name === 'grid-effects' || child.name === 'lightning-effects' ||
           child.name === 'aurora-effects' || child.name === 'lights-effects' ||
           child.name === 'ride-path' || child.name === 'parallax-backdrop') {
