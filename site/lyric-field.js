@@ -234,10 +234,15 @@ const LyricField = (function () {
       this._fwd.set(0, 0, 1).applyQuaternion(bird.quaternion);
       this._side.crossVectors(this._up, this._fwd).normalize();
       const seq = (w.idx != null) ? w.idx : (this._weave++ | 0);
-      const lanePattern = [-1, 1, -0.45, 0.45];
+      // Cycle of 4 lanes that never repeats a side back-to-back and keeps
+      // even neighbours far apart: far-left, far-right, mid-right, mid-left.
+      const lanePattern = [-1, 1, 0.5, -0.5];
       const lane = lanePattern[seq % lanePattern.length];
       const lateral = lane * CFG.lateralSpread;
-      const vert = ((seq % 2 === 0) ? 1 : -1) * CFG.vertSpread * 0.5;
+      // Pair the vertical offset with the lane so words two apart (same side)
+      // also separate up/down — prevents same-lane overlap when depths align.
+      const vertPattern = [0.9, -0.9, -0.4, 0.4];
+      const vert = vertPattern[seq % vertPattern.length] * CFG.vertSpread;
 
       // Depth: keep words at least a sprite-width apart in distance so that
       // even same-lane words separate cleanly along the flight line.
