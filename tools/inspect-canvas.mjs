@@ -73,8 +73,16 @@ if (!allowWebgpu) {
 }
 
 await page.goto(url, { waitUntil: 'domcontentloaded' });
-await page.waitForTimeout(1200);
-try { await page.mouse.click(vw / 2, vh / 2); } catch {} // user-gesture for audio
+await page.waitForTimeout(1500);
+// Start playback with a real click (counts as the audio user-gesture).
+try { await page.click('#playPauseBtn', { timeout: 4000 }); } catch {}
+try { await page.mouse.click(vw / 2, vh / 2); } catch {}
+// If still not playing after a beat, click play again
+await page.waitForTimeout(2500);
+try {
+  const playing = await page.evaluate(() => !!(window.currentStemPlayer && window.currentStemPlayer.isPlaying));
+  if (!playing) await page.click('#playPauseBtn', { timeout: 3000 }).catch(() => {});
+} catch {}
 await page.waitForTimeout(wait);
 
 if (seek > 0) {
