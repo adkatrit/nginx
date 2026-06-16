@@ -4734,12 +4734,15 @@ window.TrackScenes = (function() {
       ampBase: 1.2, choppy: 1.0, waveScale: 1.0,
       foamLo: 1.6, foamHi: 2.6, foamAmt: 0.8,
       glint: 1.0, specPow: 90,
+      detail: 0.7, detailScale: 0.035,
     };
 
     function createGerstnerOcean(planeSize) {
       if (!TSL || typeof TSL.MeshBasicNodeMaterial !== 'function') return false;
       try {
         const T = TSL;
+        const mxFractal = T.mx_fractal_noise_float;
+        const hasNoise = typeof mxFractal === 'function';
         oceanUniforms = {
           time: T.uniform(0),
           amp: T.uniform(1.2),       // wave height (live)
@@ -4750,6 +4753,8 @@ window.TrackScenes = (function() {
           foamAmt: T.uniform(0.8),
           glint: T.uniform(1.0),
           specPow: T.uniform(90),
+          detail: T.uniform(0.7),    // fractal-noise height (breaks tiling)
+          detailScale: T.uniform(0.035),
           sunDir: T.uniform(new THREE.Vector3(0, 1, 0)),
           sunCol: T.uniform(new THREE.Color(1.4, 1.3, 1.1)),
           deepCol: T.uniform(new THREE.Color(0x0a2a3a)),
@@ -4759,12 +4764,12 @@ window.TrackScenes = (function() {
           originZ: T.uniform(0),
         };
 
-        // Wave set: long swell → short chop. Directions spread for a natural sea.
+        // A few long swells for the rolling motion; the pseudo-random surface
+        // detail comes from fractal noise (a handful of sines always tiles).
         const defs = [
-          { dir: [1.0, 0.18], len: 120, amp: 1.5, steep: 0.3 },
-          { dir: [0.7, 0.75], len: 64,  amp: 0.9, steep: 0.3 },
-          { dir: [-0.35, 1.0], len: 38, amp: 0.5, steep: 0.28 },
-          { dir: [0.9, -0.45], len: 27, amp: 0.3, steep: 0.25 },
+          { dir: [1.0, 0.18], len: 127, amp: 1.4, steep: 0.3 },
+          { dir: [0.6, 0.8],  len: 71,  amp: 0.9, steep: 0.3 },
+          { dir: [-0.4, 1.0], len: 41,  amp: 0.5, steep: 0.28 },
         ];
         const N = defs.length;
         const waves = defs.map(w => {
@@ -4774,8 +4779,7 @@ window.TrackScenes = (function() {
           return { ndx, ndz, k, omega: Math.sqrt(9.8 * k), amp: w.amp, Q: w.steep / (k * w.amp * N) };
         });
 
-        // Accumulate Gerstner displacement + height gradient at world (wx,wz).
-        // waveScale uniform divides spatial frequency → live wavelength control.
+        // Gerstner swell (analytic gradient). waveScale divides spatial freq.
         const fields = (wx, wz) => {
           const sx = wx.div(oceanUniforms.waveScale);
           const sz = wz.div(oceanUniforms.waveScale);
@@ -4792,6 +4796,18 @@ window.TrackScenes = (function() {
           return { dx, dy, dz, gx, gz };
         };
 
+        // Fractal-noise surface detail at world (wx,wz), evolving with time.
+        // This is what makes the sea look pseudo-random instead of tiled.
+        const noiseAt = (wx, wz) => {
+          if (!hasNoise) return T.float(0);
+          const p = T.vec3(
+            wx.mul(oceanUniforms.detailScale),
+            oceanUniforms.time.mul(0.12),
+            wz.mul(oceanUniforms.detailScale),
+          );
+          return mxFractal(p, 4, 2.0, 0.5, 1.0);
+        };
+
         const mat = new T.MeshBasicNodeMaterial({ transparent: false, side: THREE.DoubleSide });
 
         mat.positionNode = T.Fn(() => {
@@ -4801,22 +4817,33 @@ window.TrackScenes = (function() {
           const f = fields(wx, wz);
           const a = oceanUniforms.amp;
           p.x.addAssign(f.dx.mul(a).mul(oceanUniforms.choppy));
-          p.y.addAssign(f.dy.mul(a));
+          p.y.addAssign(f.dy.mul(a).add(noiseAt(wx, wz).mul(oceanUniforms.detail)));
           p.z.addAssign(f.dz.mul(a).mul(oceanUniforms.choppy));
           return p;
         })();
 
         mat.colorNode = T.Fn(() => {
-          const f = fields(T.positionWorld.x, T.positionWorld.z);
+          const wx = T.positionWorld.x, wz = T.positionWorld.z;
+          const f = fields(wx, wz);
           const a = oceanUniforms.amp;
-          const n = T.normalize(T.vec3(f.gx.mul(a).mul(-1), T.float(1), f.gz.mul(a).mul(-1)));
+          const d = oceanUniforms.detail;
+          // Total height + finite-difference normal over (swell + noise) so the
+          // pseudo-random detail actually catches light and foam.
+          const e = T.float(2.0);
+          const nh0 = noiseAt(wx, wz);
+          const nhx = noiseAt(wx.add(e), wz);
+          const nhz = noiseAt(wx, wz.add(e));
+          const h0 = f.dy.mul(a).add(nh0.mul(d));
+          const gradX = f.gx.mul(a).add(nhx.sub(nh0).div(e).mul(d));
+          const gradZ = f.gz.mul(a).add(nhz.sub(nh0).div(e).mul(d));
+          const n = T.normalize(T.vec3(gradX.mul(-1), T.float(1), gradZ.mul(-1)));
           const viewDir = T.normalize(T.cameraPosition.sub(T.positionWorld));
           const sunDir = T.normalize(oceanUniforms.sunDir);
           const fres = T.clamp(T.pow(T.float(1).sub(T.max(T.dot(n, viewDir), T.float(0))), T.float(5)), T.float(0), T.float(1));
           const body = T.mix(oceanUniforms.deepCol, oceanUniforms.skyCol, fres.mul(0.85).add(0.15));
           const half = T.normalize(viewDir.add(sunDir));
           const spec = T.pow(T.max(T.dot(n, half), T.float(0)), oceanUniforms.specPow).mul(oceanUniforms.sunCol).mul(oceanUniforms.glint);
-          const foam = T.smoothstep(oceanUniforms.foamLo, oceanUniforms.foamHi, f.dy.mul(a)).mul(oceanUniforms.foamAmt);
+          const foam = T.smoothstep(oceanUniforms.foamLo, oceanUniforms.foamHi, h0).mul(oceanUniforms.foamAmt);
           const col = T.mix(body, oceanUniforms.foamCol, foam).add(spec).add(T.vec3(0.025, 0.06, 0.1));
           return T.vec4(col, T.float(1));
         })();
@@ -5425,6 +5452,7 @@ window.TrackScenes = (function() {
           waveHeight: 'ampBase', choppiness: 'choppy', waveScale: 'waveScale',
           foamStart: 'foamLo', foamEnd: 'foamHi', foamAmount: 'foamAmt',
           glint: 'glint', glintTight: 'specPow',
+          detail: 'detail', detailScale: 'detailScale',
         };
         if (map[param]) oceanCfg[map[param]] = value;
       } else if (section === 'stars') {
@@ -5734,6 +5762,8 @@ window.TrackScenes = (function() {
           oceanUniforms.foamAmt.value = oceanCfg.foamAmt;
           oceanUniforms.glint.value = oceanCfg.glint;
           oceanUniforms.specPow.value = oceanCfg.specPow;
+          oceanUniforms.detail.value = oceanCfg.detail;
+          oceanUniforms.detailScale.value = oceanCfg.detailScale;
           oceanUniforms.sunDir.value.copy(sunFactor > 0.18 ? sunPos : _moonDir);
           if (sunFactor > 0.18) oceanUniforms.sunCol.value.setRGB(1.7, 1.5, 1.2); // HDR warm glint
           else oceanUniforms.sunCol.value.setRGB(0.55, 0.66, 0.85);              // cool moonglade

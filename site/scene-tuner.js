@@ -54,6 +54,8 @@ window.SceneTuner = (function() {
       foamAmount:  { value: 0.8, min: 0,   max: 1,   step: 0.05, label: 'Foam Amount' },
       glint:       { value: 1.0, min: 0,   max: 5,   step: 0.1,  label: 'Glint' },
       glintTight:  { value: 90,  min: 8,   max: 320, step: 4,    label: 'Glint Tightness' },
+      detail:      { value: 0.7, min: 0,   max: 3,   step: 0.05, label: 'Detail (random)' },
+      detailScale: { value: 0.035, min: 0.005, max: 0.15, step: 0.005, label: 'Detail Scale' },
     },
     terrain: {
       flatShading:      { value: true, type: 'toggle', label: 'Flat Shading' },
