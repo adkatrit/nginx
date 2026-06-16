@@ -4728,6 +4728,13 @@ window.TrackScenes = (function() {
     // back to the flat reflective WaterMesh.
     // ═══════════════════════════════════════════════════════════════════════
     let oceanMesh = null, oceanUniforms = null;
+    // Live-tunable ocean look (Scene Tuner → 'ocean' section). The per-frame
+    // loop pushes these into the shader uniforms; amp also gets a bass lift.
+    const oceanCfg = {
+      ampBase: 1.2, choppy: 1.0, waveScale: 1.0,
+      foamLo: 1.6, foamHi: 2.6, foamAmt: 0.8,
+      glint: 1.0, specPow: 90,
+    };
 
     function createGerstnerOcean(planeSize) {
       if (!TSL || typeof TSL.MeshBasicNodeMaterial !== 'function') return false;
@@ -4735,7 +4742,14 @@ window.TrackScenes = (function() {
         const T = TSL;
         oceanUniforms = {
           time: T.uniform(0),
-          amp: T.uniform(1),
+          amp: T.uniform(1.2),       // wave height (live)
+          choppy: T.uniform(1.0),    // horizontal pinch (live)
+          waveScale: T.uniform(1.0), // wavelength multiplier (live)
+          foamLo: T.uniform(1.6),
+          foamHi: T.uniform(2.6),
+          foamAmt: T.uniform(0.8),
+          glint: T.uniform(1.0),
+          specPow: T.uniform(90),
           sunDir: T.uniform(new THREE.Vector3(0, 1, 0)),
           sunCol: T.uniform(new THREE.Color(1.4, 1.3, 1.1)),
           deepCol: T.uniform(new THREE.Color(0x0a2a3a)),
@@ -4761,17 +4775,19 @@ window.TrackScenes = (function() {
         });
 
         // Accumulate Gerstner displacement + height gradient at world (wx,wz).
-        // Returns { dx,dy,dz, gx,gz } as TSL nodes. Unrolled at graph build.
+        // waveScale uniform divides spatial frequency → live wavelength control.
         const fields = (wx, wz) => {
+          const sx = wx.div(oceanUniforms.waveScale);
+          const sz = wz.div(oceanUniforms.waveScale);
           let dx = T.float(0), dy = T.float(0), dz = T.float(0), gx = T.float(0), gz = T.float(0);
           for (const w of waves) {
-            const phase = wx.mul(w.k * w.ndx).add(wz.mul(w.k * w.ndz)).sub(oceanUniforms.time.mul(w.omega));
+            const phase = sx.mul(w.k * w.ndx).add(sz.mul(w.k * w.ndz)).sub(oceanUniforms.time.mul(w.omega));
             const c = T.cos(phase), s = T.sin(phase);
             dx = dx.add(c.mul(w.Q * w.amp * w.ndx));
             dz = dz.add(c.mul(w.Q * w.amp * w.ndz));
             dy = dy.add(s.mul(w.amp));
-            gx = gx.add(c.mul(w.amp * w.k * w.ndx));
-            gz = gz.add(c.mul(w.amp * w.k * w.ndz));
+            gx = gx.add(c.mul(w.amp * w.k * w.ndx).div(oceanUniforms.waveScale));
+            gz = gz.add(c.mul(w.amp * w.k * w.ndz).div(oceanUniforms.waveScale));
           }
           return { dx, dy, dz, gx, gz };
         };
@@ -4784,9 +4800,9 @@ window.TrackScenes = (function() {
           const wz = p.z.add(oceanUniforms.originZ);
           const f = fields(wx, wz);
           const a = oceanUniforms.amp;
-          p.x.addAssign(f.dx.mul(a));
+          p.x.addAssign(f.dx.mul(a).mul(oceanUniforms.choppy));
           p.y.addAssign(f.dy.mul(a));
-          p.z.addAssign(f.dz.mul(a));
+          p.z.addAssign(f.dz.mul(a).mul(oceanUniforms.choppy));
           return p;
         })();
 
@@ -4797,16 +4813,10 @@ window.TrackScenes = (function() {
           const viewDir = T.normalize(T.cameraPosition.sub(T.positionWorld));
           const sunDir = T.normalize(oceanUniforms.sunDir);
           const fres = T.clamp(T.pow(T.float(1).sub(T.max(T.dot(n, viewDir), T.float(0))), T.float(5)), T.float(0), T.float(1));
-          // Water body: deep blue, sky reflection by fresnel + 15% sky ambient
-          // so troughs read as deep water rather than black voids.
           const body = T.mix(oceanUniforms.deepCol, oceanUniforms.skyCol, fres.mul(0.85).add(0.15));
           const half = T.normalize(viewDir.add(sunDir));
-          const spec = T.pow(T.max(T.dot(n, half), T.float(0)), T.float(90)).mul(oceanUniforms.sunCol);
-          // Foam only on the tallest crest tips — replaces colour (whitecap),
-          // not added (which blew the crests out to a snowfield).
-          const foam = T.smoothstep(T.float(2.0), T.float(2.9), f.dy.mul(a)).mul(0.8);
-          // Ambient floor so water can never read as pure black (diagnostic +
-          // safety against any dark corner of the fresnel/mix).
+          const spec = T.pow(T.max(T.dot(n, half), T.float(0)), oceanUniforms.specPow).mul(oceanUniforms.sunCol).mul(oceanUniforms.glint);
+          const foam = T.smoothstep(oceanUniforms.foamLo, oceanUniforms.foamHi, f.dy.mul(a)).mul(oceanUniforms.foamAmt);
           const col = T.mix(body, oceanUniforms.foamCol, foam).add(spec).add(T.vec3(0.025, 0.06, 0.1));
           return T.vec4(col, T.float(1));
         })();
@@ -4846,9 +4856,17 @@ window.TrackScenes = (function() {
     async function createWaterMeshForTheme(theme) {
       if (!themeWantsWater(theme)) return;
       waterMeshPending = true;
-      // NOTE: a custom Gerstner-wave ocean was attempted here but couldn't be
-      // tuned to look right without a live preview — reverted to the clean
-      // reflective WaterMesh, which reads as real water (flat but no artifacts).
+      // Open-ocean themes (Data Tide): geometric Gerstner ocean, live-tunable
+      // via the Scene Tuner 'ocean' section (press T). Falls back to WaterMesh.
+      if (theme.useWaterMesh) {
+        const size = (theme.waterMeshConfig && theme.waterMeshConfig.size) || 2800;
+        if (createGerstnerOcean(size)) {
+          oceanMesh.position.y = -2;
+          waterMeshReady = true;
+          waterMeshPending = false;
+          return;
+        }
+      }
       try {
         const { WaterMesh } = await import('three/addons/objects/WaterMesh.js');
         const cfg = theme.waterMeshConfig || {};
@@ -5401,6 +5419,14 @@ window.TrackScenes = (function() {
         }
       } else if (section === 'flight') {
         if (param in FLY) FLY[param] = value;
+      } else if (section === 'ocean') {
+        // Live ocean tuning → oceanCfg (applied to uniforms each frame)
+        const map = {
+          waveHeight: 'ampBase', choppiness: 'choppy', waveScale: 'waveScale',
+          foamStart: 'foamLo', foamEnd: 'foamHi', foamAmount: 'foamAmt',
+          glint: 'glint', glintTight: 'specPow',
+        };
+        if (map[param]) oceanCfg[map[param]] = value;
       } else if (section === 'stars') {
         if (param in starCfg) {
           starCfg[param] = value;
@@ -5699,7 +5725,15 @@ window.TrackScenes = (function() {
           oceanUniforms.time.value = time;
           oceanUniforms.originX.value = obx;
           oceanUniforms.originZ.value = obz;
-          oceanUniforms.amp.value = 1 + pulse.bassSwell * 0.4;
+          // Live-tunable look (Scene Tuner) + a bass lift on the height
+          oceanUniforms.amp.value = oceanCfg.ampBase * (1 + pulse.bassSwell * 0.4);
+          oceanUniforms.choppy.value = oceanCfg.choppy;
+          oceanUniforms.waveScale.value = oceanCfg.waveScale;
+          oceanUniforms.foamLo.value = oceanCfg.foamLo;
+          oceanUniforms.foamHi.value = oceanCfg.foamHi;
+          oceanUniforms.foamAmt.value = oceanCfg.foamAmt;
+          oceanUniforms.glint.value = oceanCfg.glint;
+          oceanUniforms.specPow.value = oceanCfg.specPow;
           oceanUniforms.sunDir.value.copy(sunFactor > 0.18 ? sunPos : _moonDir);
           if (sunFactor > 0.18) oceanUniforms.sunCol.value.setRGB(1.7, 1.5, 1.2); // HDR warm glint
           else oceanUniforms.sunCol.value.setRGB(0.55, 0.66, 0.85);              // cool moonglade

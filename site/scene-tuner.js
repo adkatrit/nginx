@@ -45,6 +45,16 @@ window.SceneTuner = (function() {
       waterRoughness: { value: 0.3,     min: 0,   max: 1,   step: 0.05, label: 'Roughness' },
       waterMetalness: { value: 0.6,     min: 0,   max: 1,   step: 0.05, label: 'Metalness' },
     },
+    ocean: {
+      waveHeight:  { value: 1.2, min: 0,   max: 4,   step: 0.05, label: 'Wave Height' },
+      choppiness:  { value: 1.0, min: 0,   max: 2.5, step: 0.05, label: 'Choppiness' },
+      waveScale:   { value: 1.0, min: 0.3, max: 3.0, step: 0.05, label: 'Wave Scale' },
+      foamStart:   { value: 1.6, min: 0,   max: 5,   step: 0.05, label: 'Foam Start' },
+      foamEnd:     { value: 2.6, min: 0,   max: 6,   step: 0.05, label: 'Foam End' },
+      foamAmount:  { value: 0.8, min: 0,   max: 1,   step: 0.05, label: 'Foam Amount' },
+      glint:       { value: 1.0, min: 0,   max: 5,   step: 0.1,  label: 'Glint' },
+      glintTight:  { value: 90,  min: 8,   max: 320, step: 4,    label: 'Glint Tightness' },
+    },
     terrain: {
       flatShading:      { value: true, type: 'toggle', label: 'Flat Shading' },
       roughness:        { value: 0.85, min: 0, max: 1, step: 0.05, label: 'Roughness' },
