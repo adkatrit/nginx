@@ -24,16 +24,22 @@ const LyricField = (function () {
   'use strict';
 
   const CFG = {
-    leadTime: 2.6,          // seconds a word spawns before its arrival
+    leadTime: 1.9,          // seconds a word spawns before its arrival — short
+                            // enough that only ~1-2 words share the screen
     height: 2.2,            // meters above the bird's eyeline — on the flight
                             // line so you fly THROUGH words, not under them
-    lateralSpread: 4,       // gentle left/right weave so lines don't stack
-    passBehind: 14,         // despawn this far behind the camera
-    fadeInDist: 70,         // start visible at this range
-    resolveDist: 38,        // signal→meaning fully resolved by here
-    wordWorldHeight: 3.2,   // sprite height in world units
-    maxWords: 18,
-    minWordGap: 0.16,       // floor on spacing so fast lines stay readable
+    lateralSpread: 9,       // left/right placement so consecutive words land at
+                            // clearly different screen positions (no pile-up)
+    vertSpread: 3.4,        // up/down offset, alternated, for extra separation
+    passBehind: 12,         // despawn this far behind the camera
+    fadeInDist: 64,         // start visible at this range
+    resolveDist: 44,        // signal→meaning fully resolved by here (early, so
+                            // words are clean long before you reach them)
+    wordWorldHeight: 3.4,   // sprite height in world units
+    maxWords: 14,
+    minWordGap: 0.34,       // floor on spacing so words don't bunch in time
+    minConcurrent: 0,       // (reserved)
+    maxConcurrent: 3,       // hard cap on words alive at once — readability over density
     flowPerWord: 0.015,     // FLOW sip for flying through a word
     skipTokens: new Set(['a', 'the', 'of', 'to', 'in', 'on']), // keep dense lines from crowding
   };
@@ -61,10 +67,13 @@ const LyricField = (function () {
     }
     const n = tokens.length;
     const dur = Math.max(0.4, Math.min(duration || 3, n * 0.9));
+    // Space words out in time. The floor (minWordGap) keeps fast lines from
+    // bunching so only a couple are ever resolving at once.
     const gap = Math.max(CFG.minWordGap, dur / n);
     return tokens.map((word, i) => ({
       word,
       arrival: lineTime + (i + 0.5) * gap,
+      idx: i,                       // sequence index drives lateral/vertical lane
       emphasis: !!opts.emphasis,
     }));
   }
@@ -143,15 +152,23 @@ const LyricField = (function () {
       }
       const spd = this.measuredSpeed > 1 ? this.measuredSpeed : (bird.speedPerSec || 15);
 
-      // Spawn words entering their lead window
+      // Spawn words entering their lead window. Cap how many are alive at once
+      // so the screen stays readable on dense lines — count only those still
+      // ahead of the camera (past ones are dissolving and don't crowd reading).
       if (this.enabled && isPlaying) {
-        for (let i = this.pending.length - 1; i >= 0; i--) {
+        let aheadCount = 0;
+        for (const s of this.live) if (!s.flew) aheadCount++;
+        // Earliest-arrival first, so we drop the right ones when over budget.
+        this.pending.sort((a, b) => a.arrival - b.arrival);
+        for (let i = 0; i < this.pending.length; i++) {
           const w = this.pending[i];
           const lead = w.arrival - now;
-          if (lead > CFG.leadTime) continue;
-          this.pending.splice(i, 1);
-          if (lead < -0.3) continue; // missed its moment (hitch/seek)
+          if (lead > CFG.leadTime) break;     // sorted: nothing earlier remains
+          this.pending.splice(i, 1); i--;
+          if (lead < -0.3) continue;          // missed its moment (hitch/seek)
+          if (aheadCount >= CFG.maxConcurrent) continue; // over budget: skip it
           this._spawn(w, bird, spd, lead);
+          aheadCount++;
         }
       }
 
@@ -170,16 +187,21 @@ const LyricField = (function () {
 
         let opacity;
         if (ahead >= 0) {
-          // Approaching: fade in, and "resolve" out of signal flicker
-          const fadeIn = Math.min(1, (CFG.fadeInDist - dist) / (CFG.fadeInDist - CFG.resolveDist));
-          const resolve = Math.max(0, Math.min(1, (CFG.fadeInDist - dist) / (CFG.fadeInDist - CFG.resolveDist)));
-          const flicker = (1 - resolve) * 0.5 * (0.5 + 0.5 * Math.sin(now * 47 + s.seed));
-          opacity = Math.max(0, Math.min(1, fadeIn)) * (1 - flicker);
+          // Approaching: fade in, and "resolve" out of signal flicker. Both
+          // complete by resolveDist so the word is fully solid and legible
+          // well before you reach it (no shimmering at close range).
+          const t = (CFG.fadeInDist - dist) / (CFG.fadeInDist - CFG.resolveDist);
+          const resolve = Math.max(0, Math.min(1, t));
+          // Gentle flicker only during the initial "signal" phase; gone by ~70%.
+          const sig = Math.max(0, 1 - resolve / 0.7);
+          const flicker = sig * 0.4 * (0.5 + 0.5 * Math.sin(now * 32 + s.seed));
+          opacity = resolve * (1 - flicker);
         } else {
           // Past the camera: dissolve into the slipstream
           opacity = Math.max(0, 1 + ahead / CFG.passBehind);
         }
-        s.mat.opacity = opacity * (s.emphasis ? 1 : 0.92);
+        // Keep words near-opaque so they read clearly and don't smear together.
+        s.mat.opacity = Math.min(1, opacity);
 
         if (ahead < -CFG.passBehind || (s.flew && opacity <= 0.01)) {
           this._dispose(s);
@@ -201,20 +223,30 @@ const LyricField = (function () {
         depthTest: true, toneMapped: false,
       });
       const sprite = new THREE.Sprite(mat);
-      const h = CFG.wordWorldHeight * (w.emphasis ? 1.35 : 1);
+      const h = CFG.wordWorldHeight * (w.emphasis ? 1.3 : 1);
       sprite.scale.set(h * tex._aspect, h, 1);
       sprite.renderOrder = 4;
 
-      // Place ahead on the current heading, gently weaving so lines don't stack
+      // Place ahead on the current heading. Consecutive words are staggered
+      // across distinct lateral lanes AND alternating vertical offsets so they
+      // project to clearly separate screen positions instead of piling up at
+      // center. The lane pattern (−1, +1, 0, −1, +1, …) reads left→right→mid.
       this._fwd.set(0, 0, 1).applyQuaternion(bird.quaternion);
       this._side.crossVectors(this._up, this._fwd).normalize();
-      this._weave += 1.1;
-      const lateral = Math.sin(this._weave) * CFG.lateralSpread;
+      const seq = (w.idx != null) ? w.idx : (this._weave++ | 0);
+      const lanePattern = [-1, 1, -0.45, 0.45];
+      const lane = lanePattern[seq % lanePattern.length];
+      const lateral = lane * CFG.lateralSpread;
+      const vert = ((seq % 2 === 0) ? 1 : -1) * CFG.vertSpread * 0.5;
+
+      // Depth: keep words at least a sprite-width apart in distance so that
+      // even same-lane words separate cleanly along the flight line.
+      const depth = Math.max(8, spd * lead);
       const pos = new THREE.Vector3()
         .copy(bird.position)
-        .addScaledVector(this._fwd, Math.max(6, spd * lead))
+        .addScaledVector(this._fwd, depth)
         .addScaledVector(this._side, lateral);
-      pos.y = bird.position.y + CFG.height;
+      pos.y = bird.position.y + CFG.height + vert;
 
       const ground = this.sceneApi.getGroundHeight
         ? this.sceneApi.getGroundHeight(pos.x, pos.z) : 0;
@@ -235,37 +267,76 @@ const LyricField = (function () {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         if (!ctx) return null;
-        const fontPx = 96;
-        const pad = 48;
-        ctx.font = `700 ${fontPx}px "Inter", system-ui, sans-serif`;
+        const fontPx = 104;
+        const padX = 56;
+        const padY = 40;
+        const font = `800 ${fontPx}px "Inter", system-ui, sans-serif`;
+        ctx.font = font;
         const metrics = ctx.measureText(word);
-        const w = Math.ceil(metrics.width) + pad * 2;
-        const h = fontPx + pad * 2;
+        const w = Math.ceil(metrics.width) + padX * 2;
+        const h = fontPx + padY * 2;
         canvas.width = w; canvas.height = h;
 
         const c2 = canvas.getContext('2d');
         c2.clearRect(0, 0, w, h);
-        c2.font = `700 ${fontPx}px "Inter", system-ui, sans-serif`;
+
+        // Dark rounded backing plate so the word reads against bright water
+        // AND dark sky without smearing into either. Kept subtle and inset.
+        const bx = 10, by = 10, bw = w - 20, bh = h - 20, br = h * 0.34;
+        c2.fillStyle = 'rgba(6, 10, 16, 0.62)';
+        this._roundRect(c2, bx, by, bw, bh, br);
+        c2.fill();
+
+        c2.font = font;
         c2.textAlign = 'center';
         c2.textBaseline = 'middle';
-        // Warm bloom-friendly glow + crisp core
+        const cx = w / 2, cy = h / 2;
+
+        // Soft outer glow (one bloom pass; the core layers stay crisp).
         c2.shadowColor = this.baseColor;
-        c2.shadowBlur = 28;
+        c2.shadowBlur = 22;
         c2.fillStyle = this.baseColor;
-        c2.fillText(word, w / 2, h / 2);
+        c2.fillText(word, cx, cy);
         c2.shadowBlur = 0;
+
+        // Heavy dark stroke = high-contrast edge in any environment.
+        c2.lineJoin = 'round';
+        c2.miterLimit = 2;
+        c2.strokeStyle = 'rgba(2, 6, 12, 0.95)';
+        c2.lineWidth = 12;
+        c2.strokeText(word, cx, cy);
+
+        // Warm coloured rim just inside the dark stroke for depth.
+        c2.strokeStyle = this.baseColor;
+        c2.lineWidth = 5;
+        c2.strokeText(word, cx, cy);
+
+        // Bright near-white core for legibility at the center of the glyph.
         c2.fillStyle = '#fffdf5';
-        c2.fillText(word, w / 2, h / 2);
+        c2.fillText(word, cx, cy);
 
         const tex = new THREE.CanvasTexture(canvas);
         tex.colorSpace = THREE.SRGBColorSpace || tex.colorSpace;
-        tex.anisotropy = 4;
+        tex.anisotropy = 8;
+        if (THREE.LinearMipmapLinearFilter) tex.minFilter = THREE.LinearMipmapLinearFilter;
+        tex.generateMipmaps = true;
         tex._aspect = w / h;
         return tex;
       } catch (e) {
         console.warn('[LyricField] texture failed:', e);
         return null;
       }
+    }
+
+    _roundRect(c, x, y, w, h, r) {
+      r = Math.min(r, w / 2, h / 2);
+      c.beginPath();
+      c.moveTo(x + r, y);
+      c.arcTo(x + w, y, x + w, y + h, r);
+      c.arcTo(x + w, y + h, x, y + h, r);
+      c.arcTo(x, y + h, x, y, r);
+      c.arcTo(x, y, x + w, y, r);
+      c.closePath();
     }
 
     _dispose(s) {
