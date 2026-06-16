@@ -3955,6 +3955,13 @@ window.TrackScenes = (function() {
         child.visible = false;
         hiddenEffects.push(child);
       }
+      // Hide EnvironmentMode particle/star Points — they're anchored at the
+      // world origin (so they only appear where the bird spawned) and the
+      // flight scene supplies its own star dome instead.
+      if (child.isPoints) {
+        child.visible = false;
+        hiddenEffects.push(child);
+      }
       if (child.name === 'grid-effects' || child.name === 'lightning-effects' ||
           child.name === 'aurora-effects' || child.name === 'lights-effects' ||
           child.name === 'ride-path' || child.name === 'parallax-backdrop') {
