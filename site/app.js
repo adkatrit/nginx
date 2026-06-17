@@ -3417,7 +3417,7 @@
       // fallback covers a song that would end before the crossing.
       if (currentTrackScene.isJourneyActive && currentIndex < tracks.length - 1) {
         const morphing = currentTrackScene.isJourneyActive();
-        if (!morphing && currentIndex !== journeyArmedFromIndex && sprog > 0.72) {
+        if (!morphing && currentIndex !== journeyArmedFromIndex && sprog > 0.5) {
           const nextTitle = tracks[currentIndex + 1].title;
           if (currentTrackScene.beginJourney(nextTitle)) {
             journeyArmedFromIndex = currentIndex;

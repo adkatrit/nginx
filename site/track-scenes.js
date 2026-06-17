@@ -4739,8 +4739,10 @@ window.TrackScenes = (function() {
       themeAObj: null,    // outgoing theme object (snapshot of activeTheme at start)
       ox: 0, oz: 0,       // boundary origin (bird world pos at start)
       dirX: 0, dirZ: 1,   // forward axis at start (unit, world space)
-      center: 950,        // distance ahead (along dir) of the blend midpoint
-      half: 560,          // half-width of the blend band (land→sea reveal length)
+      center: 1500,       // distance ahead (along dir) of the blend midpoint —
+                          // the boundary sits past the visible horizon so the
+                          // new world reveals gradually as you fly toward it
+      half: 380,          // half-width of the blend band (land→sea reveal length)
       audioSwitched: false,
     };
     let onTrackHandoff = null;  // called once when the bird reaches the midpoint
@@ -5627,25 +5629,31 @@ window.TrackScenes = (function() {
           applyCloudShadow(terrainMat);
         }
         journey.active = true;
-        // Refresh already-spawned chunks that fall in/beyond the blend band so
-        // the incoming world appears in the distance immediately (otherwise the
-        // far horizon would stay theme A until those chunks recycle). Near
-        // chunks (t≈0) are left alone — they'd respawn identical anyway.
+        // Refresh only the OFF-SCREEN chunks in the blend band so the incoming
+        // world is ready as it scrolls into view from the horizon — WITHOUT
+        // popping anything currently on screen. Visible/near chunks are left to
+        // recycle naturally as the bird flies forward (they're theme A there
+        // anyway, since the boundary sits past the horizon). This is the
+        // difference between the new world "appearing out of nowhere" and it
+        // rising gently over the horizon as you approach.
+        const REVEAL_MIN = 1000; // ≈ camera far — only touch chunks beyond this
+        const projOf = (cx, cz) =>
+          (cx * CHUNK_SIZE - journey.ox) * journey.dirX + (cz * CHUNK_SIZE - journey.oz) * journey.dirZ;
         for (const [key, ch] of terrainChunks) {
           const [cx, cz] = key.split(',').map(Number);
-          if (journeyT(cx * CHUNK_SIZE, cz * CHUNK_SIZE) > 0.001) {
+          if (projOf(cx, cz) > REVEAL_MIN && journeyT(cx * CHUNK_SIZE, cz * CHUNK_SIZE) > 0.001) {
             ch.mesh.geometry.dispose(); scene.remove(ch.mesh); terrainChunks.delete(key);
           }
         }
         for (const [key, ch] of waterChunks) {
           const [cx, cz] = key.split(',').map(Number);
-          if (journeyT(cx * CHUNK_SIZE, cz * CHUNK_SIZE) > 0.001) {
+          if (projOf(cx, cz) > REVEAL_MIN && journeyT(cx * CHUNK_SIZE, cz * CHUNK_SIZE) > 0.001) {
             ch.mesh.geometry.dispose(); scene.remove(ch.mesh); waterChunks.delete(key);
           }
         }
         for (const [key, ch] of sceneryChunks) {
           const [cx, cz] = key.split(',').map(Number);
-          if (journeyT(cx * CHUNK_SIZE, cz * CHUNK_SIZE) > 0.001) {
+          if (projOf(cx, cz) > REVEAL_MIN && journeyT(cx * CHUNK_SIZE, cz * CHUNK_SIZE) > 0.001) {
             for (const obj of ch.objects) { obj.traverse(c => { if (c.geometry) c.geometry.dispose(); }); scene.remove(obj); }
             sceneryChunks.delete(key);
           }
