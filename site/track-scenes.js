@@ -4604,6 +4604,14 @@ window.TrackScenes = (function() {
     let fogDensityDay = activeTheme.fogDensityDay ?? 0.0002;
     let fogColorLight = activeTheme.fogColorLight || 0x8c7a5e;
 
+    // Album sun: in journey mode app.js feeds a CONTINUOUS album phase (0 at the
+    // first track → 1 at the last). The sun then sweeps one long day across the
+    // whole record and never snaps back to "dark" at a track boundary. null ⇒
+    // fall back to the per-track sunrise (single-track / journey mode off).
+    let albumSunTarget = null;   // latest target from app.js (0..1) or null
+    let albumSunPhase = null;    // smoothed, monotonic follower
+    const ALBUM_SUN_LOW = -6, ALBUM_SUN_HIGH = 24;  // day arc in degrees
+
     const sunPos = new THREE.Vector3();
     const phi = (90 - baseSunElevation) * Math.PI / 180;
     sunPos.setFromSphericalCoords(1, phi, sunAzimuth * Math.PI / 180);
@@ -4765,9 +4773,30 @@ window.TrackScenes = (function() {
       const t = journeyT(x, z);
       if (t <= 0) return A.colorVertex(h, slope, nPatch, nGrain, A.waterY);
       const cb = B.colorVertex(h, slope, nPatch, nGrain, B.waterY);
-      if (t >= 1) return cb;
-      const ca = A.colorVertex(h, slope, nPatch, nGrain, A.waterY);
-      return { r: ca.r * (1 - t) + cb.r * t, g: ca.g * (1 - t) + cb.g * t, b: ca.b * (1 - t) + cb.b * t };
+      let col;
+      if (t >= 1) {
+        col = cb;
+      } else {
+        const ca = A.colorVertex(h, slope, nPatch, nGrain, A.waterY);
+        col = { r: ca.r * (1 - t) + cb.r * t, g: ca.g * (1 - t) + cb.g * t, b: ca.b * (1 - t) + cb.b * t };
+      }
+      // Coastline: lay a sandy beach where the descending land meets the
+      // incoming sea — a band just above the blended waterline, strongest
+      // through the middle of the transition (the actual shore) and only on
+      // gentle ground (not cliffs). This is what reads as a real coast.
+      const wY = A.waterY * (1 - t) + B.waterY * t;
+      const above = h - wY;
+      if (above > -0.6 && above < 3.2) {
+        const band = Math.max(0, 1 - Math.abs(above - 1.0) / 2.2);  // peak ~1 unit up the bank
+        const coast = Math.min(1, Math.min(t, 1 - t) / 0.28);       // only across the transition
+        const flat = Math.max(0, 1 - slope * 0.5);                  // sand on gentle ground
+        const s = band * coast * flat * 0.9;
+        if (s > 0.001) {
+          const sandR = 0.80 + nGrain * 0.04, sandG = 0.72 + nGrain * 0.03, sandB = 0.54;
+          col = { r: col.r * (1 - s) + sandR * s, g: col.g * (1 - s) + sandG * s, b: col.b * (1 - s) + sandB * s };
+        }
+      }
+      return col;
     }
 
     // Water level settles to the incoming world's sea level as the bird crosses.
@@ -5632,6 +5661,8 @@ window.TrackScenes = (function() {
         return { active: true, t: tb, audioSwitched: journey.audioSwitched };
       },
       setTrackHandoff(fn) { onTrackHandoff = fn; },
+      // Continuous album phase (0..1) for the album-wide sun; null = per-track.
+      setAlbumProgress(p) { albumSunTarget = (typeof p === 'number') ? Math.max(0, Math.min(1, p)) : null; },
 
       // Frame-perfect MIDI events (enriched by MidiRouter in app.js)
       onMidi: onMidiEvent,
@@ -5857,7 +5888,25 @@ window.TrackScenes = (function() {
           const aud = document.getElementById('playerAudio');
           if (aud && aud.duration > 0) songProgress = aud.currentTime / aud.duration;
         }
-        const dynElevation = SUN_START + songProgress * (SUN_END - SUN_START);
+        // Sun elevation + day factor. Journey mode: one continuous album day
+        // (no reset at track boundaries). Otherwise: per-track sunrise.
+        let dynElevation, sunFactor, horizonProximity;
+        if (albumSunTarget != null) {
+          if (albumSunPhase == null) albumSunPhase = albumSunTarget;
+          else albumSunPhase += (albumSunTarget - albumSunPhase) * 0.06; // smooth follower
+          // sqrt curve: the sun does most of its rise during the first track and
+          // then climbs gently — so a track ends bright and the next CONTINUES
+          // bright (no snap back to dawn), while the album still moves through a day.
+          dynElevation = ALBUM_SUN_LOW + Math.sqrt(albumSunPhase) * (ALBUM_SUN_HIGH - ALBUM_SUN_LOW);
+          const sf = Math.max(0, Math.min(1, (dynElevation + 5) / 10)); // 0 at -5° → 1 at +5°
+          sunFactor = sf * sf * (3 - 2 * sf);
+          horizonProximity = Math.max(0, 1 - Math.abs(dynElevation) / 12);
+        } else {
+          dynElevation = SUN_START + songProgress * (SUN_END - SUN_START);
+          const sunT = Math.max(0, Math.min(1, (dynElevation - SUN_START) / (SUN_END - SUN_START)));
+          sunFactor = sunT * sunT * (3 - 2 * sunT);  // smoothstep curve
+          horizonProximity = 1 - Math.abs(dynElevation) / Math.max(Math.abs(SUN_START), Math.abs(SUN_END));
+        }
         const dynPhi = (90 - dynElevation) * Math.PI / 180;
         const dynTheta = sunAzimuth * Math.PI / 180;
         sunPos.setFromSphericalCoords(1, dynPhi, dynTheta);
@@ -5866,13 +5915,7 @@ window.TrackScenes = (function() {
         // (water light direction handled in the moonlight block below — by day
         // it glints off the sun, after dark off the moon)
 
-        // Natural sun-linked lighting: derive everything from sun elevation
-        // smoothstep maps elevation smoothly: 0 at -5° (below horizon) → 1 at +5° (above)
-        const sunT = Math.max(0, Math.min(1, (dynElevation - SUN_START) / (SUN_END - SUN_START)));
-        const sunFactor = sunT * sunT * (3 - 2 * sunT);  // smoothstep curve
-
         // Atmosphere: golden-hour haze near horizon, cleaner sky when sun is up
-        const horizonProximity = 1 - Math.abs(dynElevation) / Math.max(Math.abs(SUN_START), Math.abs(SUN_END));
         skyUniforms.turbidity.value = baseTurbidity + (1 - sunFactor) * 3 + horizonProximity * 2;
         skyUniforms.rayleigh.value = baseRayleigh + sunFactor * 1.5;
         skyUniforms.mieCoefficient.value = baseMieCoefficient + horizonProximity * 0.02;

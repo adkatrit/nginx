@@ -3397,34 +3397,41 @@
       currentTrackScene.update(t, freqData, amplitude, shipPos, shipSpeed, effectiveStems);
     }
 
-    // ── Journey mode: near the end of a track, begin morphing the world toward
-    // the next track so it appears in the distance and the bird flies into it.
-    // The audio normally hands off when the bird crosses the boundary (the scene
-    // calls onJourneyHandoff); the songProgress fallback below covers the case
-    // where the song would otherwise end before the crossing.
-    if (journeyMode && flightSceneActive && currentTrackScene.isJourneyActive
-        && currentIndex < tracks.length - 1) {
+    // ── Journey mode: the album plays as one continuous flight.
+    if (journeyMode && flightSceneActive) {
       let sprog = 0;
       const sp = window.currentStemPlayer;
       if (sp && sp.getDuration && sp.getDuration() > 0) sprog = sp.getCurrentTime() / sp.getDuration();
       else if (audio.duration) sprog = audio.currentTime / audio.duration;
-      const morphing = currentTrackScene.isJourneyActive();
-      // Arm the morph once, ~3/4 through the track.
-      if (!morphing && currentIndex !== journeyArmedFromIndex && sprog > 0.72) {
-        const nextTitle = tracks[currentIndex + 1].title;
-        if (currentTrackScene.beginJourney(nextTitle)) {
-          journeyArmedFromIndex = currentIndex;
-          journeyHandoffDone = false;
-          journeyNextTitle = nextTitle;
-          showJourneyToast('Approaching ' + nextTitle + '…');
+
+      // Feed the album-continuous sun (one long day, no reset at boundaries).
+      // (currentIndex + songProgress) is monotonic across a handoff, so the sun
+      // never snaps back to dark when the next track starts.
+      if (currentTrackScene.setAlbumProgress && tracks.length > 0) {
+        currentTrackScene.setAlbumProgress((currentIndex + sprog) / tracks.length);
+      }
+
+      // Near the end of a track, begin morphing the world toward the next track
+      // so it appears in the distance and the bird flies into it. Audio hands
+      // off when the bird crosses (scene → onJourneyHandoff); the songProgress
+      // fallback covers a song that would end before the crossing.
+      if (currentTrackScene.isJourneyActive && currentIndex < tracks.length - 1) {
+        const morphing = currentTrackScene.isJourneyActive();
+        if (!morphing && currentIndex !== journeyArmedFromIndex && sprog > 0.72) {
+          const nextTitle = tracks[currentIndex + 1].title;
+          if (currentTrackScene.beginJourney(nextTitle)) {
+            journeyArmedFromIndex = currentIndex;
+            journeyHandoffDone = false;
+            journeyNextTitle = nextTitle;
+            showJourneyToast('Approaching ' + nextTitle + '…');
+          }
+        }
+        if (morphing && !journeyHandoffDone && sprog >= 0.985) {
+          onJourneyHandoff(journeyNextTitle);
         }
       }
-      // Fallback handoff: the song is essentially over but the bird hasn't yet
-      // crossed (slow/curving approach) — start the next track so audio is
-      // continuous. Idempotent with the scene's own midpoint handoff.
-      if (morphing && !journeyHandoffDone && sprog >= 0.985) {
-        onJourneyHandoff(journeyNextTitle);
-      }
+    } else if (currentTrackScene && currentTrackScene.setAlbumProgress) {
+      currentTrackScene.setAlbumProgress(null); // per-track sun when journey off
     }
 
     // ── Rhythm gates: MIDI-locked flyable targets (rhythm flight game) ──
