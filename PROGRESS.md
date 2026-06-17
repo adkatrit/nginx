@@ -2,6 +2,44 @@
 
 ---
 
+## Journey mode — the album as one continuous flight (2026-06-17) — WORKING
+
+Goal (user): no manual track switching — start at track 1 and have the world
+"naturally become the next track." The next world should appear in the
+distance and you fly into it; the next track starts when you're over it. No
+visible boundary.
+
+The whole flight world is a function of position (x,z), so this is done by
+blending, not by rebuilding:
+
+**Phase 1 — morph engine (`track-scenes.js`):** `beginJourney(name)` captures a
+world-space boundary along the bird's heading; `terrainHeight`, vertex colour,
+sea level, scenery and the entire atmosphere (sun/turbidity/rayleigh/mie/
+exposure/lights) blend theme A→B with a smoothstep over distance. Already-
+spawned chunks in/beyond the blend band are refreshed so the incoming world
+appears at the horizon immediately. At the midpoint the scene fires
+`onTrackHandoff`; once the bird is fully across it commits via `setTheme`
+(restoring native rendering, e.g. Data Tide's Gerstner ocean). API:
+`beginJourney(name,opts)`, `isJourneyActive`, `getJourneyProgress`,
+`setTrackHandoff`. Engine is dormant until called — normal play unchanged.
+
+**Phase 2 — orchestration (`app.js`):** `journeyMode` (default on). In the
+render loop, ~72% through a track the scene morphs toward the next track
+("Approaching <title>…" toast). Audio hands off when the bird crosses
+(`onJourneyHandoff` → `loadTrack(idx,{journey:true})`, overlay suppressed,
+theme swap deferred to the scene); a `songProgress ≥ 0.985` fallback covers a
+slow/curving approach so audio is always continuous. Per-section score shows
+as a non-blocking toast; `applyTrackTheme`/`handleTrackEnded` are guarded so a
+morph is never interrupted by a hard swap or the score modal.
+
+Verified headless: auto-trigger fires, toast shows, audio switches (stem
+duration 224.4s Terms → 182.1s Data Tide), no errors, no score-modal
+interruption. The bird's physical crossing/commit only runs at real flight
+speed (headless swiftshader flies at ~0.14 u/s), so the final visual seam is
+best confirmed live. Toast styled in `styles.css` (`.wa-journey-toast`).
+
+---
+
 ## Professional-quality visual pass (2026-06-16) — COMPLETE (this round)
 
 Goal: "make this a wholly better game, truly professional quality, highly

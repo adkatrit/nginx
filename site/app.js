@@ -1436,6 +1436,14 @@
   };
   let themeSpotlight = null;  // Track-specific accent spotlight
   let currentTrackScene = null;  // Custom scene for current track
+  // ── Journey mode: the album plays as one continuous flight. Near the end of
+  // a track the flight scene morphs toward the next track's world (it appears
+  // in the distance and you fly into it); the next track's audio starts when
+  // the bird crosses. Default on in environment/flight mode.
+  let journeyMode = true;
+  let journeyArmedFromIndex = -1;  // index we've already triggered a journey from
+  let journeyHandoffDone = false;  // next track's audio already started this morph
+  let journeyNextTitle = null;     // title the current morph is heading toward
   const TrackScenes = window.TrackScenes || null;
   const EnvironmentMode = window.EnvironmentMode || null;
   let environmentInstance = null; // Themed environment instance
@@ -1496,7 +1504,12 @@
 
     // Build custom track scene (if available and Three.js is ready)
     if (TrackScenes && threeReady && threeScene && three) {
-      if (currentTrackScene && currentTrackScene.setTheme) {
+      const morphing = currentTrackScene && currentTrackScene.isJourneyActive && currentTrackScene.isJourneyActive();
+      if (morphing) {
+        // A journey is morphing the world toward this track; the scene commits
+        // the theme itself once the bird finishes crossing. Don't hard-swap.
+        console.log("[Journey] morph in progress — deferring theme swap to scene:", track.title);
+      } else if (currentTrackScene && currentTrackScene.setTheme) {
         // Hot-swap terrain theme (no full rebuild — bird position carries over)
         currentTrackScene.setTheme(track.title);
         console.log("Hot-swapped terrain theme:", track.title);
@@ -1507,6 +1520,7 @@
           currentTrackScene = null;
         }
         currentTrackScene = TrackScenes.build(track.title, three, threeScene, { freqData, timeData });
+        if (currentTrackScene && currentTrackScene.setTrackHandoff) currentTrackScene.setTrackHandoff(onJourneyHandoff);
         console.log("Custom track scene built:", track.title, currentTrackScene ? "success" : "not available");
       }
     }
@@ -2977,6 +2991,7 @@
       // Build track scene now that Three.js is ready (if not already built)
       if (TrackScenes && !currentTrackScene && currentTrackTitle) {
         currentTrackScene = TrackScenes.build(currentTrackTitle, three, threeScene, { freqData, timeData });
+        if (currentTrackScene && currentTrackScene.setTrackHandoff) currentTrackScene.setTrackHandoff(onJourneyHandoff);
         console.log("Track scene built after Three.js ready:", currentTrackTitle, currentTrackScene ? "success" : "not available");
       }
 
@@ -3380,6 +3395,36 @@
 
       // Pass the effective stems directly (scenes access stemData?.drums?.energy etc)
       currentTrackScene.update(t, freqData, amplitude, shipPos, shipSpeed, effectiveStems);
+    }
+
+    // ── Journey mode: near the end of a track, begin morphing the world toward
+    // the next track so it appears in the distance and the bird flies into it.
+    // The audio normally hands off when the bird crosses the boundary (the scene
+    // calls onJourneyHandoff); the songProgress fallback below covers the case
+    // where the song would otherwise end before the crossing.
+    if (journeyMode && flightSceneActive && currentTrackScene.isJourneyActive
+        && currentIndex < tracks.length - 1) {
+      let sprog = 0;
+      const sp = window.currentStemPlayer;
+      if (sp && sp.getDuration && sp.getDuration() > 0) sprog = sp.getCurrentTime() / sp.getDuration();
+      else if (audio.duration) sprog = audio.currentTime / audio.duration;
+      const morphing = currentTrackScene.isJourneyActive();
+      // Arm the morph once, ~3/4 through the track.
+      if (!morphing && currentIndex !== journeyArmedFromIndex && sprog > 0.72) {
+        const nextTitle = tracks[currentIndex + 1].title;
+        if (currentTrackScene.beginJourney(nextTitle)) {
+          journeyArmedFromIndex = currentIndex;
+          journeyHandoffDone = false;
+          journeyNextTitle = nextTitle;
+          showJourneyToast('Approaching ' + nextTitle + '…');
+        }
+      }
+      // Fallback handoff: the song is essentially over but the bird hasn't yet
+      // crossed (slow/curving approach) — start the next track so audio is
+      // continuous. Idempotent with the scene's own midpoint handoff.
+      if (morphing && !journeyHandoffDone && sprog >= 0.985) {
+        onJourneyHandoff(journeyNextTitle);
+      }
     }
 
     // ── Rhythm gates: MIDI-locked flyable targets (rhythm flight game) ──
@@ -4331,7 +4376,7 @@
 
   // ---- Playback Functions ----
 
-  async function loadTrack(index, { autoplay = false } = {}) {
+  async function loadTrack(index, { autoplay = false, journey = false } = {}) {
     if (!tracks.length) return;
     const safeIndex = clamp(index, 0, tracks.length - 1);
     currentIndex = safeIndex;
@@ -4369,9 +4414,12 @@
       try {
         console.log("Loading stems for:", t.title);
 
-        // Show loading overlay
-        showLoadingOverlay(t.title);
-        updateLoadingProgress(0, 100, "Loading manifest...");
+        // Show loading overlay — but not during a seamless journey handoff,
+        // where the flight must keep going uninterrupted while stems stream in.
+        if (!journey) {
+          showLoadingOverlay(t.title);
+          updateLoadingProgress(0, 100, "Loading manifest...");
+        }
 
         // Ensure audio context exists
         if (!audioCtx) {
@@ -5526,6 +5574,26 @@
   });
   // Shared track-ended handler for both <audio> and stem player
   function handleTrackEnded() {
+    // Journey mode: if the world is mid-morph toward the next track, announce
+    // this section's score as a brief toast, hand off to the next track's audio
+    // (if the bird hasn't already crossed), and keep flying — no score screen.
+    const morphing = journeyMode && currentTrackScene && currentTrackScene.isJourneyActive
+      && currentTrackScene.isJourneyActive();
+    if (morphing) {
+      const gateRun = rhythmGates && rhythmGates.getStats ? rhythmGates.getStats() : null;
+      const score = gateRun && gateRun.score > 0 ? gateRun.score : 0;
+      showJourneyToast(score > 0
+        ? `${currentTrackTitle} — ${score.toLocaleString()} pts`
+        : `${currentTrackTitle} ✓`);
+      if (!journeyHandoffDone) onJourneyHandoff(journeyNextTitle);
+      if (rhythmGates && rhythmGates.resetRun) {
+        rhythmGates.resetRun();
+        updateScoreHUD(0, 1);
+        updateFlowHUD(rhythmGates.getFlow(), 0);
+      }
+      return;
+    }
+
     // In environment mode: stop, show score screen, let user choose next
     if (EnvironmentMode && bgVizMode === "environment" && currentTrackTitle) {
       // Rhythm gates own the run when the flight scene is active —
@@ -5677,6 +5745,36 @@
   }
 
   initSwipeGestures();
+
+  // ── Journey handoff: start the next track's audio mid-flight (called by the
+  // flight scene when the bird reaches the world boundary, or by the track-end
+  // handler if the song finishes first). Idempotent per morph.
+  function onJourneyHandoff(nextTitle) {
+    if (journeyHandoffDone) return;
+    journeyHandoffDone = true;
+    const title = nextTitle || journeyNextTitle;
+    const idx = tracks.findIndex((tr) => tr.title === title);
+    if (idx < 0) return;
+    showJourneyToast('♪ ' + title);
+    // journey:true → keep the morph going (no theme hard-swap) and skip the
+    // full-screen loading overlay so the flight stays seamless.
+    loadTrack(idx, { autoplay: true, journey: true });
+  }
+
+  // Brief, non-blocking banner announcing the world/track you're flying into.
+  function showJourneyToast(text) {
+    let toast = document.getElementById('journeyToast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'journeyToast';
+      toast.className = 'wa-journey-toast';
+      document.body.appendChild(toast);
+    }
+    toast.textContent = text;
+    toast.classList.add('is-visible');
+    clearTimeout(toast._hideTimeout);
+    toast._hideTimeout = setTimeout(() => toast.classList.remove('is-visible'), 3200);
+  }
 
   // ---- Keyboard shortcuts ----
   function showVolumeToast(vol) {

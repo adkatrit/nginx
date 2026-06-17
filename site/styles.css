@@ -882,6 +882,41 @@ input[type="range"]:active::-moz-range-thumb {
   opacity: 1;
 }
 
+/* Journey toast — non-blocking "now flying into <world>" banner. Sits high and
+   center, clear of the play path, themed with the track accent. */
+.wa-journey-toast {
+  position: fixed;
+  top: 84px;
+  left: 50%;
+  transform: translate(-50%, -14px);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 80vw;
+  background: linear-gradient(180deg, rgba(8, 12, 20, 0.92), rgba(8, 12, 20, 0.8));
+  color: #fff;
+  font: 700 15px/1.1 var(--wa-ui, sans-serif);
+  letter-spacing: 0.02em;
+  padding: 12px 22px;
+  border-radius: 999px;
+  border: 1px solid rgba(var(--wa-accent-rgb), 0.55);
+  box-shadow: 0 6px 30px rgba(0, 0, 0, 0.45),
+    0 0 22px rgba(var(--wa-accent-rgb), 0.35),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: opacity 0.5s ease, transform 0.5s ease;
+  z-index: 120;
+}
+
+.wa-journey-toast.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
 /* Swipe gesture indicator */
 .wa-swipe-indicator {
   position: absolute;
