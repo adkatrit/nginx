@@ -4713,8 +4713,68 @@ window.TrackScenes = (function() {
     const waterChunks = new Map();
     const sceneryChunks = new Map();
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // JOURNEY TRANSITION — seamless world-to-world morph ("album as one flight")
+    // ───────────────────────────────────────────────────────────────────────
+    // Everything in the world is a function of position (x,z): terrain height,
+    // vertex colour, water level, scenery, and (via the bird's own crossing) the
+    // atmosphere. To make the NEXT track's world appear in the distance and be
+    // flown INTO, we blend theme A → theme B with a smoothstep over distance
+    // along a world-space boundary captured when the transition begins. Because
+    // every system reads the same blend factor, there is no seam — land simply
+    // gives way to the next world as you cross it.
+    const journey = {
+      active: false,
+      committed: false,
+      themeBName: null,   // incoming theme name (for the eventual setTheme commit)
+      themeBObj: null,    // resolved incoming theme object
+      themeAObj: null,    // outgoing theme object (snapshot of activeTheme at start)
+      ox: 0, oz: 0,       // boundary origin (bird world pos at start)
+      dirX: 0, dirZ: 1,   // forward axis at start (unit, world space)
+      center: 950,        // distance ahead (along dir) of the blend midpoint
+      half: 560,          // half-width of the blend band (land→sea reveal length)
+      audioSwitched: false,
+    };
+    let onTrackHandoff = null;  // called once when the bird reaches the midpoint
+
+    // Blend factor 0→1 at world point (x,z): 0 = fully theme A, 1 = fully B.
+    function journeyT(x, z) {
+      if (!journey.active) return 0;
+      const proj = (x - journey.ox) * journey.dirX + (z - journey.oz) * journey.dirZ;
+      const u = (proj - (journey.center - journey.half)) / (2 * journey.half);
+      const c = u < 0 ? 0 : u > 1 ? 1 : u;
+      return c * c * (3 - 2 * c); // smoothstep
+    }
+
     function terrainHeight(x, z) {
-      return activeTheme.terrainHeight(x + worldSeedX, z + worldSeedZ, noise2D, fbm, currentTime);
+      const A = journey.active ? journey.themeAObj : activeTheme;
+      const hA = A.terrainHeight(x + worldSeedX, z + worldSeedZ, noise2D, fbm, currentTime);
+      if (!journey.active) return hA;
+      const t = journeyT(x, z);
+      if (t <= 0) return hA;
+      const hB = journey.themeBObj.terrainHeight(x + worldSeedX, z + worldSeedZ, noise2D, fbm, currentTime);
+      return t >= 1 ? hB : hA * (1 - t) + hB * t;
+    }
+
+    // Vertex colour at a world point — blended across the journey boundary.
+    function colorAt(h, slope, nPatch, nGrain, x, z) {
+      if (!journey.active) {
+        return activeTheme.colorVertex(h, slope, nPatch, nGrain, activeTheme.waterY);
+      }
+      const A = journey.themeAObj, B = journey.themeBObj;
+      const t = journeyT(x, z);
+      if (t <= 0) return A.colorVertex(h, slope, nPatch, nGrain, A.waterY);
+      const cb = B.colorVertex(h, slope, nPatch, nGrain, B.waterY);
+      if (t >= 1) return cb;
+      const ca = A.colorVertex(h, slope, nPatch, nGrain, A.waterY);
+      return { r: ca.r * (1 - t) + cb.r * t, g: ca.g * (1 - t) + cb.g * t, b: ca.b * (1 - t) + cb.b * t };
+    }
+
+    // Water level settles to the incoming world's sea level as the bird crosses.
+    function journeyWaterY() {
+      if (!journey.active) return activeTheme.waterY;
+      const tb = journeyT(bird ? bird.position.x : journey.ox, bird ? bird.position.z : journey.oz);
+      return journey.themeAObj.waterY * (1 - tb) + journey.themeBObj.waterY * tb;
     }
 
     let terrainMat = null;
@@ -5003,7 +5063,7 @@ window.TrackScenes = (function() {
         const nPatch = (n1 - 0.5) * 2;
         const nGrain = (n2 - 0.5) * 2;
 
-        const c = activeTheme.colorVertex(h, slope, nPatch, nGrain, activeTheme.waterY);
+        const c = colorAt(h, slope, nPatch, nGrain, wx, wz);
         colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
       }
 
@@ -5026,7 +5086,7 @@ window.TrackScenes = (function() {
       const geom = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, 1, 1);
       geom.rotateX(-Math.PI / 2);
       const mesh = new THREE.Mesh(geom, waterMat);
-      mesh.position.set(cx * CHUNK_SIZE, activeTheme.waterY, cz * CHUNK_SIZE);
+      mesh.position.set(cx * CHUNK_SIZE, journeyWaterY(), cz * CHUNK_SIZE);
       mesh.receiveShadow = true;
       scene.add(mesh);
       waterChunks.set(`${cx},${cz}`, { mesh });
@@ -5053,6 +5113,9 @@ window.TrackScenes = (function() {
         const h = terrainHeight(x, z);
 
         if (!activeTheme.spawnSceneryObject) continue;
+        // Thin out (then stop) the outgoing world's scenery as it gives way to
+        // the next world, so nothing is left stranded on the incoming terrain.
+        if (journey.active && journeyT(x, z) > 0.35) continue;
         const obj = activeTheme.spawnSceneryObject(x, z, h, activeTheme.waterY, s, s3, THREE, sceneryMats, sceneryGeoms);
         if (!obj) continue;
 
@@ -5498,10 +5561,77 @@ window.TrackScenes = (function() {
       window.SceneTuner.syncFromTheme(activeTheme, FLY, starCfg);
     }
 
-    return {
+    const api = {
       group,
       // Tell app.js not to force-enable EffectsManager effects (grid, aurora, etc.)
       disableEffects: { grid: true, aurora: true, lightning: true, lights: true, particles: true },
+
+      // ── Journey transition (album-as-one-flight) ──
+      // Begin morphing the world toward `nextThemeName`; the next world renders
+      // in the distance ahead and the bird flies into it. `onHandoff(name)` (set
+      // via setTrackHandoff) fires once at the midpoint so app.js can start the
+      // next track's audio. Returns true if the transition started.
+      beginJourney(nextThemeName, opts) {
+        const B = THEMES[nextThemeName];
+        if (!B || journey.active || !bird || B === activeTheme) return false;
+        if (opts && typeof opts.center === 'number') journey.center = opts.center;
+        if (opts && typeof opts.half === 'number') journey.half = opts.half;
+        // Travel direction is the bird's HEADING (it flies via translateZ along
+        // rotation.y), not its mesh quaternion — that's only visual banking.
+        const fx = Math.sin(bird.rotation.y), fz = Math.cos(bird.rotation.y);
+        journey.themeAObj = activeTheme;
+        journey.themeBObj = B;
+        journey.themeBName = nextThemeName;
+        journey.ox = bird.position.x; journey.oz = bird.position.z;
+        journey.dirX = fx; journey.dirZ = fz;
+        journey.audioSwitched = false;
+        journey.committed = false;
+        // Leaving an ocean (Gerstner) world? Hand rendering to chunks for the
+        // blend, and make sure a terrain material exists for them.
+        if (activeTheme.useWaterMesh) disposeWaterMesh();
+        if (!terrainMat) {
+          terrainMat = new THREE.MeshStandardMaterial({
+            vertexColors: true, flatShading: false,
+            roughness: 0.2, metalness: 0.3, emissiveIntensity: 0.08,
+            emissive: new THREE.Color(0xffffff),
+          });
+          applyCloudShadow(terrainMat);
+        }
+        journey.active = true;
+        // Refresh already-spawned chunks that fall in/beyond the blend band so
+        // the incoming world appears in the distance immediately (otherwise the
+        // far horizon would stay theme A until those chunks recycle). Near
+        // chunks (t≈0) are left alone — they'd respawn identical anyway.
+        for (const [key, ch] of terrainChunks) {
+          const [cx, cz] = key.split(',').map(Number);
+          if (journeyT(cx * CHUNK_SIZE, cz * CHUNK_SIZE) > 0.001) {
+            ch.mesh.geometry.dispose(); scene.remove(ch.mesh); terrainChunks.delete(key);
+          }
+        }
+        for (const [key, ch] of waterChunks) {
+          const [cx, cz] = key.split(',').map(Number);
+          if (journeyT(cx * CHUNK_SIZE, cz * CHUNK_SIZE) > 0.001) {
+            ch.mesh.geometry.dispose(); scene.remove(ch.mesh); waterChunks.delete(key);
+          }
+        }
+        for (const [key, ch] of sceneryChunks) {
+          const [cx, cz] = key.split(',').map(Number);
+          if (journeyT(cx * CHUNK_SIZE, cz * CHUNK_SIZE) > 0.001) {
+            for (const obj of ch.objects) { obj.traverse(c => { if (c.geometry) c.geometry.dispose(); }); scene.remove(obj); }
+            sceneryChunks.delete(key);
+          }
+        }
+        console.log('[Flight] Journey → begin morph toward', nextThemeName);
+        return true;
+      },
+      isJourneyActive() { return journey.active; },
+      // 0→1 progress of the bird across the boundary (and whether audio handed off)
+      getJourneyProgress() {
+        if (!journey.active) return { active: false, t: journey.committed ? 1 : 0, audioSwitched: journey.audioSwitched };
+        const tb = bird ? journeyT(bird.position.x, bird.position.z) : 0;
+        return { active: true, t: tb, audioSwitched: journey.audioSwitched };
+      },
+      setTrackHandoff(fn) { onTrackHandoff = fn; },
 
       // Frame-perfect MIDI events (enriched by MidiRouter in app.js)
       onMidi: onMidiEvent,
@@ -5678,6 +5808,42 @@ window.TrackScenes = (function() {
 
         // Keep effects hidden
         for (const fx of hiddenEffects) fx.visible = false;
+
+        // ── Journey tick: as the bird crosses the world boundary, interpolate
+        // the whole atmosphere A→B, settle the water plane, hand off the audio
+        // at the midpoint, and commit to the incoming world once fully across.
+        if (journey.active && bird) {
+          const tb = journeyT(bird.position.x, bird.position.z);
+          const A = journey.themeAObj, B = journey.themeBObj;
+          const L = (a, b) => a * (1 - tb) + b * tb;
+          baseSunElevation   = L(A.baseSunElevation, B.baseSunElevation);
+          sunElevationRange   = L(A.sunElevationRange || 10, B.sunElevationRange || 10);
+          sunAzimuth          = L(A.sunAzimuth, B.sunAzimuth);
+          baseTurbidity       = L(A.baseTurbidity, B.baseTurbidity);
+          baseRayleigh        = L(A.baseRayleigh, B.baseRayleigh);
+          baseMieCoefficient  = L(A.baseMieCoefficient, B.baseMieCoefficient);
+          baseMieDirectionalG = L(A.baseMieDirectionalG, B.baseMieDirectionalG);
+          baseExposure        = L(A.baseExposure, B.baseExposure);
+          baseSunIntensity    = L(A.baseSunIntensity || 0.1, B.baseSunIntensity || 0.1);
+          sunIntensityRange   = L(A.sunIntensityRange || 1.6, B.sunIntensityRange || 1.6);
+          baseHemiIntensity   = L(A.baseHemiIntensity || 0.04, B.baseHemiIntensity || 0.04);
+          hemiIntensityRange  = L(A.hemiIntensityRange || 0.46, B.hemiIntensityRange || 0.46);
+          const wy = L(A.waterY, B.waterY);
+          for (const [, ch] of waterChunks) ch.mesh.position.y = wy;
+          if (!journey.audioSwitched && tb >= 0.5) {
+            journey.audioSwitched = true;
+            if (onTrackHandoff) { try { onTrackHandoff(journey.themeBName); } catch (e) { /* ignore */ } }
+          }
+          if (!journey.committed && tb >= 0.992) {
+            journey.committed = true;
+            const name = journey.themeBName;
+            journey.active = false;
+            api.setTheme(name);  // restore the incoming world's native rendering
+            journey.themeAObj = journey.themeBObj = journey.themeBName = null;
+            journey.audioSwitched = false;
+            journey.committed = false;
+          }
+        }
 
         // Sun rises with song progress over baseSunElevation → baseSunElevation + sunElevationRange
         const SUN_START = baseSunElevation;
@@ -6026,8 +6192,9 @@ window.TrackScenes = (function() {
         }
 
         // Spawn/cleanup terrain + scenery in 2D grid around bird
-        // (skip for pure-ocean themes — no terrain chunks there)
-        if (!activeTheme.useWaterMesh) {
+        // (skip for pure-ocean themes — no terrain chunks there — unless a
+        // journey is morphing the world, which always renders via chunks)
+        if (!activeTheme.useWaterMesh || journey.active) {
           updateChunks2D(posX, posZ);
 
           // Animate terrain if theme requires it (e.g. ocean waves)
@@ -6318,6 +6485,9 @@ window.TrackScenes = (function() {
         scene.remove(group);
       }
     };
+    // Debug handle so the world can be driven from the console / capture tool.
+    try { window.__flightScene = api; } catch (e) { /* ignore */ }
+    return api;
   }
 
 
