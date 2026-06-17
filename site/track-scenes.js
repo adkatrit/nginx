@@ -4608,9 +4608,9 @@ window.TrackScenes = (function() {
     // first track → 1 at the last). The sun then sweeps one long day across the
     // whole record and never snaps back to "dark" at a track boundary. null ⇒
     // fall back to the per-track sunrise (single-track / journey mode off).
-    let albumSunTarget = null;   // latest target from app.js (0..1) or null
-    let albumSunPhase = null;    // smoothed, monotonic follower
+    let albumSunTarget = null;   // continuous album phase from app.js (0..1) or null
     const ALBUM_SUN_LOW = -6, ALBUM_SUN_HIGH = 24;  // day arc in degrees
+    let _sunDbg = null;          // debug snapshot of the sun state (getSunDebug)
 
     const sunPos = new THREE.Vector3();
     const phi = (90 - baseSunElevation) * Math.PI / 180;
@@ -5671,6 +5671,7 @@ window.TrackScenes = (function() {
       setTrackHandoff(fn) { onTrackHandoff = fn; },
       // Continuous album phase (0..1) for the album-wide sun; null = per-track.
       setAlbumProgress(p) { albumSunTarget = (typeof p === 'number') ? Math.max(0, Math.min(1, p)) : null; },
+      getSunDebug() { return _sunDbg; },
 
       // Frame-perfect MIDI events (enriched by MidiRouter in app.js)
       onMidi: onMidiEvent,
@@ -5900,12 +5901,13 @@ window.TrackScenes = (function() {
         // (no reset at track boundaries). Otherwise: per-track sunrise.
         let dynElevation, sunFactor, horizonProximity;
         if (albumSunTarget != null) {
-          if (albumSunPhase == null) albumSunPhase = albumSunTarget;
-          else albumSunPhase += (albumSunTarget - albumSunPhase) * 0.06; // smooth follower
-          // sqrt curve: the sun does most of its rise during the first track and
-          // then climbs gently — so a track ends bright and the next CONTINUES
-          // bright (no snap back to dawn), while the album still moves through a day.
-          dynElevation = ALBUM_SUN_LOW + Math.sqrt(albumSunPhase) * (ALBUM_SUN_HIGH - ALBUM_SUN_LOW);
+          // Drive the sun DIRECTLY from the (already smooth, monotonic) album
+          // phase — no per-frame follower, so it can't lag or darken on a frame
+          // hitch (e.g. while the next track's stems load at a handoff). sqrt
+          // curve: the sun does most of its rise during the first track, then
+          // climbs gently — so a track ends bright and the next CONTINUES bright
+          // (no snap back to dawn) while the album still moves through a day.
+          dynElevation = ALBUM_SUN_LOW + Math.sqrt(albumSunTarget) * (ALBUM_SUN_HIGH - ALBUM_SUN_LOW);
           const sf = Math.max(0, Math.min(1, (dynElevation + 5) / 10)); // 0 at -5° → 1 at +5°
           sunFactor = sf * sf * (3 - 2 * sf);
           horizonProximity = Math.max(0, 1 - Math.abs(dynElevation) / 12);
@@ -5931,6 +5933,11 @@ window.TrackScenes = (function() {
         // Floors keep the pre-dawn start readable (themes were authored
         // when fog supplied most of the early-track luminance)
         skyUniforms.exposure.value = Math.max(baseExposure, 0.18) + sunFactor * 0.5;
+        _sunDbg = {
+          theme: activeTheme.name, album: albumSunTarget,
+          elev: +dynElevation.toFixed(2), sunFactor: +sunFactor.toFixed(3),
+          exposure: +skyUniforms.exposure.value.toFixed(3), journey: journey.active,
+        };
 
         // Light intensities driven by sun elevation (hemi set in moon block below)
         sunLight.intensity = baseSunIntensity + sunFactor * sunIntensityRange;
